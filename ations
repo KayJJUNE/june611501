@@ -1,0 +1,13 @@
+                                          Table "public.user_language"
+     Column     |            Type             | Collation | Nullable |                  Default                  
+----------------+-----------------------------+-----------+----------+-------------------------------------------
+ id             | integer                     |           | not null | nextval('user_language_id_seq'::regclass)
+ channel_id     | bigint                      |           |          | 
+ user_id        | bigint                      |           |          | 
+ character_name | text                        |           |          | 
+ language       | text                        |           |          | 'ko'::text
+ updated_at     | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "user_language_pkey" PRIMARY KEY, btree (id)
+    "user_language_channel_id_user_id_character_name_key" UNIQUE CONSTRAINT, btree (channel_id, user_id, character_name)
+
