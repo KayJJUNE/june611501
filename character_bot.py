@@ -22,7 +22,6 @@ from database_manager import DatabaseManager
 from typing import Dict, TYPE_CHECKING, Any
 import json
 import sys
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 import re
@@ -30,7 +29,6 @@ import langdetect
 from deep_translator import GoogleTranslator
 import random
 from vision_manager import VisionManager
-import openai
 
 # 절대 경로 설정
 current_dir = Path(__file__).resolve().parent
@@ -240,9 +238,7 @@ class CharacterSelect(discord.ui.Select):
                 if selected_bot:
                     try:
                         # 채널 등록
-                        print("[DEBUG] add_channel 호출 전")
                         success, message = await selected_bot.add_channel(channel.id, interaction.user.id)
-                        print("[DEBUG] add_channel 호출 후")
 
                         if success:
                             # 채널 생성 알림 메시지
@@ -250,7 +246,6 @@ class CharacterSelect(discord.ui.Select):
                                 f"Channel registration complete",
                                 ephemeral=True
                             )
-                            print(f"[DEBUG] active_channels after add: {selected_bot.active_channels}")
                         else:
                             await channel.send("An error occurred while registering the channel. Please create the channel again.")
                             await channel.delete()
@@ -345,102 +340,263 @@ class CharacterBot:
         self.character_name = character_name
         self.story_mode_sessions = {}  # user_id: {chapter_id, scene_id, crush_score, active}
         self.active_channels = {}  # channel_id: user_id
-        self.db = DatabaseManager()  # DatabaseManager 인스턴스 추가
-        self.last_bot_messages = {}  # user_id별 최근 챗봇 메시지 리스트
+        self.db = DatabaseManager()
+        self.last_bot_messages = {}
         self.vision_manager = VisionManager(OPENAI_API_KEY)
-        self.user_message_buffers = {}  # (user_id) -> list of (msg, timestamp)
 
     async def add_channel(self, channel_id: int, user_id: int) -> tuple[bool, str]:
-        print(f"[add_channel] called for {self.character_name}: channel_id={channel_id}, user_id={user_id}")
-        self.active_channels[channel_id] = user_id
-        print(f"[add_channel] active_channels now: {self.active_channels}")
-        return True, "채널 등록 완료"
+        """1:1 채널을 등록합니다."""
+        try:
+            self.active_channels[channel_id] = user_id
+            return True, "채널 등록 완료"
+        except Exception as e:
+            print(f"채널 등록 중 오류 발생: {e}")
+            return False, str(e)
+
+    async def start_story_mode(self, user_id: int, chapter_id: int):
+        """Start story mode."""
+        try:
+            print(f"[DEBUG] start_story_mode start: user_id={user_id}, chapter_id={chapter_id}")
+
+            # Initialize story session
+            self.story_mode_sessions[user_id] = {
+                "chapter_id": chapter_id,
+                "scene_id": 1,
+                "crush_score": 0,
+                "active": True
+            }
+
+            # Send story start message
+            channel_id = self.active_channels.get(user_id)
+            if channel_id:
+                channel = self.bot.get_channel(channel_id)
+                if channel:
+                    await channel.send(f"Story mode has started! Starting Chapter {chapter_id}.")
+
+                    # Run story scene
+                    await self.run_story_scene(channel, user_id, chapter_id, 1)
+                else:
+                    print(f"[ERROR] Channel not found: {channel_id}")
+            else:
+                print(f"[ERROR] Active channel not found for user: {user_id}")
+
+        except Exception as e:
+            print(f"[ERROR] start_story_mode: {e}")
+            import traceback
+            print(traceback.format_exc())
+            raise
+
+    async def run_story_scene(self, channel, user_id, chapter_id, scene_id=1):
+        try:
+            from config import STORY_CHAPTERS, CHARACTER_INFO
+            chapter = STORY_CHAPTERS[self.character_name][chapter_id - 1]
+            scene = chapter["scenes"][scene_id - 1]
+            image_path = CHARACTER_INFO[self.character_name].get("image")
+            files = []
+            if image_path and os.path.exists(image_path):
+                filename = os.path.basename(image_path)
+                file = discord.File(image_path, filename=filename)
+                files.append(file)
+            embed = discord.Embed(
+                title=f"{scene['title']}",
+                description=scene["background"],
+                color=CHARACTER_INFO[self.character_name]["color"]
+            )
+            if files:
+                embed.set_thumbnail(url=f"attachment://{filename}")
+                await channel.send(embed=embed, files=files)
+            else:
+                await channel.send(embed=embed)
+            await self.send_bot_message(channel, f"*{scene['narration']}*", user_id)
+            # 첫 대사
+            first_line = scene['lines'][0]
+            embed_line = discord.Embed(description=first_line)
+            if files:
+                embed_line.set_author(name=self.character_name, icon_url=f"attachment://{filename}")
+                await channel.send(embed=embed_line, file=discord.File(image_path, filename=filename))
+            else:
+                embed_line.set_author(name=self.character_name)
+                await channel.send(embed=embed_line)
+            crush_score = 0
+            for i in range(1, 10):
+                if i < len(scene["lines"]):
+                    embed_line = discord.Embed(description=scene['lines'][i])
+                    if files:
+                        embed_line.set_author(name=self.character_name, icon_url=f"attachment://{filename}")
+                        await channel.send(embed=embed_line, file=discord.File(image_path, filename=filename))
+                    else:
+                        embed_line.set_author(name=self.character_name)
+                        await channel.send(embed=embed_line)
+                await self.send_bot_message(channel, f"\n{scene['user_prompt']}", user_id)
+                def check(m):
+                    return m.author.id == user_id and m.channel == channel
+                try:
+                    user_msg = await self.bot.wait_for('message', check=check, timeout=180)
+                    user_input = user_msg.content.strip().lower()
+                    matched = False
+                    for rule_key, rule in scene["response_rules"].items():
+                        if rule_key in user_input:
+                            embed_reply = discord.Embed(description=rule['reply'])
+                            if files:
+                                embed_reply.set_author(name=self.character_name, icon_url=f"attachment://{filename}")
+                                await channel.send(embed=embed_reply, file=discord.File(image_path, filename=filename))
+                            else:
+                                embed_reply.set_author(name=self.character_name)
+                                await channel.send(embed=embed_reply)
+                            crush_score += rule["score"]
+                            matched = True
+                            break
+                    if not matched:
+                        embed_reply = discord.Embed(description="...")
+                        embed_reply.set_author(name=self.character_name)
+                        await channel.send(embed=embed_reply)
+                except asyncio.TimeoutError:
+                    await self.send_bot_message(channel, "The session has ended automatically due to inactivity.", user_id)
+                    self.story_mode_sessions[user_id]["active"] = False
+                    return
+            # After 10 conversations, show [A][B] choices
+            choices = {
+                "A": {"label": "A: I really enjoyed today!", "reply": "...Thank you. I enjoyed it too.", "score": 1},
+                "B": {"label": "B: It was a bit awkward.", "reply": "Still, it will be more natural next time.", "score": 0}
+            }
+            view = self.ChoiceView(user_id, choices, self, channel, self.character_name, chapter_id, scene_id+1)
+            await self.send_bot_message(channel, "What would you like to choose?", user_id)
+
+        except Exception as e:
+            print(f"[ERROR] Error in story scene: {e}")
+            await channel.send("An error occurred while running the story scene.")
+
+    class ChoiceButton(discord.ui.Button):
+        def __init__(self, label, value, user_id, reply, score, parent, channel, character_name, chapter_id, next_scene_id):
+            super().__init__(label=label, style=discord.ButtonStyle.primary)
+            self.value = value
+            self.user_id = user_id
+            self.reply = reply
+            self.score = score
+            self.parent = parent
+            self.channel = channel
+            self.character_name = character_name
+            self.chapter_id = chapter_id
+            self.next_scene_id = next_scene_id
+
+        async def callback(self, interaction: discord.Interaction):
+            if interaction.user.id != self.user_id:
+                await interaction.response.send_message("Only the designated user can make this choice.", ephemeral=True)
+                return
+
+            embed = discord.Embed(description=self.reply)
+            image_path = CHARACTER_INFO[self.character_name].get("image")
+            if image_path and os.path.exists(image_path):
+                embed.set_author(name=self.character_name, icon_url=f"attachment://{os.path.basename(image_path)}")
+                file = discord.File(image_path, filename=os.path.basename(image_path))
+                await self.channel.send(embed=embed, file=file)
+            else:
+                embed.set_author(name=self.character_name)
+                await self.channel.send(embed=embed)
+
+            await interaction.response.send_message(f"Selected option: {self.value}", ephemeral=True)
+
+            chapter = STORY_CHAPTERS[self.character_name][self.chapter_id - 1]
+            if self.next_scene_id <= len(chapter["scenes"]):
+                await self.parent.run_story_scene(self.channel, self.user_id, self.chapter_id, self.next_scene_id)
+            else:
+                await self.channel.send("All story scenes have been completed.")
+                self.parent.story_mode_sessions[self.user_id]["active"] = False
+
+    class ChoiceView(discord.ui.View):
+        def __init__(self, user_id, choices, parent, channel, character_name, chapter_id, next_scene_id):
+            super().__init__()
+            self.user_id = user_id
+            for key, choice in choices.items():
+                self.add_item(parent.ChoiceButton(
+                    label=choice["label"],
+                    value=key,
+                    user_id=user_id,
+                    reply=choice["reply"],
+                    score=choice["score"],
+                    parent=parent,
+                    channel=channel,
+                    character_name=character_name,
+                    chapter_id=chapter_id,
+                    next_scene_id=next_scene_id
+                ))
 
     async def on_message(self, message):
-        print(f"[on_message] called for {self.character_name}")
-        if message.attachments:
-            print(f"[on_message] Image attachment detected: {message.attachments}")
-            for attachment in message.attachments:
-                if attachment.content_type and attachment.content_type.startswith('image/'):
-                    print(f"[on_message] Processing image: {attachment.url}")
-                    image_url = attachment.url
-                    user_text = message.content.strip()
-                    # 캐릭터별 Vision 프롬프트
-                    character_prompts = {
-                        "kagari": "You are Kagari, a bright and shy girl. When analyzing the image, focus on the emotional and aesthetic aspects. If the user asks a specific question about the image, make sure to address it in your response.",
-                        "eros": "You are Eros, a playful and charming character. When analyzing the image, focus on the interesting and engaging elements. If the user asks a specific question about the image, make sure to address it in your response.",
-                        "elysia": "You are Elysia, a mysterious and elegant character. When analyzing the image, focus on the ethereal and artistic aspects. If the user asks a specific question about the image, make sure to address it in your response."
-                    }
-                    char_prompt = character_prompts.get(self.character_name.lower(), "Analyze this image and respond in a way that matches your character's personality. If the user asks a specific question about the image, make sure to address it.")
+        # 1. 동시 채널 체크
+        user_id = message.author.id
+        user_channels = [
+            ch for ch in self.bot.get_all_channels()
+            if isinstance(ch, discord.TextChannel) and str(user_id) in ch.name
+        ]
+        story_channels = [ch for ch in user_channels if "story" in ch.name]
+        normal_channels = [ch for ch in user_channels if "story" not in ch.name]
 
-                    # 텍스트+이미지 프롬프트 결합
-                    vision_prompt = char_prompt
-                    if user_text:
-                        # 유저의 질문이 있는 경우
-                        if "?" in user_text:
-                            vision_prompt += f"\nThe user is specifically asking: {user_text}"
-                        else:
-                            vision_prompt += f"\nThe user's message: {user_text}"
-                    try:
-                        # Vision API 호출
-                        image_analysis = await self.vision_manager.analyze_image(image_url, vision_prompt)
-                    except Exception as e:
-                        await message.channel.send("이미지 분석 중 오류가 발생했습니다. 다시 시도해 주세요.")
-                        return
-                    # 친밀도 점수
-                    affinity_info = self.db.get_affinity(message.author.id, self.character_name)
-                    try:
-                        emotion_score = float(affinity_info['emotion_score']) if affinity_info and 'emotion_score' in affinity_info else 0.5
-                        # 0~1 스케일로 정규화 (예: 0~100점 기준)
-                        if emotion_score > 1:
-                            emotion_score = emotion_score / 100
-                    except Exception:
-                        emotion_score = 0.5
-                    # 캐릭터 스타일 응답 생성
-                    try:
-                        response = self.vision_manager.generate_character_response(
-                            image_analysis,
-                            self.character_name,
-                            emotion_score
-                        )
-                    except Exception as e:
-                        response = "이미지 분석 결과를 캐릭터 스타일로 변환하는 데 실패했습니다."
-                    await message.channel.send(response)
-                    # 대화 기록 저장
-                    try:
-                        self.db.add_message(
-                            channel_id=message.channel.id,
-                            user_id=message.author.id,
-                            character_name=self.character_name,
-                            role="assistant",
-                            content=response
-                        )
-                    except Exception as e:
-                        print(f"DB 저장 오류: {e}")
-                    return
-        await self.process_normal_message(message)
+        if len(story_channels) > 0 and len(normal_channels) > 0:
+            await message.channel.send(
+                "You are currently using both story mode and 1:1 chat. Please use only one channel at a time."
+            )
+            return  # 대화 처리 중단
+
+        # 2. 채널 모드 분기
+        channel_mode = get_channel_mode(message.channel.name)
+        if channel_mode == "story":
+            await self.process_story_message(message)
+        else:
+            await self.process_normal_message(message)
+
+    async def process_story_message(self, message):
+        # config.py에서 스토리 시나리오/프롬프트/예시 불러오기
+        from config import STORY_CHAPTERS, CHARACTER_PROMPTS
+        character_name = self.character_name
+        # 예시: chapter_id, scene_id 등은 채널/DB에서 추출
+        chapter_id = self.story_mode_sessions.get(message.author.id, {}).get("chapter_id", 1)
+        chapter = STORY_CHAPTERS[character_name][chapter_id - 1]
+        story_prompt = CHARACTER_PROMPTS[character_name]["story"]
+        examples = CHARACTER_PROMPTS[character_name]["examples"]
+        scenario = chapter["description"]
+
+        system_prompt = (
+            f"{story_prompt}\n"
+            f"Scenario: {scenario}\n"
+            f"Examples: {' '.join(examples)}"
+        )
+        # OpenAI 등 LLM 호출
+        ai_response = await self.generate_response(
+            user_message=message.content,
+            system_prompt=system_prompt
+        )
+        await message.channel.send(ai_response)
 
     async def process_normal_message(self, message):
-        user_id = message.author.id
-        character = self.character_name
-        now = datetime.datetime.utcnow()
-        # 1. 메시지 버퍼에 저장
-        buf = self.user_message_buffers.setdefault(user_id, [])
-        buf.append((message.content, now))
-        if len(buf) > 20:
-            buf.pop(0)
-        # 2. 20턴마다 요약 생성 및 저장
-        if len(buf) == 20:
-            summary = await self.summarize_messages(buf, user_id, character)
-            self.db.add_episode(user_id, character, summary, now)
-            self.user_message_buffers[user_id] = []
-            self.db.delete_old_episodes(20)
-        # 3. 감정 분석 및 states에 기록
-        emotions = await self.analyze_emotion(message.content)
-        for emo, score in emotions.items():
-            self.db.set_state(user_id, character, emo, score, now)
-        # 4. 기존 대화 처리
-        await self.process_normal_message(message)
+        from config import CHARACTER_PROMPTS
+        character_name = self.character_name
+        base_prompt = CHARACTER_PROMPTS[character_name]["base"]
+        ai_response = await self.generate_response(
+            user_message=message.content,
+            system_prompt=base_prompt
+        )
+        await self.db.update_affinity(
+            user_id=message.author.id,
+            character_name=character_name,
+            message=message.content,
+            timestamp=str(datetime.now())
+        )
+        await message.channel.send(ai_response)
+
+    def setup_commands(self):
+        # 기존의 story_command 및 관련 함수/콜백 삭제
+        pass
+
+    async def on_interaction(self, interaction: discord.Interaction):
+        # 기존의 스토리 관련 인터랙션 처리 코드 삭제
+        pass
+
+    async def on_ready(self):
+        print('Chatbot Selector가 준비되었습니다.')
+        await self.change_presence(
+            status=discord.Status.online,
+            activity=discord.Game(name="Bot Selector")
+        )
 
     def detect_language(self, text: str) -> str:
         try:
@@ -556,15 +712,8 @@ class CharacterBot:
 
     def remove_channel(self, channel_id):
         if hasattr(self, "active_channels"):
-            if isinstance(self.active_channels, dict):
-                self.active_channels.pop(channel_id, None)
-            elif isinstance(self.active_channels, set):
-                self.active_channels.discard(channel_id)
-            elif isinstance(self.active_channels, list):
-                try:
-                    self.active_channels.remove(channel_id)
-                except ValueError:
-                    pass
+            if channel_id in self.active_channels:
+                self.active_channels.remove(channel_id)
 
     async def update_affinity(self, user_id, character_name, message, timestamp, mode="chat"):
         self.db.update_affinity(
@@ -574,45 +723,6 @@ class CharacterBot:
             timestamp=timestamp,
             mode=mode
         )
-
-    async def summarize_messages(self, buf, user_id, character):
-        # OpenAI API로 20개 메시지 요약
-        prompt = f"Summarize the following conversation between user and {character} in 2-3 sentences.\n" + "\n".join([f"User: {m}" for m, _ in buf])
-        response = openai.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": prompt}],
-            max_tokens=200
-        )
-        return response.choices[0].message.content.strip()
-
-    async def analyze_emotion(self, text):
-        # OpenAI API로 감정 분석 (joy, sadness, anger, etc.)
-        prompt = f"Analyze the following message and return a JSON with the user's emotional state (joy, sadness, anger, surprise, etc.) and a score (0~1) for each.\nMessage: {text}"
-        response = openai.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": prompt}],
-            max_tokens=100
-        )
-        import json
-        try:
-            emotions = json.loads(response.choices[0].message.content)
-            return emotions if isinstance(emotions, dict) else {}
-        except Exception:
-            return {}
-
-async def run_all_bots():
-    selector_bot = None
-    try:
-        selector_bot = BotSelector()
-        await selector_bot.start(TOKEN)
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        if selector_bot is not None:
-            await selector_bot.close()
-
-print(f"[DEBUG] CharacterBot type:", type(CharacterBot))
-print(f"[DEBUG] dir(CharacterBot):", dir(CharacterBot))
 
 class CardClaimButton(discord.ui.Button):
     def __init__(self, user_id: int, milestone: int, character_name: str, db):
@@ -674,6 +784,20 @@ class CardClaimView(discord.ui.View):
         button.label = "Claimed"
         await interaction.message.edit(view=self)
         await interaction.response.send_message("Card successfully claimed! Check your inventory.", ephemeral=True)
+
+async def run_all_bots():
+    selector_bot = None
+    try:
+        selector_bot = BotSelector()
+        await selector_bot.start(TOKEN)
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        if selector_bot is not None:
+            await selector_bot.close()
+
+print(f"[DEBUG] CharacterBot type:", type(CharacterBot))
+print(f"[DEBUG] dir(CharacterBot):", dir(CharacterBot))
 
 def get_card_claim_embed_and_view(user_id, character_name, card_id, db):
     from config import CHARACTER_CARD_INFO
