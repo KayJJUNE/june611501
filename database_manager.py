@@ -744,29 +744,21 @@ class DatabaseManager:
             with psycopg2.connect(DATABASE_URL) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute('''
-                        WITH CharacterAffinity AS (
-                            SELECT 
-                                user_id,
-                                SUM(emotion_score) as total_emotion,
-                                COUNT(*) as total_messages
-                            FROM affinity
-                            GROUP BY user_id
-                        ),
-                        TotalMessages AS (
-                            SELECT 
-                                user_id,
-                                COUNT(*) as total_messages
-                            FROM conversations
-                            WHERE message_role = 'user'
-                            GROUP BY user_id
-                        )
                         SELECT 
                             COALESCE(a.user_id, m.user_id) as user_id,
                             COALESCE(a.total_emotion, 0) as total_emotion,
                             COALESCE(m.total_messages, 0) as total_messages
-                        FROM CharacterAffinity a
-                        FULL OUTER JOIN TotalMessages m ON a.user_id = m.user_id
-                        WHERE COALESCE(a.total_emotion, 0) > 0 OR COALESCE(m.total_messages, 0) > 0
+                        FROM (
+                            SELECT user_id, SUM(emotion_score) as total_emotion
+                            FROM affinity
+                            GROUP BY user_id
+                        ) a
+                        FULL OUTER JOIN (
+                            SELECT user_id, COUNT(*) as total_messages
+                            FROM conversations
+                            WHERE message_role = 'user'
+                            GROUP BY user_id
+                        ) m ON a.user_id = m.user_id
                         ORDER BY total_emotion DESC, total_messages DESC
                         LIMIT 10
                     ''')
@@ -1389,7 +1381,6 @@ class DatabaseManager:
             return dict(cur.fetchall())
 
     def add_episode(self, user_id, character, summary, timestamp):
-        print(f"add_episode called: {user_id}, {character}, {summary[:30]}, {timestamp}")
         with self.conn.cursor() as cur:
             cur.execute('''
                 INSERT INTO episodes (user_id, character, summary, timestamp)

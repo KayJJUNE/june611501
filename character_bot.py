@@ -22,6 +22,7 @@ from database_manager import DatabaseManager
 from typing import Dict, TYPE_CHECKING, Any
 import json
 import sys
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 import re
@@ -239,17 +240,9 @@ class CharacterSelect(discord.ui.Select):
                 if selected_bot:
                     try:
                         # 채널 등록
-                        print("\n=== Channel Registration Debug ===")
-                        print(f"Channel ID: {channel.id}")
-                        print(f"User ID: {interaction.user.id}")
-                        print(f"Selected bot: {selected_char}")
-                        print(f"Bot active_channels before: {selected_bot.active_channels}")
-
+                        print("[DEBUG] add_channel 호출 전")
                         success, message = await selected_bot.add_channel(channel.id, interaction.user.id)
-
-                        print(f"Add channel result - Success: {success}, Message: {message}")
-                        print(f"Bot active_channels after: {selected_bot.active_channels}")
-                        print("=== End Channel Registration Debug ===\n")
+                        print("[DEBUG] add_channel 호출 후")
 
                         if success:
                             # 채널 생성 알림 메시지
@@ -265,9 +258,6 @@ class CharacterSelect(discord.ui.Select):
 
                     except Exception as e:
                         print(f"Error registering channel: {e}")
-                        import traceback
-                        print("Traceback:")
-                        print(traceback.format_exc())
                         if not interaction.response.is_done():
                             await interaction.response.send_message(
                                 "An error occurred while setting up the channel. Please try again.",
@@ -361,121 +351,74 @@ class CharacterBot:
         self.user_message_buffers = {}  # (user_id) -> list of (msg, timestamp)
 
     async def add_channel(self, channel_id: int, user_id: int) -> tuple[bool, str]:
-        print("\n=== CharacterBot add_channel Debug ===")
-        print(f"Function called for {self.character_name}")
-        print(f"self id: {id(self)}, type: {type(self)}")
-        print(f"Parameters - channel_id: {channel_id}, user_id: {user_id}")
-        print(f"Active channels before: {self.active_channels}")
-        print(f"Active channels type: {type(self.active_channels)}")
-        try:
-            if not isinstance(self.active_channels, dict):
-                print(f"Converting active_channels from {type(self.active_channels)} to dict")
-                self.active_channels = {}
-            self.active_channels[channel_id] = user_id
-            print(f"Active channels after: {self.active_channels}")
-            print(f"self id after add: {id(self)}")
-            print("=== End CharacterBot add_channel Debug ===\n")
-            return True, "채널 등록 완료"
-        except Exception as e:
-            print(f"Error in add_channel: {e}")
-            import traceback
-            print("Traceback:")
-            print(traceback.format_exc())
-            return False, f"채널 등록 실패: {str(e)}"
+        print(f"[add_channel] called for {self.character_name}: channel_id={channel_id}, user_id={user_id}")
+        self.active_channels[channel_id] = user_id
+        print(f"[add_channel] active_channels now: {self.active_channels}")
+        return True, "채널 등록 완료"
 
     async def on_message(self, message):
-        try:
-            print("\n=== CharacterBot on_message Debug Info ===")
-            print(f"Character: {self.character_name}")
-            print(f"self id: {id(self)}, type: {type(self)}")
-            print(f"Message ID: {message.id}")
-            print(f"Author: {message.author} (ID: {message.author.id})")
-            print(f"Channel: {message.channel} (ID: {message.channel.id})")
-            print(f"Content: {message.content}")
-            print(f"Attachments: {message.attachments}")
-            print(f"Active channels: {self.active_channels}")
-            print(f"Channel name: {message.channel.name}")
-            print(f"Channel category: {message.channel.category}")
-            print(f"Channel permissions: {message.channel.permissions_for(message.guild.me)}")
-            print(f"Bot permissions: {message.guild.me.guild_permissions}")
-            print("===========================\n")
-            if message.channel.id not in self.active_channels:
-                print(f"[WARNING] Channel {message.channel.id} not in active_channels!")
-                print(f"Current active_channels: {self.active_channels}")
-                print(f"self id: {id(self)}")
-                return
-            if message.attachments:
-                print(f"[on_message] Image attachment detected: {message.attachments}")
-                for attachment in message.attachments:
-                    print(f"[on_message] attachment type: {type(attachment)}")
-                    if attachment.content_type and attachment.content_type.startswith('image/'):
-                        print(f"[on_message] Processing image: {attachment.url}")
-                        image_url = attachment.url
-                        user_text = message.content.strip()
-                        # 캐릭터별 Vision 프롬프트
-                        character_prompts = {
-                            "kagari": "You are Kagari, a bright and shy girl. When analyzing the image, focus on the emotional and aesthetic aspects. If the user asks a specific question about the image, make sure to address it in your response.",
-                            "eros": "You are Eros, a playful and charming character. When analyzing the image, focus on the interesting and engaging elements. If the user asks a specific question about the image, make sure to address it in your response.",
-                            "elysia": "You are Elysia, a mysterious and elegant character. When analyzing the image, focus on the ethereal and artistic aspects. If the user asks a specific question about the image, make sure to address it in your response."
-                        }
-                        char_prompt = character_prompts.get(self.character_name.lower(), "Analyze this image and respond in a way that matches your character's personality. If the user asks a specific question about the image, make sure to address it.")
-                        # 텍스트+이미지 프롬프트 결합
-                        vision_prompt = char_prompt
-                        if user_text:
-                            if "?" in user_text:
-                                vision_prompt += f"\nThe user is specifically asking: {user_text}"
-                            else:
-                                vision_prompt += f"\nThe user's message: {user_text}"
-                        try:
-                            print(f"[on_message] VisionManager.analyze_image 호출 전: {attachment}, prompt: {vision_prompt}")
-                            image_analysis = await self.vision_manager.analyze_image(attachment, vision_prompt)
-                            print(f"[on_message] VisionManager.analyze_image 반환값: {image_analysis}")
-                        except Exception as e:
-                            print(f"[on_message] VisionManager.analyze_image 오류: {e}")
-                            await message.channel.send("이미지 분석 중 오류가 발생했습니다. 다시 시도해 주세요.")
-                            return
-                        # 친밀도 점수
-                        affinity_info = self.db.get_affinity(message.author.id, self.character_name)
-                        try:
-                            emotion_score = float(affinity_info['emotion_score']) if affinity_info and 'emotion_score' in affinity_info else 0.5
-                            if emotion_score > 1:
-                                emotion_score = emotion_score / 100
-                        except Exception:
-                            emotion_score = 0.5
-                        # 캐릭터 스타일 응답 생성
-                        try:
-                            response = self.vision_manager.generate_character_response(
-                                image_analysis,
-                                self.character_name,
-                                emotion_score
-                            )
-                            print(f"[on_message] generate_character_response 반환값: {response}")
-                        except Exception as e:
-                            print(f"[on_message] generate_character_response 오류: {e}")
-                            response = "이미지 분석 결과를 캐릭터 스타일로 변환하는 데 실패했습니다."
-                        await message.channel.send(response)
-                        # 대화 기록 저장
-                        try:
-                            self.db.add_message(
-                                channel_id=message.channel.id,
-                                user_id=message.author.id,
-                                character_name=self.character_name,
-                                role="assistant",
-                                content=response
-                            )
-                        except Exception as e:
-                            print(f"DB 저장 오류: {e}")
+        print(f"[on_message] called for {self.character_name}")
+        if message.attachments:
+            print(f"[on_message] Image attachment detected: {message.attachments}")
+            for attachment in message.attachments:
+                if attachment.content_type and attachment.content_type.startswith('image/'):
+                    print(f"[on_message] Processing image: {attachment.url}")
+                    image_url = attachment.url
+                    user_text = message.content.strip()
+                    # 캐릭터별 Vision 프롬프트
+                    character_prompts = {
+                        "kagari": "You are Kagari, a bright and shy girl. When analyzing the image, focus on the emotional and aesthetic aspects. If the user asks a specific question about the image, make sure to address it in your response.",
+                        "eros": "You are Eros, a playful and charming character. When analyzing the image, focus on the interesting and engaging elements. If the user asks a specific question about the image, make sure to address it in your response.",
+                        "elysia": "You are Elysia, a mysterious and elegant character. When analyzing the image, focus on the ethereal and artistic aspects. If the user asks a specific question about the image, make sure to address it in your response."
+                    }
+                    char_prompt = character_prompts.get(self.character_name.lower(), "Analyze this image and respond in a way that matches your character's personality. If the user asks a specific question about the image, make sure to address it.")
+
+                    # 텍스트+이미지 프롬프트 결합
+                    vision_prompt = char_prompt
+                    if user_text:
+                        # 유저의 질문이 있는 경우
+                        if "?" in user_text:
+                            vision_prompt += f"\nThe user is specifically asking: {user_text}"
+                        else:
+                            vision_prompt += f"\nThe user's message: {user_text}"
+                    try:
+                        # Vision API 호출
+                        image_analysis = await self.vision_manager.analyze_image(image_url, vision_prompt)
+                    except Exception as e:
+                        await message.channel.send("이미지 분석 중 오류가 발생했습니다. 다시 시도해 주세요.")
                         return
-            await self.process_normal_message(message)
-        except Exception as e:
-            print("\n=== CharacterBot on_message Error ===")
-            print(f"Error type: {type(e)}")
-            print(f"Error message: {str(e)}")
-            import traceback
-            print("Traceback:")
-            print(traceback.format_exc())
-            print("========================\n")
-            await message.channel.send("메시지 처리 중 오류가 발생했습니다. 다시 시도해 주세요.")
+                    # 친밀도 점수
+                    affinity_info = self.db.get_affinity(message.author.id, self.character_name)
+                    try:
+                        emotion_score = float(affinity_info['emotion_score']) if affinity_info and 'emotion_score' in affinity_info else 0.5
+                        # 0~1 스케일로 정규화 (예: 0~100점 기준)
+                        if emotion_score > 1:
+                            emotion_score = emotion_score / 100
+                    except Exception:
+                        emotion_score = 0.5
+                    # 캐릭터 스타일 응답 생성
+                    try:
+                        response = self.vision_manager.generate_character_response(
+                            image_analysis,
+                            self.character_name,
+                            emotion_score
+                        )
+                    except Exception as e:
+                        response = "이미지 분석 결과를 캐릭터 스타일로 변환하는 데 실패했습니다."
+                    await message.channel.send(response)
+                    # 대화 기록 저장
+                    try:
+                        self.db.add_message(
+                            channel_id=message.channel.id,
+                            user_id=message.author.id,
+                            character_name=self.character_name,
+                            role="assistant",
+                            content=response
+                        )
+                    except Exception as e:
+                        print(f"DB 저장 오류: {e}")
+                    return
+        await self.process_normal_message(message)
 
     async def process_normal_message(self, message):
         user_id = message.author.id
@@ -497,7 +440,7 @@ class CharacterBot:
         for emo, score in emotions.items():
             self.db.set_state(user_id, character, emo, score, now)
         # 4. 기존 대화 처리
-        # 중복 재귀 호출 방지: 실제 대화 응답 처리 함수로 분리 필요 (여기서는 패치하지 않음)
+        await self.process_normal_message(message)
 
     def detect_language(self, text: str) -> str:
         try:

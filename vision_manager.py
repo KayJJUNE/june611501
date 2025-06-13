@@ -22,13 +22,12 @@ class VisionManager:
         """
         try:
             print("[VisionManager] analyze_image called")
-            print(f"[VisionManager] attachment type: {type(attachment)}")
+            # 1. 첨부파일을 바이트로 읽기
             image_bytes = await attachment.read()
-            print(f"[VisionManager] image_bytes length: {len(image_bytes)}")
-            content_type = getattr(attachment, 'content_type', None) or "image/jpeg"
-            print(f"[VisionManager] content_type: {content_type}")
+            content_type = attachment.content_type or "image/jpeg"
             image_data = base64.b64encode(image_bytes).decode('utf-8')
             image_url_base64 = f"data:{content_type};base64,{image_data}"
+
             prompt_text = prompt or "Describe this image in detail."
             print("[VisionManager] Calling OpenAI Vision API...")
             response = await self.client.chat.completions.create(
@@ -51,8 +50,6 @@ class VisionManager:
             }
         except Exception as e:
             print(f"[VisionManager] Error: {e}")
-            import traceback
-            traceback.print_exc()
             return {"error": str(e), "success": False}
 
     def generate_character_response(self, image_analysis: Dict, character_name: str, emotion_score: float) -> str:

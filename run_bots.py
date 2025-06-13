@@ -10,6 +10,7 @@ from discord import app_commands
 from typing import Dict, Any
 from datetime import datetime
 import langdetect
+import sqlite3
 from config import (
     CHARACTER_PROMPTS, 
     OPENAI_API_KEY, 
@@ -19,10 +20,8 @@ from config import (
     AFFINITY_LEVELS,
     get_combined_prompt
 )
-import setuptools
+from distutils import core
 from openai_manager import analyze_emotion_with_gpt_and_pattern
-from database_manager import DatabaseManager
-from vision_manager import VisionManager
 
 # Load environment variables
 load_dotenv()
@@ -92,7 +91,6 @@ class CharacterBot(commands.Bot):
         self.user_affinity_levels = {}
         self.last_message_time = {}
         self.chat_timers = {}
-        self.vision_manager = VisionManager(OPENAI_API_KEY)
 
         # 프롬프트 설정
         base_prompt = CHARACTER_PROMPTS.get(character_name, "")
@@ -270,57 +268,14 @@ class CharacterBot(commands.Bot):
             return False
 
     async def on_message(self, message):
+        """메시지 수신 시 호출되는 이벤트 핸들러"""
         try:
             if message.author.bot:
                 return
 
+            # 이 캐릭터 봇이 관리하는 채널이 아니면 무시
             if message.channel.id not in self.active_channels:
                 return
-
-            # 이미지 처리 로직 추가
-            if message.attachments:
-                for attachment in message.attachments:
-                    if attachment.content_type and attachment.content_type.startswith('image/'):
-                        character_prompts = {
-                            "kagari": "You are Kagari, a bright and shy girl. When analyzing the image, focus on the emotional and aesthetic aspects. If the user asks a specific question about the image, make sure to address it in your response.",
-                            "eros": "You are Eros, a playful and charming character. When analyzing the image, focus on the interesting and engaging elements. If the user asks a specific question about the image, make sure to address it in your response.",
-                            "elysia": "You are Elysia, a mysterious and elegant character. When analyzing the image, focus on the ethereal and artistic aspects. If the user asks a specific question about the image, make sure to address it in your response."
-                        }
-                        char_prompt = character_prompts.get(self.character_name.lower(), "Analyze this image and respond in a way that matches your character's personality. If the user asks a specific question about the image, make sure to address it.")
-
-                        vision_prompt = char_prompt
-                        if message.content:
-                            if "?" in message.content:
-                                vision_prompt += f"\nThe user is specifically asking: {message.content}"
-                            else:
-                                vision_prompt += f"\nThe user's message: {message.content}"
-
-                        try:
-                            image_analysis = await self.vision_manager.analyze_image(attachment, vision_prompt)
-                            affinity_info = self.db.get_affinity(message.author.id, self.character_name)
-                            emotion_score = float(affinity_info['emotion_score']) if affinity_info and 'emotion_score' in affinity_info else 0.5
-                            if emotion_score > 1:
-                                emotion_score = emotion_score / 100
-
-                            response = self.vision_manager.generate_character_response(
-                                image_analysis,
-                                self.character_name,
-                                emotion_score
-                            )
-                            await message.channel.send(response)
-
-                            self.db.add_message(
-                                channel_id=message.channel.id,
-                                user_id=message.author.id,
-                                character_name=self.character_name,
-                                role="assistant",
-                                content=response
-                            )
-                            return
-                        except Exception as e:
-                            print(f"이미지 처리 중 오류 발생: {e}")
-                            await message.channel.send("이미지 분석 중 오류가 발생했습니다. 다시 시도해 주세요.")
-                            return
 
             # 메시지 처리
             channel_id = message.channel.id
@@ -403,8 +358,8 @@ class CharacterBot(commands.Bot):
             await self.send_response_with_intimacy(message, response, emotion_score)
 
         except Exception as e:
-            print(f"메시지 처리 중 오류 발생: {e}")
-            await message.channel.send("메시지 처리 중 오류가 발생했습니다. 다시 시도해 주세요.")
+            print(f"Error in message processing: {e}")
+            await message.channel.send("Sorry, an error occurred.")
 
     def get_affinity_grade(self, emotion_score):
         if emotion_score >= AFFINITY_LEVELS["Gold"]:
@@ -415,6 +370,222 @@ class CharacterBot(commands.Bot):
             return "Iron"
         else:
             return "Rookie"
+
+
+class DatabaseManager:
+    def __init__(self):
+        self.db_name = "chatbot.db"
+        self.setup_database()
+
+    def setup_database(self):
+        """데이터베이스 초기화"""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+
+            # 대화 기록 테이블 수정
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    channel_id INTEGER,
+                    user_id INTEGER,
+                    character_name TEXT,
+                    message_role TEXT,
+                    content TEXT,
+                    language TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(channel_id, user_id, character_name, timestamp)
+                )
+            ''')
+
+            # 사용자별 대화 컨텍스트 테이블 추가
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_context (
+                    user_id INTEGER,
+                    character_name TEXT,
+                    last_conversation TEXT,
+                    last_language TEXT,
+                    last_interaction DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, character_name)
+                )
+            ''')
+
+            # 친밀도 테이블 수정
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS affinity (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    character_name TEXT,
+                    emotion_score INTEGER DEFAULT 0,
+                    daily_message_count INTEGER DEFAULT 0,
+                    last_daily_reset TEXT DEFAULT (date('now')),
+                    last_message_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    last_message_content TEXT,
+                    UNIQUE(user_id, character_name)
+                )
+            ''')
+
+
+            conn.commit()
+
+    def add_message(self, channel_id: int, user_id: int, character_name: str, 
+                   role: str, content: str):
+        """새 메시지 추가"""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO conversations 
+                (channel_id, user_id, character_name, message_role, content)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (channel_id, user_id, character_name, role, content))
+            conn.commit()
+
+    def get_recent_messages(self, channel_id: int, limit: int = 10, user_id: int = None):
+        """채널의 최근 메시지 가져오기"""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+
+            if user_id is not None:
+                # 특정 사용자의 메시지만 가져오기
+                cursor.execute('''
+                    SELECT message_role, content 
+                    FROM conversations 
+                    WHERE channel_id = ? AND user_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                ''', (channel_id, user_id, limit))
+            else:
+                # 채널의 모든 메시지 가져오기
+                cursor.execute('''
+                    SELECT message_role, content 
+                    FROM conversations 
+                    WHERE channel_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                ''', (channel_id, limit))
+
+            messages = cursor.fetchall()
+            # 시간 순서대로 정렬하여 반환 (오래된 메시지가 먼저 오도록)
+            return [{"role": role, "content": content} for role, content in reversed(messages)]
+
+    def get_affinity(self, user_id: int, character_name: str):
+        """사용자의 특정 캐릭터와의 친밀도 정보 조회"""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+
+            # 현재 날짜와 마지막 리셋 날짜가 다르면 daily_count 리셋
+            cursor.execute('''
+                UPDATE affinity 
+                SET daily_message_count = 0, last_daily_reset = date('now')
+                WHERE user_id = ? 
+                AND character_name = ?
+                AND last_daily_reset < date('now')
+            ''', (user_id, character_name))
+
+            # 친밀도 정보 조회
+            cursor.execute('''
+                INSERT OR IGNORE INTO affinity (user_id, character_name)
+                VALUES (?, ?)
+            ''', (user_id, character_name))
+
+            cursor.execute('''
+                SELECT emotion_score, daily_message_count
+                FROM affinity
+                WHERE user_id = ? AND character_name = ?
+            ''', (user_id, character_name))
+
+            result = cursor.fetchone()
+            conn.commit()
+
+            return {
+                'emotion_score': result[0] if result else 0,
+                'daily_count': result[1] if result else 0
+            }
+
+    def update_affinity(self, user_id: int, character_name: str, 
+                       last_message: str, last_message_time: str, score_change: int):
+        """친밀도 정보 업데이트"""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+
+            # 현재 친밀도 정보 가져오기
+            cursor.execute('''
+                SELECT emotion_score, daily_message_count
+                FROM affinity
+                WHERE user_id = ? AND character_name = ?
+            ''', (user_id, character_name))
+
+            result = cursor.fetchone()
+            current_score = result[0] if result else 0
+            daily_count = result[1] if result else 0
+
+            # 친밀도 업데이트
+            cursor.execute('''
+                INSERT OR REPLACE INTO affinity 
+                (user_id, character_name, emotion_score, daily_message_count, 
+                last_message_content, last_message_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, character_name, current_score + score_change, 
+                  daily_count + 1, last_message, last_message_time))
+
+            conn.commit()
+
+    def get_affinity_ranking(self):
+        """전체 친밀도 랭킹 조회"""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, SUM(emotion_score) as total_score
+                FROM affinity
+                GROUP BY user_id
+                HAVING total_score > 0
+                ORDER BY total_score DESC
+                LIMIT 10
+            ''')
+            return cursor.fetchall()
+
+    def reset_affinity(self, user_id: int, character_name: str) -> bool:
+        """특정 유저의 친밀도 초기화"""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE affinity
+                    SET emotion_score = 0,
+                        daily_message_count = 0,
+                        last_daily_reset = date('now')
+                    WHERE user_id = ? AND character_name = ?
+                ''', (user_id, character_name))
+
+                if cursor.rowcount == 0:
+                    cursor.execute('''
+                        INSERT INTO affinity (user_id, character_name)
+                        VALUES (?, ?)
+                    ''', (user_id, character_name))
+
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error resetting affinity for user {user_id}: {e}")
+            return False
+
+    def reset_all_affinity(self, character_name: str) -> bool:
+        """모든 유저의 친밀도 초기화"""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE affinity
+                    SET emotion_score = 0,
+                        daily_message_count = 0,
+                        last_daily_reset = date('now')
+                    WHERE character_name = ?
+                ''', (character_name,))
+
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error in reset_all_affinity: {e}")
+            return False
 
 async def call_openai(prompt):
     # 실제 OpenAI API 연동 코드로 대체 필요
