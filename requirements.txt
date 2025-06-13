@@ -11,4 +11,5 @@ streamlit
 gradio
 aiohttp>=3.9.0
 psycopg2-binary
-requests
+requests==2.31.0
+setuptools
