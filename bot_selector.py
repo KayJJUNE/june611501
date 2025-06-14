@@ -419,14 +419,14 @@ class CharacterSelect(discord.ui.Select):
         self.bot_selector = bot_selector
         options = []
         from config import CHARACTER_INFO
-
+        
         for char, info in CHARACTER_INFO.items():
             options.append(discord.SelectOption(
                 label=char,
                 description=f"{info['description']}",
                 value=char
             ))
-
+        
         super().__init__(
             placeholder="Please select a character to chat with...",
             min_values=1,
@@ -713,9 +713,8 @@ class BotSelector(commands.Bot):
             name="bot",
             description="Open character selection menu"
         )
-        async def bot_command(interaction: discord.Interaction):
+        async def bot_command(self, interaction: discord.Interaction):
             try:
-                # 채널 타입 확인
                 if not isinstance(interaction.channel, discord.TextChannel):
                     await interaction.response.send_message(
                         "This command can only be used in server channels.",
@@ -723,44 +722,83 @@ class BotSelector(commands.Bot):
                     )
                     return
 
-                # 초기 응답 보내기
-                await interaction.response.defer(ephemeral=True)
-                
-                # 봇 선택 UI 생성
-                view = BotSelectView(self)
-                
-                # 임베드 생성
-                embed = discord.Embed(
-                    title="🤖 Character Selection",
-                    description="Please select a character to chat with:",
-                    color=discord.Color.blue()
+                from config import CHARACTER_INFO, CHARACTER_IMAGES 
+                print("Available characters:", CHARACTER_INFO.keys())
+                print("Image paths:", CHARACTER_IMAGES)
+
+                view = discord.ui.View()
+                view.add_item(CharacterSelect(self))
+
+                # 모든 임베드를 리스트로 관리
+                embeds = []
+                files = []
+
+                # 각 캐릭터의 이미지와 정보를 개별 임베드로 추가
+                for char_name, char_info in CHARACTER_INFO.items():
+                    try:
+                        img_path = CHARACTER_IMAGES.get(char_name)
+                        print(f"Processing {char_name}:")
+                        print(f"  Path: {img_path}")
+                        print(f"  Exists: {os.path.exists(img_path) if img_path else False}")
+                        if img_path and os.path.exists(img_path):
+                            print(f"  Adding file for {char_name}")
+                            file = discord.File(img_path, filename=f"{char_name.lower()}.png")
+                            files.append(file)
+
+                            # 캐릭터별 임베드 생성
+                            char_embed = discord.Embed(
+                                title=f"{char_info['emoji']} {char_name}",
+                                description=char_info['description'],
+                                color=char_info.get('color', discord.Color.blue())
+                            )
+                            char_embed.set_image(url=f"attachment://{char_name.lower()}.png")
+                            embeds.append(char_embed)
+
+                    except Exception as e:
+                        print(f"Error processing {char_name}: {e}")
+                        continue
+
+                # 마지막 선택 임베드 추가
+                selection_embed = discord.Embed(
+                    title="✨ ",
+                    description="Which character would you like to talk to?",
+                    color=discord.Color.gold()
                 )
-                
-                # 각 캐릭터 정보 추가
-                for char_name, bot in self.character_bots.items():
-                    char_info = CHARACTER_INFO.get(char_name, {})
-                    embed.add_field(
-                        name=f"{char_info.get('emoji', '🤖')} {char_info.get('name', char_name)}",
-                        value=char_info.get('description', 'No description available.'),
-                        inline=False
-                    )
-                
-                # 응답 보내기
-                try:
-                    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
-                except discord.NotFound:
-                    # 웹훅이 만료된 경우 새로운 응답 시도
-                    await interaction.response.send_message(
-                        "An error occurred while loading the character selection menu. Please try again.",
-                        ephemeral=True
-                    )
-                
+
+                # 사용 가능한 캐릭터 목록 추가
+                character_list = []
+                for char_name, char_info in CHARACTER_INFO.items():
+                    character_list.append(f"{char_info['emoji']} **{char_name}** - {char_info['description']}")
+
+                selection_embed.add_field(
+                    name="Available Characters",
+                    value="\n".join(character_list),
+                    inline=False
+                )
+                embeds.append(selection_embed)
+
+                print(f"Sending message with {len(embeds)} embeds and {len(files)} files")
+                # 중복 전송 방지: followup.send만 사용
+                await interaction.followup.send(
+                    embeds=embeds,
+                    files=files,
+                    view=view,
+                    ephemeral=True
+                )
+
             except Exception as e:
                 print(f"Error in bot_command: {e}")
+                import traceback
+                print(traceback.format_exc())
                 try:
                     if not interaction.response.is_done():
                         await interaction.response.send_message(
-                            "An error occurred while loading the character selection menu.",
+                            "An error occurred while loading the character selection menu. Please try again.",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.followup.send(
+                            "An error occurred while loading the character selection menu. Please try again.",
                             ephemeral=True
                         )
                 except Exception as followup_error:
@@ -1970,3 +2008,9 @@ class BotSelector(commands.Bot):
             return
         # 일반 메시지/스토리 모드 등은 기존대로 처리
         await self.process_normal_message(message)
+
+class BotSelectView(discord.ui.View):
+    def __init__(self, bot_selector):
+        super().__init__(timeout=180)  # 3분 타임아웃
+        self.bot_selector = bot_selector
+        self.add_item(CharacterSelect(bot_selector))
