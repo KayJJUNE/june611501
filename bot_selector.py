@@ -93,13 +93,13 @@ class RankingSelect(discord.ui.Select):
             )
 
             if ranking_type == "kagari":
-                rankings = self.view.db.get_character_rankings("Kagari")
+                rankings = self.view.db.get_character_ranking("Kagari")
                 embed.title = "🌸 Kagari Chat Ranking"
             elif ranking_type == "eros":
-                rankings = self.view.db.get_character_rankings("Eros")
+                rankings = self.view.db.get_character_ranking("Eros")
                 embed.title = "💝 Eros Chat Ranking"
             elif ranking_type == "elysia":
-                rankings = self.view.db.get_character_rankings("Elysia")
+                rankings = self.view.db.get_character_ranking("Elysia")
                 embed.title = "🦋 Elysia Chat Ranking"
             else:  # total
                 rankings = self.view.db.get_total_ranking()
@@ -438,10 +438,24 @@ class CharacterSelect(discord.ui.Select):
         try:
             selected_char = self.values[0]
 
-            # Create or get the 'chatbot' category
+            # 채널 생성 및 설정
             category = discord.utils.get(interaction.guild.categories, name="chatbot")
             if not category:
-                category = await interaction.guild.create_category("chatbot")
+                try:
+                    category = await interaction.guild.create_category("chatbot")
+                except Exception as e:
+                    print(f"Category creation error: {e}")
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            "Please check bot permissions.",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.followup.send(
+                            "Please check bot permissions.",
+                            ephemeral=True
+                        )
+                    return
 
             channel_name = f"{selected_char.lower()}-{interaction.user.name.lower()}"
             overwrites = {
@@ -450,45 +464,122 @@ class CharacterSelect(discord.ui.Select):
                 interaction.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
             }
 
-            # Create the 1:1 chat channel
-            channel = await interaction.guild.create_text_channel(
-                name=channel_name,
-                category=category,
-                overwrites=overwrites
-            )
+            try:
+                # 채널 생성
+                channel = await interaction.guild.create_text_channel(
+                    name=channel_name,
+                    category=category,
+                    overwrites=overwrites
+                )
+            except Exception as e:
+                print(f"Channel creation errors: {e}")
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "Channel creation failed, please check bot permissions.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        "Channel creation failed, please check bot permissions.",
+                        ephemeral=True
+                    )
+                return
 
-            # Register the channel to the character bot
+            # 최근 대화 10개 출력 (임베드)
+            try:
+                recent_messages = self.bot_selector.db.get_user_character_messages(interaction.user.id, selected_char, limit=10)
+                if recent_messages:
+                    history_lines = []
+                    for msg in recent_messages:
+                        if msg["role"] == "user":
+                            history_lines.append(f"Me: {msg['content']}")
+                        else:
+                            history_lines.append(f"{selected_char}: {msg['content']}")
+                    history_text = '\n'.join(history_lines)
+                    embed = discord.Embed(
+                        title=f"Previous conversations (last 10)",
+                        description=f"```{history_text}```",
+                        color=discord.Color.dark_grey()
+                    )
+                    await channel.send(embed=embed)
+            except Exception as e:
+                print(f"Error displaying previous conversation embed: {e}")
+
+            # 선택된 캐릭터 봇에 채널 추가
             selected_bot = self.bot_selector.character_bots.get(selected_char)
             if selected_bot:
-                if not isinstance(selected_bot.active_channels, dict):
-                    selected_bot.active_channels = {}
-                selected_bot.active_channels[channel.id] = {
-                    "user_id": interaction.user.id,
-                    "history": []
-                }
+                print("[DEBUG] add_channel 호출 전")
+                success, message = await selected_bot.add_channel(channel.id, interaction.user.id)
+                print("[DEBUG] add_channel 호출 후")
 
-            # 1. Send hyperlink guide in the original channel (ephemeral)
-            channel_link = f"https://discord.com/channels/{interaction.guild.id}/{channel.id}"
-            await interaction.response.send_message(
-                f"Your private chat channel has been created! [Click here to start chatting]({channel_link})",
-                ephemeral=True
-            )
+                if success:
+                    # 채널 생성 알림 메시지
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            f"Start chatting with {selected_char} in {channel.mention}!",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.followup.send(
+                            f"Start chatting with {selected_char} in {channel.mention}!",
+                            ephemeral=True
+                        )
 
-            # 2. Send language selection menu in the new channel
-            view = LanguageSelectView(self.bot_selector.db, interaction.user.id, selected_char)
-            await channel.send(
-                f"{interaction.user.mention}, before you start chatting, please select your preferred language:",
-                view=view
-            )
+                    # 언어 선택 임베드 생성
+                    embed = discord.Embed(
+                        title="🌍 Language Selection",
+                        description="Please select the language for conversation.",
+                        color=discord.Color.blue()
+                    )
+
+                    # 언어별 설명 추가
+                    languages = {
+                        "English": "English - Start conversation in English",
+                        "[ベータ] 日本語": "Japanese - 日本語で会話を 始めます",
+                        "[Beta版] 中文": "Chinese - 开始用中文对话"
+                    }
+
+                    language_description = "\n".join([f"• {key}: {value}" for key, value in languages.items()])
+                    embed.add_field(
+                        name="Available Languages",
+                        value=language_description,
+                        inline=False
+                    )
+
+                    # 언어 선택 뷰 생성
+                    view = LanguageSelectView(self.bot_selector.db, interaction.user.id, selected_char)
+
+                    # 새로 생성된 채널에 임베드와 언어 선택 버튼 전송
+                    await channel.send(content="**Please select your language**", embed=embed, view=view)
+                else:
+                    await channel.send("Channel registration failed. Please create a new channel.")
+                    await channel.delete()
+            else:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "Selected character not found.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        "Selected character not found.",
+                        ephemeral=True
+                    )
 
         except Exception as e:
-            print(f"Error in CharacterSelect callback: {e}")
+            print(f"Error in channel creation: {e}")
             import traceback
             print(traceback.format_exc())
             if not interaction.response.is_done():
-                await interaction.response.send_message("An error occurred. Please try again.", ephemeral=True)
+                await interaction.response.send_message(
+                    "An error occurred, please try again.",
+                    ephemeral=True
+                )
             else:
-                await interaction.followup.send("An error occurred. Please try again.", ephemeral=True)
+                await interaction.followup.send(
+                    "An error occurred, please try again.",
+                    ephemeral=True
+                )
 
 class SettingsManager:
     def __init__(self):
@@ -567,6 +658,7 @@ class BotSelector(commands.Bot):
         }
 
         self.setup_commands()
+        self.add_listener(self.on_message)  # ← 여기서 self로 호출!
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
@@ -686,8 +778,8 @@ class BotSelector(commands.Bot):
                 embeds.append(selection_embed)
 
                 print(f"Sending message with {len(embeds)} embeds and {len(files)} files")
-                # 먼저 상호작용에 응답
-                await interaction.response.send_message(
+                # 중복 전송 방지: followup.send만 사용
+                await interaction.followup.send(
                     embeds=embeds,
                     files=files,
                     view=view,
@@ -699,7 +791,7 @@ class BotSelector(commands.Bot):
                 import traceback
                 print(traceback.format_exc())
                 try:
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         "An error occurred while loading the character selection menu. Please try again.",
                         ephemeral=True
                     )
@@ -866,47 +958,18 @@ class BotSelector(commands.Bot):
         )
         async def ranking_command(interaction: discord.Interaction):
             try:
+                # 랭킹 선택 UI 생성
                 view = RankingView(self.db)
-
-                # 초기 임베드 생성
-                embed = discord.Embed(
-                    title="🏆 Ranking System",
-                    description="Please select the ranking you want to check from the menu below.",
-                    color=discord.Color.blue()
-                )
-
-                embed.add_field(
-                    name="Kagari Chat Ranking 🌸",
-                    value="Top 10 users by affinity and chat count with Kagari",
-                    inline=False
-                )
-                embed.add_field(
-                    name="Eros Chat Ranking 💝",
-                    value="Top 10 users by affinity and chat count with Eros",
-                    inline=False
-                )
-                embed.add_field(
-                    name="Elysia Chat Ranking 🦋",
-                    value="Top 10 users by affinity and chat count with Elysia",
-                    inline=False
-                )
-                embed.add_field(
-                    name="Total Chat Ranking 👑",
-                    value="Top 10 users by total affinity and chat count across all characters",
-                    inline=False
-                )
-
-                # followup.send를 사용하여 응답을 보냅니다
-                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
-
+                await interaction.response.send_message("랭킹 종류를 선택해주세요:", view=view, ephemeral=True)
             except Exception as e:
                 print(f"Error in ranking command: {e}")
-                import traceback
-                print(traceback.format_exc())
-                if not interaction.response.is_done():
-                    await interaction.response.send_message("An error occurred while loading ranking information.", ephemeral=True)
-                else:
-                    await interaction.followup.send("An error occurred while loading ranking information.", ephemeral=True)
+                try:
+                    if interaction.response.is_done():
+                        await interaction.followup.send("랭킹 정보를 불러오는 중 오류가 발생했습니다.", ephemeral=True)
+                    else:
+                        await interaction.response.send_message("랭킹 정보를 불러오는 중 오류가 발생했습니다.", ephemeral=True)
+                except Exception as followup_error:
+                    print(f"Error sending error message: {followup_error}")
 
         @self.tree.command(
             name="affinity",
@@ -1892,7 +1955,6 @@ class BotSelector(commands.Bot):
                 await interaction.response.send_message("An error occurred, please contact your administrator.", ephemeral=True)
 
     async def on_message(self, message):
-        print(f"[BotSelector] on_message 이벤트 감지! {message.content} / attachments: {message.attachments}")
         session = self.roleplay_sessions.get(message.channel.id) if hasattr(self, "roleplay_sessions") else None
         if session and session["is_active"]:
             if message.author.id != session["user_id"]:
@@ -1938,33 +2000,5 @@ class BotSelector(commands.Bot):
                 session["is_active"] = False
                 await message.channel.send("Roleplay mode has ended.")
             return
-        # 이미지 첨부가 있는 경우 캐릭터봇에게 위임 (active_channels + 채널명 규칙)
-        if message.attachments:
-            print("\n=== BotSelector Image Processing Debug ===")
-            print(f"Channel ID: {message.channel.id}")
-            print(f"Channel name: {message.channel.name}")
-            print(f"Available character bots: {list(self.character_bots.keys())}")
-
-            for char_name, bot in self.character_bots.items():
-                print(f"\nChecking {char_name} bot:")
-                print(f"Active channels: {bot.active_channels}")
-                print(f"Channel name starts with {char_name.lower()}-: {message.channel.name.startswith(char_name.lower() + '-')}")
-
-                if (
-                    message.channel.id in bot.active_channels
-                    or message.channel.name.startswith(char_name.lower() + "-")
-                ):
-                    print(f"[BotSelector] 이미지 첨부 감지, {char_name} 봇에 위임 (on_message 호출 직전)")
-                    try:
-                        print(f"[BotSelector] {char_name} 봇 on_message 호출 시작")
-                        await bot.on_message(message)
-                        print(f"[BotSelector] {char_name} 봇 on_message 호출 완료")
-                    except Exception as e:
-                        print(f"[BotSelector] {char_name} 봇 on_message 호출 중 예외 발생: {e}")
-                        import traceback
-                        print("Traceback:")
-                        print(traceback.format_exc())
-                    return  # 반드시 return하여 BotSelector가 추가 응답하지 않도록 함
-            print("=== End BotSelector Image Processing Debug ===\n")
-            return
+        # 일반 메시지/스토리 모드 등은 기존대로 처리
         await self.process_normal_message(message)
