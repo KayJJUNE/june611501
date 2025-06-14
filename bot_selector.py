@@ -715,6 +715,7 @@ class BotSelector(commands.Bot):
         )
         async def bot_command(interaction: discord.Interaction):
             try:
+                # 채널 타입 확인
                 if not isinstance(interaction.channel, discord.TextChannel):
                     await interaction.response.send_message(
                         "This command can only be used in server channels.",
@@ -722,79 +723,46 @@ class BotSelector(commands.Bot):
                     )
                     return
 
-                from config import CHARACTER_INFO, CHARACTER_IMAGES 
-                print("Available characters:", CHARACTER_INFO.keys())
-                print("Image paths:", CHARACTER_IMAGES)
-
-                view = discord.ui.View()
-                view.add_item(CharacterSelect(self))
-
-                # 모든 임베드를 리스트로 관리
-                embeds = []
-                files = []
-
-                # 각 캐릭터의 이미지와 정보를 개별 임베드로 추가
-                for char_name, char_info in CHARACTER_INFO.items():
-                    try:
-                        img_path = CHARACTER_IMAGES.get(char_name)
-                        print(f"Processing {char_name}:")
-                        print(f"  Path: {img_path}")
-                        print(f"  Exists: {os.path.exists(img_path) if img_path else False}")
-                        if img_path and os.path.exists(img_path):
-                            print(f"  Adding file for {char_name}")
-                            file = discord.File(img_path, filename=f"{char_name.lower()}.png")
-                            files.append(file)
-
-                            # 캐릭터별 임베드 생성
-                            char_embed = discord.Embed(
-                                title=f"{char_info['emoji']} {char_name}",
-                                description=char_info['description'],
-                                color=char_info.get('color', discord.Color.blue())
-                            )
-                            char_embed.set_image(url=f"attachment://{char_name.lower()}.png")
-                            embeds.append(char_embed)
-
-                    except Exception as e:
-                        print(f"Error processing {char_name}: {e}")
-                        continue
-
-                # 마지막 선택 임베드 추가
-                selection_embed = discord.Embed(
-                    title="✨ ",
-                    description="Which character would you like to talk to?",
-                    color=discord.Color.gold()
+                # 초기 응답 보내기
+                await interaction.response.defer(ephemeral=True)
+                
+                # 봇 선택 UI 생성
+                view = BotSelectView(self)
+                
+                # 임베드 생성
+                embed = discord.Embed(
+                    title="🤖 Character Selection",
+                    description="Please select a character to chat with:",
+                    color=discord.Color.blue()
                 )
-
-                # 사용 가능한 캐릭터 목록 추가
-                character_list = []
-                for char_name, char_info in CHARACTER_INFO.items():
-                    character_list.append(f"{char_info['emoji']} **{char_name}** - {char_info['description']}")
-
-                selection_embed.add_field(
-                    name="Available Characters",
-                    value="\n".join(character_list),
-                    inline=False
-                )
-                embeds.append(selection_embed)
-
-                print(f"Sending message with {len(embeds)} embeds and {len(files)} files")
-                # 중복 전송 방지: followup.send만 사용
-                await interaction.followup.send(
-                    embeds=embeds,
-                    files=files,
-                    view=view,
-                    ephemeral=True
-                )
-
-            except Exception as e:
-                print(f"Error in bot_command: {e}")
-                import traceback
-                print(traceback.format_exc())
+                
+                # 각 캐릭터 정보 추가
+                for char_name, bot in self.character_bots.items():
+                    char_info = CHARACTER_INFO.get(char_name, {})
+                    embed.add_field(
+                        name=f"{char_info.get('emoji', '🤖')} {char_info.get('name', char_name)}",
+                        value=char_info.get('description', 'No description available.'),
+                        inline=False
+                    )
+                
+                # 응답 보내기
                 try:
-                    await interaction.followup.send(
+                    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                except discord.NotFound:
+                    # 웹훅이 만료된 경우 새로운 응답 시도
+                    await interaction.response.send_message(
                         "An error occurred while loading the character selection menu. Please try again.",
                         ephemeral=True
                     )
+                
+            except Exception as e:
+                print(f"Error in bot_command: {e}")
+                try:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            "An error occurred while loading the character selection menu.",
+                            ephemeral=True
+                        )
                 except Exception as followup_error:
                     print(f"Error sending error message: {followup_error}")
 
@@ -960,14 +928,14 @@ class BotSelector(commands.Bot):
             try:
                 # 랭킹 선택 UI 생성
                 view = RankingView(self.db)
-                await interaction.response.send_message("랭킹 종류를 선택해주세요:", view=view, ephemeral=True)
+                await interaction.response.send_message("Please select a ranking type:", view=view, ephemeral=True)
             except Exception as e:
                 print(f"Error in ranking command: {e}")
                 try:
                     if interaction.response.is_done():
-                        await interaction.followup.send("랭킹 정보를 불러오는 중 오류가 발생했습니다.", ephemeral=True)
+                        await interaction.followup.send("An error occurred while loading the ranking information.", ephemeral=True)
                     else:
-                        await interaction.response.send_message("랭킹 정보를 불러오는 중 오류가 발생했습니다.", ephemeral=True)
+                        await interaction.response.send_message("An error occurred while loading the ranking information.", ephemeral=True)
                 except Exception as followup_error:
                     print(f"Error sending error message: {followup_error}")
 
