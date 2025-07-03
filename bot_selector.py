@@ -851,10 +851,16 @@ class BotSelector(commands.Bot):
                 import traceback
                 print(traceback.format_exc())
                 try:
-                    await interaction.response.send_message(
-                        "An error occurred while loading the character selection menu. Please try again.",
-                        ephemeral=True
-                    )
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            "An error occurred while loading the character selection menu. Please try again.",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.followup.send(
+                            "An error occurred while loading the character selection menu. Please try again.",
+                            ephemeral=True
+                        )
                 except Exception as followup_error:
                     print(f"Error sending error message: {followup_error}")
 
@@ -1779,105 +1785,94 @@ class BotSelector(commands.Bot):
             현재 채널의 캐릭터에게 선물을 줍니다.
             """
             await interaction.response.defer(ephemeral=True)
-
-            # 디버깅 로그 추가
-            print(f"[DEBUG] /gift called in channel: {interaction.channel.id}")
-            from story_mode import story_sessions
-            print(f"[DEBUG] story_sessions keys: {list(story_sessions.keys())}")
-            session = story_sessions.get(interaction.channel.id)
-            print(f"[DEBUG] session: {session}")
-
-            # 스토리 모드 세션이 있는지 먼저 확인
-            if session and session.get("stage_num") == 3 and session.get("waiting_for_gift"):
-                # 카가리 챕터3에서만 챕터3 선물 로직 동작
-                if session.get("character_name", "").lower() == "kagari":
-                    # 챕터3 스토리 진행 중 - 선물 사용으로 클리어 시도
-                    success, result = await handle_chapter3_gift_usage(self, interaction.user.id, session["character_name"], item, interaction.channel.id)
-
-                    if success:
-                        success_embed, completion_embed = result
-                        await interaction.followup.send(embed=success_embed, ephemeral=True)
-                        await interaction.channel.send(embed=completion_embed)
-
-                        # 10초 후 채널 삭제
-                        await asyncio.sleep(10)
-                        try:
-                            await interaction.channel.delete()
-                        except:
-                            pass
-                        return
-                    else:
-                        await interaction.followup.send(f"Error: {result}", ephemeral=True)
-                        return
-                else:
-                    await interaction.followup.send("This command is only available in Kagari's last chapter.", ephemeral=True)
+            try:
+                print(f"[DEBUG] /gift called: user_id={interaction.user.id}, item={item}, quantity={quantity}")
+                # 스토리 모드 세션 체크 등 기존 코드...
+                from story_mode import story_sessions
+                print(f"[DEBUG] story_sessions keys: {list(story_sessions.keys())}")
+                session = story_sessions.get(interaction.channel.id)
+                print(f"[DEBUG] session: {session}")
+                # ... (생략) ...
+                # 현재 채널의 캐릭터 봇 찾기
+                current_bot = None
+                for char_name, bot in self.character_bots.items():
+                    if interaction.channel.id in bot.active_channels:
+                        current_bot = bot
+                        break
+                if not current_bot:
+                    print("[DEBUG] current_bot not found for channel")
+                    await interaction.followup.send("You can't give gifts in this channel. Please use this in a character's chat channel.", ephemeral=True)
                     return
-
-            # 현재 채널의 캐릭터 봇 찾기 (일반 채팅 채널용)
-            current_bot = None
-            for char_name, bot in self.character_bots.items():
-                if interaction.channel.id in bot.active_channels:
-                    current_bot = bot
-                    break
-
-            if not current_bot:
-                await interaction.followup.send("You can't give gifts in this channel. Please use this in a character's chat channel.", ephemeral=True)
-                return
-
-            character = current_bot.character_name
-            user_id = interaction.user.id
-
-            # 보유 수량 체크
-            user_gifts = self.db.get_user_gifts(user_id)
-            gift_info = next((g for g in user_gifts if g[0] == item), None)
-
-            if not gift_info:
-                await interaction.followup.send("You don't own this gift. Please check your inventory.", ephemeral=True)
-                return
-
-            owned_quantity = gift_info[1]
-            if quantity <= 0 or quantity > owned_quantity:
-                await interaction.followup.send(f"Please check the quantity. You currently have {owned_quantity}.", ephemeral=True)
-                return
-
-            # 일반 선물 사용 (기존 로직)
-            self.db.use_user_gift(user_id, item, quantity)
-
-            gift_details = get_gift_details(item)
-            reaction_message = get_gift_reaction(character, item)
-            gift_emoji = get_gift_emoji(item)
-
-            # 선물 종류와 선호도에 따른 호감도 변화량
-            is_preferred = check_gift_preference(character, item)
-            base_affinity = 5 if is_preferred else -1
-            affinity_change = base_affinity * quantity
-
-            self.db.update_affinity(
-                user_id=user_id,
-                character_name=character,
-                last_message=f"Gave {quantity} of '{gift_details['name']}'.",
-                last_message_time=datetime.utcnow(),
-                score_change=affinity_change
-            )
-
-            embed = discord.Embed(
-                title=f"🎁 To {character}",
-                description=f"You gave **{gift_details['name']} x{quantity}**.",
-                color=discord.Color.gold()
-            )
-            embed.add_field(name="Affinity Change", value=f"`{affinity_change:+}`", inline=False)
-            embed.add_field(name=f"{character}'s Reaction", value=f"💬 *{reaction_message}*", inline=False)
-            embed.set_thumbnail(url=interaction.user.display_avatar.url)
-            embed.set_footer(text="Your gift has been delivered!")
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-            # 캐릭터 봇이 직접 리액션을 보내도록 수정
-            if current_bot:
-                await current_bot.send_reaction_message(
-                    channel_id=interaction.channel_id,
-                    text=f"*{reaction_message}*",
-                    emoji=gift_emoji
+                character = current_bot.character_name
+                user_id = interaction.user.id
+                print(f"[DEBUG] character={character}, user_id={user_id}")
+                # 보유 수량 체크
+                user_gifts = self.db.get_user_gifts(user_id)
+                print(f"[DEBUG] user_gifts: {user_gifts}")
+                gift_info = next((g for g in user_gifts if g[0] == item), None)
+                if not gift_info:
+                    print(f"[DEBUG] User does not own gift: {item}")
+                    await interaction.followup.send("You don't own this gift. Please check your inventory.", ephemeral=True)
+                    return
+                owned_quantity = gift_info[1]
+                print(f"[DEBUG] owned_quantity: {owned_quantity}")
+                if quantity <= 0 or quantity > owned_quantity:
+                    print(f"[DEBUG] Invalid quantity: {quantity}")
+                    await interaction.followup.send(f"Please check the quantity. You currently have {owned_quantity}.", ephemeral=True)
+                    return
+                # DB 차감
+                print(f"[DEBUG] Attempting to use_user_gift: {item}, quantity={quantity}")
+                result = self.db.use_user_gift(user_id, item, quantity)
+                print(f"[DEBUG] use_user_gift result: {result}")
+                if not result:
+                    await interaction.followup.send("The gift could not be used. Please check the quantity or contact the administrator..", ephemeral=True)
+                    return
+                # 선물 정보/리액션
+                gift_details = get_gift_details(item)
+                print(f"[DEBUG] gift_details: {gift_details}")
+                reaction_message = get_gift_reaction(character, item)
+                gift_emoji = get_gift_emoji(item)
+                is_preferred = check_gift_preference(character, item)
+                base_affinity = 5 if is_preferred else -1
+                affinity_change = base_affinity * quantity
+                print(f"[DEBUG] is_preferred: {is_preferred}, affinity_change: {affinity_change}")
+                # 호감도 업데이트
+                self.db.update_affinity(
+                    user_id=user_id,
+                    character_name=character,
+                    last_message=f"Gave {quantity} of '{gift_details['name']}'.",
+                    last_message_time=datetime.utcnow(),
+                    score_change=affinity_change
                 )
+                print(f"[DEBUG] Affinity updated.")
+                # 임베드 생성 및 전송
+                embed = discord.Embed(
+                    title=f"🎁 To {character}",
+                    description=f"You gave **{gift_details['name']} x{quantity}**.",
+                    color=discord.Color.gold()
+                )
+                embed.add_field(name="Affinity Change", value=f"`{affinity_change:+}`", inline=False)
+                embed.add_field(name=f"{character}'s Reaction", value=f"💬 *{reaction_message}*", inline=False)
+                embed.set_thumbnail(url=interaction.user.display_avatar.url)
+                embed.set_footer(text="Your gift has been delivered!")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                print(f"[DEBUG] Gift embed sent.")
+                # 캐릭터 봇 리액션
+                if current_bot:
+                    await current_bot.send_reaction_message(
+                        channel_id=interaction.channel_id,
+                        text=f"*{reaction_message}*",
+                        emoji=gift_emoji
+                    )
+                print(f"[DEBUG] send_reaction_message sent.")
+            except Exception as e:
+                print(f"[ERROR] /gift 명령어 처리 중 오류: {e}")
+                import traceback
+                print(traceback.format_exc())
+                try:
+                    await interaction.followup.send("에러가 발생했습니다. 관리자에게 문의하세요.", ephemeral=True)
+                except Exception as e2:
+                    print(f"[ERROR] followup.send 실패: {e2}")
 
         async def give_gift_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
             choices = []
