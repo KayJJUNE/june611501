@@ -1837,12 +1837,17 @@ class BotSelector(commands.Bot):
                 affinity_change = base_affinity * quantity
                 print(f"[DEBUG] is_preferred: {is_preferred}, affinity_change: {affinity_change}")
                 # 호감도 업데이트
+                affinity_info = self.db.get_affinity(user_id, character)
+                highest_milestone = 0
+                if affinity_info and 'highest_milestone_achieved' in affinity_info:
+                    highest_milestone = affinity_info['highest_milestone_achieved']
                 self.db.update_affinity(
                     user_id=user_id,
                     character_name=character,
                     last_message=f"Gave {quantity} of '{gift_details['name']}'.",
                     last_message_time=datetime.utcnow(),
-                    score_change=affinity_change
+                    score_change=affinity_change,
+                    highest_milestone=highest_milestone
                 )
                 print(f"[DEBUG] Affinity updated.")
                 # 임베드 생성 및 전송
@@ -1865,6 +1870,13 @@ class BotSelector(commands.Bot):
                         emoji=gift_emoji
                     )
                 print(f"[DEBUG] send_reaction_message sent.")
+                # 모든 단계가 성공하면 마지막에 선물 차감
+                print(f"[DEBUG] Attempting to use_user_gift: {item}, quantity={quantity}")
+                result = self.db.use_user_gift(user_id, item, quantity)
+                print(f"[DEBUG] use_user_gift result: {result}")
+                if not result:
+                    await interaction.followup.send("The gift could not be used. Please check the quantity or contact the administrator..", ephemeral=True)
+                    return
             except Exception as e:
                 print(f"[ERROR] /gift 명령어 처리 중 오류: {e}")
                 import traceback
