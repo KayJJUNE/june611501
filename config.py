@@ -705,7 +705,17 @@ CHARACTER_CARD_INFO = {
                     "Nope! Try thinking again~"
                 ]
             }
-        ]
+        ],
+        "elysiac6": {
+            "image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8e240175-2f85-4c6d-f16e-3a4aa632b000/public",
+            "description": "Elysia's C6 Card",
+            "tier": "C"
+        },
+        "elysiac7": {
+            "image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7d734cb4-9a93-4942-a800-717675931100/public",
+            "description": "Elysia's C7 Card",
+            "tier": "C"
+        }
     }
 }
 
@@ -1045,7 +1055,17 @@ STORY_CHAPTERS = {
                     "Nope! Try thinking again~"
                 ]
             }
-        ]
+        ],
+        "elysiac6": {
+            "image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8e240175-2f85-4c6d-f16e-3a4aa632b000/public",
+            "description": "Elysia's C6 Card",
+            "tier": "C"
+        },
+        "elysiac7": {
+            "image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7d734cb4-9a93-4942-a800-717675931100/public",
+            "description": "Elysia's C7 Card",
+            "tier": "C"
+        }
     }
 }
 
