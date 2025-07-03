@@ -715,6 +715,12 @@ class BotSelector(commands.Bot):
         self.roleplay_sessions = {}
         self.story_sessions = {}
 
+    async def check_story_quests(self, user_id: int) -> list:
+        """스토리 퀘스트 상태를 확인합니다."""
+        quests = []
+        # ... 이하 로직 ...
+        return quests
+
     async def setup_hook(self) -> None:
         """ 봇이 시작될 때 필요한 비동기 설정을 수행합니다. """
         # Cog 로드를 제거하고, 명령어는 setup_commands에서 직접 등록
@@ -2130,30 +2136,6 @@ class BotSelector(commands.Bot):
                     await interaction.response.send_message(f"퀘스트 리셋에 실패했습니다.", ephemeral=True)
             except Exception as e:
                 await interaction.response.send_message(f"에러 발생: {e}", ephemeral=True)
-
-        async def check_story_quests(self, user_id: int) -> list:
-            """스토리 퀘스트 상태를 확인합니다."""
-            quests = []
-            try:
-                # 카가리 스토리 퀘스트 (챕터 1,2,3 모두 완료)
-                kagari_completed = self.db.get_completed_chapters(user_id, 'Kagari')
-                kagari_all_completed = len(kagari_completed) >= 3
-                kagari_quest_id = 'story_kagari_all_chapters'
-                quests.append({
-                    'id': kagari_quest_id,
-                    'name': '🌸 Kagari Story Complete',
-                    'description': f'Complete all 3 chapters of Kagari\'s story ({len(kagari_completed)}/3)',
-                    'progress': len(kagari_completed),
-                    'max_progress': 3,
-                    'completed': kagari_all_completed,
-                    'reward': 'Epic Gifts x3',
-                    'claimed': self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters'),
-                    'character': 'Kagari',
-                    'quest_type': 'all_chapters'
-                })
-            except Exception as e:
-                print(f"Error checking story quests: {e}")
-            return quests
 
     def create_quest_embed(self, user_id: int, quest_status: dict) -> discord.Embed:
         """
