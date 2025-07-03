@@ -3638,36 +3638,7 @@ class NewStoryView(discord.ui.View):
         super().__init__(timeout=300)
         self.add_item(NewStoryCharacterSelect(bot_instance))
 
-    async def check_story_quests(self, user_id: int) -> list:
-        """스토리 퀘스트 상태를 확인합니다."""
-        quests = []
-
-        try:
-            characters = [
-                ("Kagari", 3, "🌸"),
-                ("Eros", 3, "💙"),
-                ("Elysia", 1, "💜")
-            ]
-            for character, max_chapter, emoji in characters:
-                completed_chapters = self.db.get_completed_chapters(user_id, character)
-                all_completed = len(completed_chapters) >= max_chapter
-                quest_id = f'story_{character.lower()}_all_chapters'
-                quests.append({
-                    'id': quest_id,
-                    'name': f'{emoji} {character} Story Complete',
-                    'description': f'Complete all {max_chapter} chapter(s) of {character}\'s story ({len(completed_chapters)}/{max_chapter})',
-                    'progress': len(completed_chapters),
-                    'max_progress': max_chapter,
-                    'completed': all_completed,
-                    'reward': 'Epic Gifts x3',
-                    'claimed': self.db.is_story_quest_claimed(user_id, character, 'all_chapters'),
-                    'character': character,
-                    'quest_type': 'all_chapters'
-                })
-        except Exception as e:
-            print(f"Error checking story quests: {e}")
-
-        return quests
+    # (여기 있던 async def check_story_quests 함수 전체 삭제)
 
 async def main():
     intents = discord.Intents.all()
