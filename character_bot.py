@@ -376,8 +376,8 @@ class CharacterBot(commands.Bot):
     async def setup_hook(self):
         # 기존 setup_hook 코드가 있다면 유지
         try:
-            self.add_view(NicknameInputView(self, 0, ""))
-            print("[DEBUG] NicknameInputView registered globally via add_view")
+            # self.add_view(NicknameInputView(self, 0, ""))  # 글로벌 등록 제거
+            print("[DEBUG] NicknameInputView registered globally via add_view (제거됨)")
         except Exception as e:
             print(f"[ERROR] Failed to register NicknameInputView globally: {e}")
 
