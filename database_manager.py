@@ -1282,3 +1282,29 @@ class DatabaseManager:
             return False
         finally:
             self.return_connection(conn)
+
+    def get_today_affinity_gain(self, user_id: int) -> int:
+        """
+        오늘 하루 동안(0시~현재) 모든 캐릭터에 대해 유저가 획득한 총 호감도 증가량을 반환합니다.
+        affinity_log 테이블에 user_id, score_change, timestamp 컬럼이 있다고 가정합니다.
+        """
+        import datetime
+        from pytz import timezone
+        now = datetime.datetime.now(timezone('Asia/Seoul'))
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COALESCE(SUM(score_change), 0)
+                    FROM affinity_log
+                    WHERE user_id = %s AND timestamp >= %s
+                """, (user_id, today_start))
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            print(f"Error in get_today_affinity_gain: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
