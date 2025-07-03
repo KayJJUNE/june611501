@@ -1263,3 +1263,22 @@ class DatabaseManager:
             return 0
         finally:
             self.return_connection(conn)
+
+    def reset_quest_claims(self, user_id: int) -> bool:
+        """
+        해당 유저의 모든 일일/주간/레벨업/스토리 퀘스트 보상 수령 기록을 삭제합니다.
+        (quest_claims 테이블 전체 삭제)
+        """
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM quest_claims WHERE user_id = %s", (user_id,))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error resetting quest claims: {e}")
+            if conn: conn.rollback()
+            return False
+        finally:
+            self.return_connection(conn)

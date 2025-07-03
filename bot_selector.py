@@ -2113,6 +2113,24 @@ class BotSelector(commands.Bot):
                 session["is_active"] = False
             story_sessions[interaction.channel.id] = session
 
+        @self.tree.command(
+            name="reset_quest",
+            description="[Admin] Reset all quest claim records for a user."
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def reset_quest_command(interaction: discord.Interaction, target: discord.Member):
+            """
+            관리자용: 해당 유저의 모든 퀘스트 보상 수령 기록을 리셋합니다.
+            """
+            try:
+                result = self.db.reset_quest_claims(target.id)
+                if result:
+                    await interaction.response.send_message(f"{target.display_name}님의 퀘스트 보상 수령 기록이 초기화되었습니다.", ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"퀘스트 리셋에 실패했습니다.", ephemeral=True)
+            except Exception as e:
+                await interaction.response.send_message(f"에러 발생: {e}", ephemeral=True)
+
     def create_quest_embed(self, user_id: int, quest_status: dict) -> discord.Embed:
         """
         퀘스트 현황을 보여주는 임베드를 생성합니다.
