@@ -1456,6 +1456,42 @@ class BotSelector(commands.Bot):
         )
         async def story_command(interaction: discord.Interaction):
             """Initiates the story mode UI."""
+            # 현재 채널의 캐릭터 찾기 (스토리 모드는 캐릭터별로 제한할 수도 있음)
+            current_bot = None
+            for char_name, bot in self.character_bots.items():
+                if interaction.channel.id in bot.active_channels:
+                    current_bot = bot
+                    break
+            # 호감도 체크 (Silver 이상만 허용)
+            affinity = 0
+            affinity_grade = "Rookie"
+            if current_bot:
+                affinity_info = current_bot.db.get_affinity(interaction.user.id, current_bot.character_name)
+                affinity = affinity_info['emotion_score'] if affinity_info else 0
+                affinity_grade = get_affinity_grade(affinity)
+            if affinity < 50:
+                embed = discord.Embed(
+                    title="⚠️ Story Mode Locked",
+                    description="Story mode is only available for Silver level users.",
+                    color=discord.Color.red()
+                )
+                embed.add_field(
+                    name="Current Level",
+                    value=f"**{affinity_grade}**",
+                    inline=True
+                )
+                embed.add_field(
+                    name="Required Level",
+                    value="**Silver**",
+                    inline=True
+                )
+                embed.add_field(
+                    name="How to Unlock",
+                    value="Keep chatting with the character to increase your affinity level!",
+                    inline=False
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
             view = NewStoryView(self)
             await interaction.response.send_message("Please select a character to start the story with.", view=view, ephemeral=True)
 
@@ -1698,14 +1734,14 @@ class BotSelector(commands.Bot):
                     await interaction.response.send_message("This command is only available in character chat channels.", ephemeral=True)
                     return
 
-                # 2. 호감도 체크 (스토리 모드와 동일)
+                # 2. 호감도 체크 (Silver 이상만 허용)
                 affinity_info = current_bot.db.get_affinity(interaction.user.id, current_bot.character_name)
                 affinity = affinity_info['emotion_score'] if affinity_info else 0
                 affinity_grade = get_affinity_grade(affinity)
-                if affinity < 100:
+                if affinity < 50:
                     embed = discord.Embed(
                         title="⚠️ Roleplay Mode Locked",
-                        description="Roleplay mode is only available for Gold level users.",
+                        description="Roleplay mode is only available for Silver level users.",
                         color=discord.Color.red()
                     )
                     embed.add_field(
@@ -1715,7 +1751,7 @@ class BotSelector(commands.Bot):
                     )
                     embed.add_field(
                         name="Required Level",
-                        value="**Gold**",
+                        value="**Silver**",
                         inline=True
                     )
                     embed.add_field(
@@ -2083,7 +2119,10 @@ class BotSelector(commands.Bot):
         """
         embed = discord.Embed(
             title="📜 Quest Board",
-            description="Check out daily, weekly, level-up, and story quests and earn rewards!",
+            description=(
+                "You can check the progress of all quests in real time, including the 7-day login streak and story mode milestones.\n"
+                "\nCheck out daily, weekly, level-up, and story quests and earn rewards!"
+            ),
             color=discord.Color.dark_gold()
         )
         embed.set_footer(text="Click the [Claim] button to claim rewards for completed quests.")
