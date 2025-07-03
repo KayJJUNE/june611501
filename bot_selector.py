@@ -1520,7 +1520,8 @@ class BotSelector(commands.Bot):
             # affinity 직접 수정
             try:
                 # 락이 필요 없다면 아래 한 줄만!
-                self.db.set_affinity(target.id, character, value)
+                from datetime import datetime
+                self.db.update_affinity(target.id, character, last_message="(reset)", last_message_time=datetime.utcnow(), score_change=value, highest_milestone=0)
                 grade = get_affinity_grade(value)
                 embed = discord.Embed(
                     title="Affinity Score Updated",
