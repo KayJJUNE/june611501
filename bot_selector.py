@@ -2331,9 +2331,7 @@ class BotSelector(commands.Bot):
         return quests
 
     async def claim_levelup_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
-        """골드 달성 시 에픽 아이템 3개 지급으로 통일"""
         try:
-            # quest_id 형식: levelup_{character}_Gold
             parts = quest_id.split('_')
             if len(parts) != 3:
                 return False, "Invalid levelup quest ID"
@@ -2341,18 +2339,21 @@ class BotSelector(commands.Bot):
             grade = parts[2]
             if grade != 'Gold':
                 return False, "Only Gold level-up quests are supported."
-            # 레벨업 플래그 설정
             self.db.add_levelup_flag(user_id, character, grade)
-            # 에픽 아이템 3개 지급
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
-            gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
-            if gift_ids:
-                for gift_id in gift_ids:
-                    self.db.add_user_gift(user_id, gift_id, 1)
-                self.db.claim_quest(user_id, quest_id)
-                reward_names = [f"{get_gift_details(g)['name']} x1" for g in gift_ids]
-                return True, ", ".join(reward_names)
-            return False, "Failed to generate reward"
+            # 유저가 이미 받은 아이템 목록 조회
+            user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
+            reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+            available_rewards = [item for item in reward_candidates if item not in user_gifts]
+            if not available_rewards:
+                return False, "You have already received all possible rewards for this quest!"
+            import random
+            selected_rewards = random.sample(available_rewards, min(3, len(available_rewards)))
+            for gift_id in selected_rewards:
+                self.db.add_user_gift(user_id, gift_id, 1)
+            self.db.claim_quest(user_id, quest_id)
+            reward_names = [get_gift_details(g)['name'] + ' x1' for g in selected_rewards]
+            return True, ", ".join(reward_names)
         except Exception as e:
             print(f"Error claiming levelup reward: {e}")
             import traceback
@@ -2495,13 +2496,11 @@ class BotSelector(commands.Bot):
 
     async def claim_daily_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         print(f"[DEBUG] claim_daily_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
-        # ID 형식: daily_{type}_{level} (type은 _ 포함 가능)
         rest = quest_id.replace('daily_', '', 1)
         type_parts = rest.rsplit('_', 1)
         quest_type = type_parts[0]
         print(f"[DEBUG] Parsed quest_type: '{quest_type}'")
 
-        # 보상 내용 정의 (affinity_gain 추가)
         rewards = {
             'conversation': ('Common Item', 'COMMON', 1),
             'affinity_gain': ('Common Item', 'COMMON', 1),
@@ -2516,33 +2515,35 @@ class BotSelector(commands.Bot):
             return False, "This is an unknown quest."
 
         try:
-            # 아이템 지급
-            gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY[reward_rarity.upper()], reward_quantity)
-
-            for gift_id in gift_ids:
-                self.db.add_user_gift(user_id, gift_id, 1)
-
-            # 퀘스트 완료 플래그 저장
+            # 유저가 이미 받은 아이템 목록 조회
+            user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
+            # 보상 후보 아이템 리스트
+            from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+            reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY[reward_rarity.upper()], reward_quantity)
+            # 아직 받지 않은 아이템만 후보로 남김
+            available_rewards = [item for item in reward_candidates if item not in user_gifts]
+            if not available_rewards:
+                return False, "You have already received all possible rewards for this quest!"
+            # 랜덤 지급
+            import random
+            reward_id = random.choice(available_rewards)
+            self.db.add_user_gift(user_id, reward_id, 1)
             self.db.claim_quest(user_id, quest_id)
-
-            reward_names = [f"{get_gift_details(g_id)['name']} x1" for g_id in gift_ids]
-            return True, ", ".join(reward_names)
-
+            reward_name = get_gift_details(reward_id)['name']
+            return True, f"{reward_name} x1"
         except Exception as e:
             print(f"Error claiming daily reward: {e}")
+            import traceback
             traceback.print_exc()
             return False, "An error occurred while trying to earn Daily Rewards."
 
     async def claim_weekly_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
-        """주간 퀘스트 보상을 지급합니다."""
         print(f"[DEBUG] claim_weekly_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
-        # ID 형식: weekly_{type}_{level} (type은 _ 포함 가능)
         rest = quest_id.replace('weekly_', '', 1)
         type_parts = rest.rsplit('_', 1)
         quest_type = type_parts[0]
         print(f"[DEBUG] Parsed quest_type: '{quest_type}'")
 
-        # 보상 내용 정의
         rewards = {
             'login': ('Epic Item', 'EPIC', 2),
             'share': ('Common Item', 'COMMON', 1)
@@ -2557,34 +2558,40 @@ class BotSelector(commands.Bot):
             return False, "This is an unknown quest."
 
         try:
-            # 아이템 지급
-            gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY[reward_rarity.upper()], reward_quantity)
-
-            for gift_id in gift_ids:
-                self.db.add_user_gift(user_id, gift_id, 1)
-
-            # 퀘스트 완료 플래그 저장
+            # 유저가 이미 받은 아이템 목록 조회
+            user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
+            from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+            reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY[reward_rarity.upper()], reward_quantity)
+            available_rewards = [item for item in reward_candidates if item not in user_gifts]
+            if not available_rewards:
+                return False, "You have already received all possible rewards for this quest!"
+            import random
+            reward_id = random.choice(available_rewards)
+            self.db.add_user_gift(user_id, reward_id, 1)
             self.db.claim_quest(user_id, quest_id)
-
-            reward_names = [f"{get_gift_details(g_id)['name']} x1" for g_id in gift_ids]
-            return True, ", ".join(reward_names)
-
+            reward_name = get_gift_details(reward_id)['name']
+            return True, f"{reward_name} x1"
         except Exception as e:
             print(f"Error claiming weekly reward: {e}")
+            import traceback
             traceback.print_exc()
             return False, "Error earning weekly rewards."
 
     async def claim_story_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
-        """스토리 퀘스트 보상을 지급합니다."""
         try:
-            # quest_id 형식: story_{character}_{quest_type}
             parts = quest_id.split('_')
             if len(parts) != 3:
                 return False, "Invalid story quest ID"
-
             character = parts[1]
             quest_type = parts[2]
-
+            from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+            user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
+            reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+            available_rewards = [item for item in reward_candidates if item not in user_gifts]
+            if not available_rewards:
+                return False, "You have already received all possible rewards for this quest!"
+            import random
+            selected_rewards = random.sample(available_rewards, min(3, len(available_rewards)))
             # Kagari 스토리 퀘스트 (3챕터 완료)
             if character == 'kagari' and quest_type == 'all_chapters':
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Kagari')
@@ -2592,14 +2599,11 @@ class BotSelector(commands.Bot):
                     return False, "You need to complete all 3 chapters of Kagari's story first"
                 if self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters'):
                     return False, "You have already claimed this reward"
-                from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
-                gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
-                for gift_id in gift_ids:
+                for gift_id in selected_rewards:
                     self.db.add_user_gift(user_id, gift_id, 1)
                 self.db.claim_story_quest(user_id, 'Kagari', 'all_chapters')
-                reward_names = [get_gift_details(g_id)['name'] for g_id in gift_ids]
+                reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
                 return True, f"Congratulations! You completed all Kagari story chapters! You received: **{', '.join(reward_names)}**"
-
             # Eros 스토리 퀘스트 (3챕터 완료)
             if character == 'eros' and quest_type == 'all_chapters':
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Eros')
@@ -2607,14 +2611,11 @@ class BotSelector(commands.Bot):
                     return False, "You need to complete all 3 chapters of Eros's story first"
                 if self.db.is_story_quest_claimed(user_id, 'Eros', 'all_chapters'):
                     return False, "You have already claimed this reward"
-                from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
-                gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
-                for gift_id in gift_ids:
+                for gift_id in selected_rewards:
                     self.db.add_user_gift(user_id, gift_id, 1)
                 self.db.claim_story_quest(user_id, 'Eros', 'all_chapters')
-                reward_names = [get_gift_details(g_id)['name'] for g_id in gift_ids]
+                reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
                 return True, f"Congratulations! You completed all Eros story chapters! You received: **{', '.join(reward_names)}**"
-
             # Elysia 스토리 퀘스트 (1챕터 완료)
             if character == 'elysia' and quest_type == 'all_chapters':
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Elysia')
@@ -2622,14 +2623,11 @@ class BotSelector(commands.Bot):
                     return False, "You need to complete chapter 1 of Elysia's story first"
                 if self.db.is_story_quest_claimed(user_id, 'Elysia', 'all_chapters'):
                     return False, "You have already claimed this reward"
-                from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
-                gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
-                for gift_id in gift_ids:
+                for gift_id in selected_rewards:
                     self.db.add_user_gift(user_id, gift_id, 1)
                 self.db.claim_story_quest(user_id, 'Elysia', 'all_chapters')
-                reward_names = [get_gift_details(g_id)['name'] for g_id in gift_ids]
+                reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
                 return True, f"Congratulations! You completed Elysia's story! You received: **{', '.join(reward_names)}**"
-
             return False, "Unknown story quest"
         except Exception as e:
             print(f"Error claiming story reward: {e}")
