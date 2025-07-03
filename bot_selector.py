@@ -2201,6 +2201,20 @@ class BotSelector(commands.Bot):
             'reward': 'Random Common Item x1',
             'claimed': self.db.is_quest_claimed(user_id, quest_id)
         })
+
+        # 3. 카드 공유 퀘스트 (중복 불가, 1회만 인정)
+        card_shared_today = self.db.get_card_shared_today(user_id)
+        quest_id = 'daily_card_share_1'
+        quests.append({
+            'id': quest_id,
+            'name': '🔗 Card Share',
+            'description': f'Share a card today ({card_shared_today}/1)',
+            'progress': min(card_shared_today, 1),
+            'max_progress': 1,
+            'completed': card_shared_today >= 1,
+            'reward': 'Random Rare Item x1',
+            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+        })
         return quests
 
     async def check_weekly_quests(self, user_id: int) -> list:
@@ -3611,17 +3625,21 @@ class NewStoryView(discord.ui.View):
         quests = []
 
         try:
-            characters = ['Kagari', 'Eros', 'Elysia']
-            for character in characters:
+            characters = [
+                ("Kagari", 3, "🌸"),
+                ("Eros", 3, "💙"),
+                ("Elysia", 1, "💜")
+            ]
+            for character, max_chapter, emoji in characters:
                 completed_chapters = self.db.get_completed_chapters(user_id, character)
-                all_completed = len(completed_chapters) >= 3
+                all_completed = len(completed_chapters) >= max_chapter
                 quest_id = f'story_{character.lower()}_all_chapters'
                 quests.append({
                     'id': quest_id,
-                    'name': f'{"🌸" if character=="Kagari" else ("💙" if character=="Eros" else "💜")} {character} Story Complete',
-                    'description': f'Complete all 3 chapters of {character}\'s story ({len(completed_chapters)}/3)',
+                    'name': f'{emoji} {character} Story Complete',
+                    'description': f'Complete all {max_chapter} chapter(s) of {character}\'s story ({len(completed_chapters)}/{max_chapter})',
                     'progress': len(completed_chapters),
-                    'max_progress': 3,
+                    'max_progress': max_chapter,
                     'completed': all_completed,
                     'reward': 'Epic Gifts x3',
                     'claimed': self.db.is_story_quest_claimed(user_id, character, 'all_chapters'),

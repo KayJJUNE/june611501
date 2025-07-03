@@ -1238,3 +1238,28 @@ class DatabaseManager:
             if conn: conn.rollback()
         finally:
             self.return_connection(conn)
+
+    def get_card_shared_today(self, user_id: int) -> int:
+        """
+        CST 기준으로 오늘 카드 공유를 1회 이상 했는지 확인합니다.
+        중복 공유는 불가(1회만 인정).
+        """
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                today_cst = get_today_cst()
+                cursor.execute(
+                    """
+                    SELECT COUNT(DISTINCT card_id) FROM user_quest_events
+                    WHERE user_id = %s AND event_type = 'card_share' AND event_date = %s
+                    """,
+                    (user_id, today_cst)
+                )
+                count = cursor.fetchone()[0]
+                return 1 if count > 0 else 0
+        except Exception as e:
+            print(f"Error checking daily card share: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
