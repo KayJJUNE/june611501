@@ -718,9 +718,49 @@ class BotSelector(commands.Bot):
     async def check_story_quests(self, user_id: int) -> list:
         """스토리 퀘스트 상태를 확인합니다."""
         quests = []
-        # ... 이하 로직 ...
-        return quests
+        try:
+            # Kagari (3챕터)
+            kagari_completed = self.db.get_completed_chapters(user_id, 'Kagari')
+            quests.append({
+                'id': 'story_kagari_all_chapters',
+                'name': '🌸 Kagari Story Complete',
+                'description': f'Complete all 3 chapters of Kagari\'s story ({len(kagari_completed)}/3)',
+                'progress': len(kagari_completed),
+                'max_progress': 3,
+                'completed': len(kagari_completed) >= 3,
+                'reward': 'Epic Gifts x3',
+                'claimed': self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters')
+            })
 
+            # Eros (3챕터)
+            eros_completed = self.db.get_completed_chapters(user_id, 'Eros')
+            quests.append({
+                'id': 'story_eros_all_chapters',
+                'name': '💝 Eros Story Complete',
+                'description': f'Complete all 3 chapters of Eros\'s story ({len(eros_completed)}/3)',
+                'progress': len(eros_completed),
+                'max_progress': 3,
+                'completed': len(eros_completed) >= 3,
+                'reward': 'Epic Gifts x3',
+                'claimed': self.db.is_story_quest_claimed(user_id, 'Eros', 'all_chapters')
+            })
+
+            # Elysia (1챕터)
+            elysia_completed = self.db.get_completed_chapters(user_id, 'Elysia')
+            quests.append({
+                'id': 'story_elysia_all_chapters',
+                'name': '🦋 Elysia Story Complete',
+                'description': f'Complete chapter 1 of Elysia\'s story ({len(elysia_completed)}/1)',
+                'progress': len(elysia_completed),
+                'max_progress': 1,
+                'completed': len(elysia_completed) >= 1,
+                'reward': 'Epic Gifts x3',
+                'claimed': self.db.is_story_quest_claimed(user_id, 'Elysia', 'all_chapters')
+            })
+        except Exception as e:
+            print(f"Error in check_story_quests: {e}")
+        return quests
+    
     async def setup_hook(self) -> None:
         """ 봇이 시작될 때 필요한 비동기 설정을 수행합니다. """
         # Cog 로드를 제거하고, 명령어는 setup_commands에서 직접 등록
@@ -2244,7 +2284,6 @@ class BotSelector(commands.Bot):
             'reward': 'Random Epic Items x2',
             'claimed': self.db.is_quest_claimed(user_id, quest_id)
         })
-
         # 2. 카드 공유 퀘스트
         card_shared = self.db.get_card_shared_this_week(user_id)
         quest_id = 'weekly_share'
@@ -2546,32 +2585,52 @@ class BotSelector(commands.Bot):
             character = parts[1]
             quest_type = parts[2]
 
-            # 카가리 스토리 퀘스트 (모든 챕터 완료)
+            # Kagari 스토리 퀘스트 (3챕터 완료)
             if character == 'kagari' and quest_type == 'all_chapters':
-                # 모든 챕터 완료 확인
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Kagari')
                 if len(completed_chapters) < 3:
                     return False, "You need to complete all 3 chapters of Kagari's story first"
-
-                # 이미 보상을 받았는지 확인
                 if self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters'):
                     return False, "You have already claimed this reward"
-
-                # 에픽 선물 3개 지급
                 from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
                 gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
-
                 for gift_id in gift_ids:
                     self.db.add_user_gift(user_id, gift_id, 1)
-
-                # 스토리 퀘스트 완료 플래그 저장
                 self.db.claim_story_quest(user_id, 'Kagari', 'all_chapters')
-
                 reward_names = [get_gift_details(g_id)['name'] for g_id in gift_ids]
                 return True, f"Congratulations! You completed all Kagari story chapters! You received: **{', '.join(reward_names)}**"
 
-            return False, "Unknown story quest"
+            # Eros 스토리 퀘스트 (3챕터 완료)
+            if character == 'eros' and quest_type == 'all_chapters':
+                completed_chapters = self.db.get_completed_chapters(user_id, 'Eros')
+                if len(completed_chapters) < 3:
+                    return False, "You need to complete all 3 chapters of Eros's story first"
+                if self.db.is_story_quest_claimed(user_id, 'Eros', 'all_chapters'):
+                    return False, "You have already claimed this reward"
+                from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+                gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+                for gift_id in gift_ids:
+                    self.db.add_user_gift(user_id, gift_id, 1)
+                self.db.claim_story_quest(user_id, 'Eros', 'all_chapters')
+                reward_names = [get_gift_details(g_id)['name'] for g_id in gift_ids]
+                return True, f"Congratulations! You completed all Eros story chapters! You received: **{', '.join(reward_names)}**"
 
+            # Elysia 스토리 퀘스트 (1챕터 완료)
+            if character == 'elysia' and quest_type == 'all_chapters':
+                completed_chapters = self.db.get_completed_chapters(user_id, 'Elysia')
+                if len(completed_chapters) < 1:
+                    return False, "You need to complete chapter 1 of Elysia's story first"
+                if self.db.is_story_quest_claimed(user_id, 'Elysia', 'all_chapters'):
+                    return False, "You have already claimed this reward"
+                from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+                gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+                for gift_id in gift_ids:
+                    self.db.add_user_gift(user_id, gift_id, 1)
+                self.db.claim_story_quest(user_id, 'Elysia', 'all_chapters')
+                reward_names = [get_gift_details(g_id)['name'] for g_id in gift_ids]
+                return True, f"Congratulations! You completed Elysia's story! You received: **{', '.join(reward_names)}**"
+
+            return False, "Unknown story quest"
         except Exception as e:
             print(f"Error claiming story reward: {e}")
             import traceback
@@ -3071,7 +3130,7 @@ class GiftSelect(discord.ui.Select):
             )
 
         super().__init__(
-            placeholder="선물할 아이템을 선택하세요...",
+            placeholder="Select an item to give as a gift....",
             min_values=1,
             max_values=1,
             options=options
