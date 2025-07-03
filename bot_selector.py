@@ -2277,52 +2277,62 @@ class BotSelector(commands.Bot):
     async def check_levelup_quests(self, user_id: int) -> list:
         """레벨업 퀘스트 상태를 확인합니다."""
         quests = []
-
         try:
-            # 각 캐릭터별 레벨업 상태 확인
+            # 각 캐릭터별 골드 달성 퀘스트만 생성
             characters = ['Kagari', 'Eros', 'Elysia']
-
             for character in characters:
                 affinity_info = self.db.get_affinity(user_id, character)
                 if not affinity_info:
                     continue
-
                 current_score = affinity_info['emotion_score']
                 current_grade = get_affinity_grade(current_score)
-
-                # 레벨업 보상 체크
-                levelup_rewards = {
-                    'Rookie': {'next': 'Iron', 'reward': 'Common Item x1'},
-                    'Iron': {'next': 'Bronze', 'reward': 'Common Items x2'},
-                    'Bronze': {'next': 'Silver', 'reward': 'Rare Item x1'},
-                    'Silver': {'next': 'Gold', 'reward': 'Epic Items x2'}
+                # 골드 달성 여부만 체크
+                has_claimed = self.db.has_levelup_flag(user_id, character, 'Gold')
+                quest = {
+                    'id': f'levelup_{character}_Gold',
+                    'name': f'⭐ {character} Level-up',
+                    'description': f'Reach Gold level with {character}',
+                    'progress': 1 if current_grade == 'Gold' else 0,
+                    'max_progress': 1,
+                    'completed': (current_grade == 'Gold') and not has_claimed,
+                    'reward': 'Epic Items x3',
+                    'claimed': has_claimed,
+                    'character': character,
+                    'current_grade': current_grade
                 }
-
-                if current_grade in levelup_rewards:
-                    next_grade = levelup_rewards[current_grade]['next']
-                    reward = levelup_rewards[current_grade]['reward']
-
-                    # 레벨업 플래그 확인
-                    has_claimed = self.db.has_levelup_flag(user_id, character, current_grade)
-
-                    quest = {
-                        'id': f'levelup_{character}_{current_grade}',
-                        'name': f'⭐ {character} Level-up',
-                        'description': f'Reach {next_grade} level with {character}',
-                        'progress': 1 if current_grade != 'Rookie' else 0,
-                        'max_progress': 1,
-                        'completed': not has_claimed and current_grade != 'Rookie',
-                        'reward': reward,
-                        'claimed': has_claimed,
-                        'character': character,
-                        'current_grade': current_grade
-                    }
-                    quests.append(quest)
-
+                quests.append(quest)
         except Exception as e:
             print(f"Error checking levelup quests: {e}")
-
         return quests
+
+    async def claim_levelup_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
+        """골드 달성 시 에픽 아이템 3개 지급으로 통일"""
+        try:
+            # quest_id 형식: levelup_{character}_Gold
+            parts = quest_id.split('_')
+            if len(parts) != 3:
+                return False, "Invalid levelup quest ID"
+            character = parts[1]
+            grade = parts[2]
+            if grade != 'Gold':
+                return False, "Only Gold level-up quests are supported."
+            # 레벨업 플래그 설정
+            self.db.add_levelup_flag(user_id, character, grade)
+            # 에픽 아이템 3개 지급
+            from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+            gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+            if gift_ids:
+                for gift_id in gift_ids:
+                    self.db.add_user_gift(user_id, gift_id, 1)
+                self.db.claim_quest(user_id, quest_id)
+                reward_names = [f"{get_gift_details(g)['name']} x1" for g in gift_ids]
+                return True, ", ".join(reward_names)
+            return False, "Failed to generate reward"
+        except Exception as e:
+            print(f"Error claiming levelup reward: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, "Error claiming levelup reward"
 
     def format_daily_quests(self, quests: list) -> str:
         if quests is None or len(quests) == 0:
@@ -2538,50 +2548,6 @@ class BotSelector(commands.Bot):
             print(f"Error claiming weekly reward: {e}")
             traceback.print_exc()
             return False, "Error earning weekly rewards."
-
-    async def claim_levelup_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
-        """레벨업 보상을 지급합니다."""
-        try:
-            # quest_id 형식: levelup_{character}_{grade}
-            parts = quest_id.split('_')
-            if len(parts) != 3:
-                return False, "Invalid levelup quest ID"
-
-            character = parts[1]
-            grade = parts[2]
-
-            # 레벨업 플래그 설정
-            self.db.add_levelup_flag(user_id, character, grade)
-
-            # 보상 지급
-            reward_map = {
-                'Rookie': (GIFT_RARITY["COMMON"], 1),
-                'Iron': (GIFT_RARITY["COMMON"], 2),
-                'Bronze': (GIFT_RARITY["RARE"], 1),
-                'Silver': (GIFT_RARITY["EPIC"], 2)
-            }
-
-            rarity, count = reward_map.get(grade, (None, 0))
-
-            if not rarity:
-                return False, "No reward for this grade"
-
-            gift_ids = get_gifts_by_rarity_v2(rarity, count)
-
-            if gift_ids:
-                for gift_id in gift_ids:
-                    self.db.add_user_gift(user_id, gift_id, 1)
-                self.db.claim_quest(user_id, quest_id) # 통합된 claim 메서드 사용
-                reward_names = [f"{get_gift_details(g)['name']} x1" for g in gift_ids]
-                return True, ", ".join(reward_names)
-
-            return False, "Failed to generate reward"
-
-        except Exception as e:
-            print(f"Error claiming levelup reward: {e}")
-            import traceback
-            traceback.print_exc()
-            return False, "Error claiming levelup reward"
 
     async def claim_story_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         """스토리 퀘스트 보상을 지급합니다."""
