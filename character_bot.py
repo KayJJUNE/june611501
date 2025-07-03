@@ -1311,7 +1311,7 @@ class NicknameInputView(discord.ui.View):
 
 class NicknameInputModal(discord.ui.Modal, title="Enter Nickname"):
     nickname = discord.ui.TextInput(
-        label="Nickname (2-15 characters, no emoticons/special characters)",
+        label="Nickname (2-15 chars, no emoticons)",
         min_length=2,
         max_length=15,
         required=True
