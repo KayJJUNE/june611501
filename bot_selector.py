@@ -263,12 +263,12 @@ except NameError:
             # 글자수 초과 체크 (혹시 모를 예외 상황 대비)
             if len(self.user_role.value) > 150 or len(self.character_role.value) > 150:
                 await interaction.response.send_message(
-                    "❌ 'Your Role'과 'Character Role'은 150자 이내로 입력해야 합니다.", ephemeral=True
+                    "❌ 'Your Role and Character Role must be entered in 150 characters or less..", ephemeral=True
                 )
                 return
             if len(self.story_line.value) > 1500:
                 await interaction.response.send_message(
-                    "❌ 'Story Line'은 1500자 이내로 입력해야 합니다.", ephemeral=True
+                    "❌ 'The Story Line must be entered within 1,500 characters..", ephemeral=True
                 )
                 return
             try:
@@ -2211,34 +2211,20 @@ class BotSelector(commands.Bot):
             'reward': 'Random Common Item x1',
             'claimed': self.db.is_quest_claimed(user_id, quest_id)
         })
-
-        # 2. 카드 획득 퀘스트
-        today_cards = self.db.get_today_cards(user_id)
-        quest_id = 'daily_card_collection_1'
+        # 2. 호감도 +5 달성 퀘스트 (오늘 하루 동안 어떤 캐릭터든 호감도 증가량 5 이상)
+        affinity_gain = self.db.get_today_affinity_gain(user_id)  # 이 함수는 DB에서 오늘 하루 동안의 총 호감도 증가량을 반환해야 함
+        quest_id = 'daily_affinity_gain_5'
         quests.append({
             'id': quest_id,
-            'name': '🎴 Card Collection',
-            'description': f'Obtain 1 card ({today_cards}/1)',
-            'progress': min(today_cards, 1),
-            'max_progress': 1,
-            'completed': today_cards >= 1,
+            'name': '💖 Affinity +5',
+            'description': f'Gain +5 affinity with any character today ({affinity_gain}/5)',
+            'progress': min(affinity_gain, 5),
+            'max_progress': 5,
+            'completed': affinity_gain >= 5,
             'reward': 'Random Common Item x1',
             'claimed': self.db.is_quest_claimed(user_id, quest_id)
         })
 
-        # 3. 카드 공유 퀘스트 (중복 불가, 1회만 인정)
-        card_shared_today = self.db.get_card_shared_today(user_id)
-        quest_id = 'daily_card_share_1'
-        quests.append({
-            'id': quest_id,
-            'name': '🔗 Card Share',
-            'description': f'Share a card today ({card_shared_today}/1)',
-            'progress': min(card_shared_today, 1),
-            'max_progress': 1,
-            'completed': card_shared_today >= 1,
-            'reward': 'Random Rare Item x1',
-            'claimed': self.db.is_quest_claimed(user_id, quest_id)
-        })
         return quests
 
     async def check_weekly_quests(self, user_id: int) -> list:
@@ -2333,6 +2319,7 @@ class BotSelector(commands.Bot):
             import traceback
             traceback.print_exc()
             return False, "Error claiming levelup reward"
+
 
     def format_daily_quests(self, quests: list) -> str:
         if quests is None or len(quests) == 0:
@@ -2468,7 +2455,6 @@ class BotSelector(commands.Bot):
             return False, "Error claiming reward"
 
     async def claim_daily_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
-        """일일 퀘스트 보상을 지급합니다."""
         print(f"[DEBUG] claim_daily_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
         # ID 형식: daily_{type}_{level} (type은 _ 포함 가능)
         rest = quest_id.replace('daily_', '', 1)
@@ -2476,10 +2462,12 @@ class BotSelector(commands.Bot):
         quest_type = type_parts[0]
         print(f"[DEBUG] Parsed quest_type: '{quest_type}'")
 
-        # 보상 내용 정의
+        # 보상 내용 정의 (affinity_gain 추가)
         rewards = {
             'conversation': ('Common Item', 'COMMON', 1),
-            'card_collection': ('Rare Item', 'RARE', 1)
+            'card_collection': ('Rare Item', 'RARE', 1),
+            'affinity_gain': ('Common Item', 'COMMON', 1),
+            'card_share': ('Rare Item', 'RARE', 1),
         }
         print(f"[DEBUG] Available daily rewards keys: {list(rewards.keys())}")
 
@@ -2929,33 +2917,6 @@ class ShareCardButton(discord.ui.Button):
         except Exception as e:
             print(f"Error recording card share: {e}")
 
-    async def check_story_quests(self, user_id: int) -> list:
-        """스토리 퀘스트 상태를 확인합니다."""
-        quests = []
-
-        try:
-            # 카가리 스토리 퀘스트 (챕터 1,2,3 모두 완료)
-            kagari_completed = self.db.get_completed_chapters(user_id, 'Kagari')
-            kagari_all_completed = len(kagari_completed) >= 3
-            kagari_quest_id = 'story_kagari_all_chapters'
-
-            quests.append({
-                'id': kagari_quest_id,
-                'name': '🌸 Kagari Story Complete',
-                'description': f'Complete all 3 chapters of Kagari\'s story ({len(kagari_completed)}/3)',
-                'progress': len(kagari_completed),
-                'max_progress': 3,
-                'completed': kagari_all_completed,
-                'reward': 'Epic Gifts x3',
-                'claimed': self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters'),
-                'character': 'Kagari',
-                'quest_type': 'all_chapters'
-            })
-
-        except Exception as e:
-            print(f"Error checking story quests: {e}")
-
-        return quests
 
 import psycopg2
 from psycopg2 import pool
