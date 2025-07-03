@@ -675,47 +675,34 @@ CHARACTER_CARD_INFO = {
         "banner_image": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/deddb343-023f-430a-2987-aaafd8985c00/public"
     },
     "Elysia": {
+        "elysiac1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/a06d472e-e813-475b-0d0d-3c2c27ef4200/public", "description": "Elysia's C1 Card", "tier": "C"},
+        "elysiac2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/78eae705-b2ff-4455-c030-fd2396949400/public", "description": "Elysia's C2 Card", "tier": "C"},
+        "elysiac3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3157a0c6-2e02-4294-8ac3-9575b59d0000/public", "description": "Elysia's C3 Card", "tier": "C"},
+        "elysiac4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/c788be89-5d39-4d60-6190-6b4583701600/public", "description": "Elysia's C4 Card", "tier": "C"},
+        "elysiac5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/1251f630-ca06-4af0-b366-66be9d249f00/public", "description": "Elysia's C5 Card", "tier": "C"},
+        "elysiac6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8e240175-2f85-4c6d-f16e-3a4aa632b000/public", "description": "Elysia's C6 Card", "tier": "C"},
+        "elysiac7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7d734cb4-9a93-4942-a800-717675931100/public", "description": "Elysia's C7 Card", "tier": "C"},
+        "elysiac8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/6958cb13-a49c-44ed-ba25-cc9b1082b900/public", "description": "Elysia's C8 Card", "tier": "C"},
+        "elysiac9": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/9a1a6fdc-8585-46ae-208c-19295fdf1600/public", "description": "Elysia's C9 Card", "tier": "C"},
+        "elysiac10": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/1d9be087-f70b-44da-b730-0ec061e48800/public", "description": "Elysia's C10 Card", "tier": "C"},
+        "elysiab1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/e3369258-7be0-4af3-0d80-2150fbcb2600/public", "description": "Elysia's B1 Card", "tier": "B"},
+        "elysiab2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/05266398-07e3-42cc-edb3-8b2e8b890b00/public", "description": "Elysia's B2 Card", "tier": "B"},
+        "elysiab3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/25aa67e2-91e5-4fdb-1ca6-207ef4707b00/public", "description": "Elysia's B3 Card", "tier": "B"},
+        "elysiab4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/cae2269a-3db1-43f9-50ee-466de5469500/public", "description": "Elysia's B4 Card", "tier": "B"},
+        "elysiab5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/f65884cb-a812-4cad-992d-4c65b5013100/public", "description": "Elysia's B5 Card", "tier": "B"},
+        "elysiab6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/18f01e43-13a9-464b-8418-beec477e9100/public", "description": "Elysia's B6 Card", "tier": "B"},
+        "elysiab7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/64f5ff09-072e-47c3-e8c6-23c4c58b4500/public", "description": "Elysia's B7 Card", "tier": "B"},
+        "elysiaa1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/a3282b4b-5c87-4f81-6ebc-d20ee55ecd00/public", "description": "Elysia's A1 Card", "tier": "A"},
+        "elysiaa2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/f6195c5f-6d72-47c4-e5a3-a8dfb2dd4900/public", "description": "Elysia's A2 Card", "tier": "A"},
+        "elysiaa3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5625ab09-e198-4ca5-4c6b-b690c4c86b00/public", "description": "Elysia's A3 Card", "tier": "A"},
+        "elysiaa4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/bbaba4d8-3ff1-4da3-b9c9-6b1d45012600/public", "description": "Elysia's A4 Card", "tier": "A"},
+        "elysiaa5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3389383a-0408-45df-7666-3e9bc33fb600/public", "description": "Elysia's A5 Card", "tier": "A"},
+        "elysias1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/e1079aef-8bfc-4c7c-588c-f48aa481ee00/public", "description": "Elysia's S1 Card", "tier": "S"},
+        "elysias2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3b1834ca-413f-4ceb-b62a-cd7257b7d400/public", "description": "Elysia's S2 Card", "tier": "S"},
+        "elysias3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/c8349a96-25fd-476a-c17d-3b2d58c4da00/public", "description": "Elysia's S3 Card", "tier": "S"},
+        "elysias4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/12081df7-1c22-4961-465b-da1a70a4e500/public", "description": "Elysia's S4 Card", "tier": "S"},
         "banner_image": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/fc411b48-19f9-455b-4fbe-0fb48eb39b00/public",
-        "description": "Elysia's mysterious favorite thing.",
-        "chapters": [
-            {
-                "id": 1,
-                "title": "Elysia's Favorite Thing?",
-                "prompt": "Try to find out what Elysia's favorite thing is! You have 24 turns to ask questions and deduce the answer.",
-                "answer": ["rubber ball", "ball"],
-                "hints": [
-                    ["Cats love this item."],
-                    ["It's made of something soft and squishy."],
-                    ["It can go anywhere."]
-                ],
-                "banner_image": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/fc411b48-19f9-455b-4fbe-0fb48eb39b00/public",
-                "rewards": {"type": "random_gift", "rarity": "RARE", "quantity": 2},
-                "yes_replies": [
-                    "Oh, that's a good question! You're getting closer!~",
-                    "Yeah, it might be related to that! Hehe~",
-                    "You're one step closer to the answer! You're sharp, nya~",
-                    "Ooh, that's kind of similar! Think a bit more!~",
-                    "Yes! That's the right direction. You have good sense, nya~"
-                ],
-                "no_replies": [
-                    "Hmm... I think that's a bit different~",
-                    "Sorry, I don't think that's it, nya!",
-                    "Hmm, I feel like you're getting further from the answer~",
-                    "That doesn't really have much to do with me, nya.",
-                    "Nope! Try thinking again~"
-                ]
-            }
-        ],
-        "elysiac6": {
-            "image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8e240175-2f85-4c6d-f16e-3a4aa632b000/public",
-            "description": "Elysia's C6 Card",
-            "tier": "C"
-        },
-        "elysiac7": {
-            "image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7d734cb4-9a93-4942-a800-717675931100/public",
-            "description": "Elysia's C7 Card",
-            "tier": "C"
-        }
+        "description": "Elysia's mysterious favorite thing."
     }
 }
 
