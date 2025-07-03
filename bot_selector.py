@@ -263,12 +263,12 @@ except NameError:
             # 글자수 초과 체크 (혹시 모를 예외 상황 대비)
             if len(self.user_role.value) > 150 or len(self.character_role.value) > 150:
                 await interaction.response.send_message(
-                    "❌ 'Your Role'과 'Character Role'은 150자 이내로 입력해야 합니다.", ephemeral=True
+                    "❌ 'Your Role and Character Role must be entered in 150 characters or less..", ephemeral=True
                 )
                 return
             if len(self.story_line.value) > 1500:
                 await interaction.response.send_message(
-                    "❌ 'Story Line'은 1500자 이내로 입력해야 합니다.", ephemeral=True
+                    "❌ 'The Story Line must be entered within 1,500 characters..", ephemeral=True
                 )
                 return
             try:
@@ -718,68 +718,8 @@ class BotSelector(commands.Bot):
     async def check_story_quests(self, user_id: int) -> list:
         """스토리 퀘스트 상태를 확인합니다."""
         quests = []
-        try:
-            # 카가리 스토리 퀘스트 (챕터 1,2,3 모두 완료)
-            kagari_completed = self.db.get_completed_chapters(user_id, 'Kagari')
-            kagari_all_completed = len(kagari_completed) >= 3
-            kagari_quest_id = 'story_kagari_all_chapters'
-            quests.append({
-                'id': kagari_quest_id,
-                'name': '🌸 Kagari Story Complete',
-                'description': f'Complete all 3 chapters of Kagari\'s story ({len(kagari_completed)}/3)',
-                'progress': len(kagari_completed),
-                'max_progress': 3,
-                'completed': kagari_all_completed,
-                'reward': 'Epic Gifts x3',
-                'claimed': self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters'),
-                'character': 'Kagari',
-                'quest_type': 'all_chapters'
-            })
-            # Eros (3챕터)
-            eros_completed = self.db.get_completed_chapters(user_id, 'Eros')
-            quests.append({
-                'id': 'story_eros_all_chapters',
-                'name': '💝 Eros Story Complete',
-                'description': f'Complete all 3 chapters of Eros\'s story ({len(eros_completed)}/3)',
-                'progress': len(eros_completed),    
-                'max_progress': 3,
-                'completed': len(eros_completed) >= 3,
-                'reward': 'Epic Gifts x3',
-                'claimed': self.db.is_story_quest_claimed(user_id, 'Eros', 'all_chapters'),
-                'character': 'Eros',
-                'quest_type': 'all_chapters'
-            })
-            # Elysia (1챕터)
-            elysia_completed = self.db.get_completed_chapters(user_id, 'Elysia')
-            quests.append({
-                'id': 'story_elysia_chapter1',
-                'name': '🦋 Elysia Story Complete',
-                'description': f'Complete chapter 1 of Elysia\'s story ({min(len(elysia_completed), 1)}/1)',
-                'progress': min(len(elysia_completed), 1),
-                'max_progress': 1,
-                'completed': len(elysia_completed) >= 1,
-                'reward': 'Epic Gifts x3',
-                'claimed': self.db.is_story_quest_claimed(user_id, 'Elysia', 'chapter1'),
-                'character': 'Elysia',
-                'quest_type': 'chapter1'
-            })
-        except Exception as e:
-            print(f"Error checking story quests: {e}")
+        # ... 이하 로직 ...
         return quests
-
-    async def claim_story_quest_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
-        """스토리 퀘스트 보상을 지급합니다."""
-        try:
-            # quest_id 형식: story_{character}_all_chapters 또는 story_{character}_chapter1
-            if quest_id == 'story_kagari_all_chapters':
-                reward = 'Epic Gifts x3'
-            elif quest_id == 'story_eros_all_chapters':
-                reward = 'Epic Gifts x3'
-            elif quest_id == 'story_elysia_chapter1':
-                reward = 'Epic Gifts x3'
-        except Exception as e:
-            print(f"Error checking story quests: {e}")
-        return reward
 
     async def setup_hook(self) -> None:
         """ 봇이 시작될 때 필요한 비동기 설정을 수행합니다. """
@@ -892,12 +832,12 @@ class BotSelector(commands.Bot):
                     inline=True
                 )
                 embed.add_field(
-                    name="🐝 Eros",
+                    name="💝 Eros",
                     value="Cute Honeybee",
                     inline=True
                 )
                 embed.add_field(
-                    name="🐱 Elysia",
+                    name="⚔️ Elysia",
                     value="Nya Kitty Girl",
                     inline=True
                 )
@@ -2271,34 +2211,20 @@ class BotSelector(commands.Bot):
             'reward': 'Random Common Item x1',
             'claimed': self.db.is_quest_claimed(user_id, quest_id)
         })
-
-        # 2. 카드 획득 퀘스트
-        today_cards = self.db.get_today_cards(user_id)
-        quest_id = 'daily_card_collection_1'
+        # 2. 호감도 +5 달성 퀘스트 (오늘 하루 동안 어떤 캐릭터든 호감도 증가량 5 이상)
+        affinity_gain = self.db.get_today_affinity_gain(user_id)  # 이 함수는 DB에서 오늘 하루 동안의 총 호감도 증가량을 반환해야 함
+        quest_id = 'daily_affinity_gain_5'
         quests.append({
             'id': quest_id,
-            'name': '🎴 Card Collection',
-            'description': f'Obtain 1 card ({today_cards}/1)',
-            'progress': min(today_cards, 1),
-            'max_progress': 1,
-            'completed': today_cards >= 1,
+            'name': '💖 Affinity +5',
+            'description': f'Gain +5 affinity with any character today ({affinity_gain}/5)',
+            'progress': min(affinity_gain, 5),
+            'max_progress': 5,
+            'completed': affinity_gain >= 5,
             'reward': 'Random Common Item x1',
             'claimed': self.db.is_quest_claimed(user_id, quest_id)
         })
 
-        # 3. 카드 공유 퀘스트 (중복 불가, 1회만 인정)
-        card_shared_today = self.db.get_card_shared_today(user_id)
-        quest_id = 'daily_card_share_1'
-        quests.append({
-            'id': quest_id,
-            'name': '🔗 Card Share',
-            'description': f'Share a card today ({card_shared_today}/1)',
-            'progress': min(card_shared_today, 1),
-            'max_progress': 1,
-            'completed': card_shared_today >= 1,
-            'reward': 'Random Rare Item x1',
-            'claimed': self.db.is_quest_claimed(user_id, quest_id)
-        })
         return quests
 
     async def check_weekly_quests(self, user_id: int) -> list:
@@ -2337,52 +2263,63 @@ class BotSelector(commands.Bot):
     async def check_levelup_quests(self, user_id: int) -> list:
         """레벨업 퀘스트 상태를 확인합니다."""
         quests = []
-
         try:
-            # 각 캐릭터별 레벨업 상태 확인
+            # 각 캐릭터별 골드 달성 퀘스트만 생성
             characters = ['Kagari', 'Eros', 'Elysia']
-
             for character in characters:
                 affinity_info = self.db.get_affinity(user_id, character)
                 if not affinity_info:
                     continue
-
                 current_score = affinity_info['emotion_score']
                 current_grade = get_affinity_grade(current_score)
-
-                # 레벨업 보상 체크
-                levelup_rewards = {
-                    'Rookie': {'next': 'Iron', 'reward': 'Common Item x1'},
-                    'Iron': {'next': 'Bronze', 'reward': 'Common Items x2'},
-                    'Bronze': {'next': 'Silver', 'reward': 'Rare Item x1'},
-                    'Silver': {'next': 'Gold', 'reward': 'Epic Items x2'}
+                # 골드 달성 여부만 체크
+                has_claimed = self.db.has_levelup_flag(user_id, character, 'Gold')
+                quest = {
+                    'id': f'levelup_{character}_Gold',
+                    'name': f'⭐ {character} Level-up',
+                    'description': f'Reach Gold level with {character}',
+                    'progress': 1 if current_grade == 'Gold' else 0,
+                    'max_progress': 1,
+                    'completed': (current_grade == 'Gold') and not has_claimed,
+                    'reward': 'Epic Items x3',
+                    'claimed': has_claimed,
+                    'character': character,
+                    'current_grade': current_grade
                 }
-
-                if current_grade in levelup_rewards:
-                    next_grade = levelup_rewards[current_grade]['next']
-                    reward = levelup_rewards[current_grade]['reward']
-
-                    # 레벨업 플래그 확인
-                    has_claimed = self.db.has_levelup_flag(user_id, character, current_grade)
-
-                    quest = {
-                        'id': f'levelup_{character}_{current_grade}',
-                        'name': f'⭐ {character} Level-up',
-                        'description': f'Reach {next_grade} level with {character}',
-                        'progress': 1 if current_grade != 'Rookie' else 0,
-                        'max_progress': 1,
-                        'completed': not has_claimed and current_grade != 'Rookie',
-                        'reward': reward,
-                        'claimed': has_claimed,
-                        'character': character,
-                        'current_grade': current_grade
-                    }
-                    quests.append(quest)
-
+                quests.append(quest)
         except Exception as e:
             print(f"Error checking levelup quests: {e}")
-
         return quests
+
+    async def claim_levelup_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
+        """골드 달성 시 에픽 아이템 3개 지급으로 통일"""
+        try:
+            # quest_id 형식: levelup_{character}_Gold
+            parts = quest_id.split('_')
+            if len(parts) != 3:
+                return False, "Invalid levelup quest ID"
+            character = parts[1]
+            grade = parts[2]
+            if grade != 'Gold':
+                return False, "Only Gold level-up quests are supported."
+            # 레벨업 플래그 설정
+            self.db.add_levelup_flag(user_id, character, grade)
+            # 에픽 아이템 3개 지급
+            from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+            gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+            if gift_ids:
+                for gift_id in gift_ids:
+                    self.db.add_user_gift(user_id, gift_id, 1)
+                self.db.claim_quest(user_id, quest_id)
+                reward_names = [f"{get_gift_details(g)['name']} x1" for g in gift_ids]
+                return True, ", ".join(reward_names)
+            return False, "Failed to generate reward"
+        except Exception as e:
+            print(f"Error claiming levelup reward: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, "Error claiming levelup reward"
+
 
     def format_daily_quests(self, quests: list) -> str:
         if quests is None or len(quests) == 0:
@@ -2518,7 +2455,6 @@ class BotSelector(commands.Bot):
             return False, "Error claiming reward"
 
     async def claim_daily_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
-        """일일 퀘스트 보상을 지급합니다."""
         print(f"[DEBUG] claim_daily_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
         # ID 형식: daily_{type}_{level} (type은 _ 포함 가능)
         rest = quest_id.replace('daily_', '', 1)
@@ -2526,14 +2462,10 @@ class BotSelector(commands.Bot):
         quest_type = type_parts[0]
         print(f"[DEBUG] Parsed quest_type: '{quest_type}'")
 
-        # 보상 내용 정의
+        # 보상 내용 정의 (affinity_gain 추가)
         rewards = {
             'conversation': ('Common Item', 'COMMON', 1),
-            'card_collection': ('Rare Item', 'RARE', 1),
-            'card_share': ('Rare Item', 'RARE', 1),
-            'story_kagari_all_chapters': ('Epic Item', 'EPIC', 3),
-            'story_eros_all_chapters': ('Epic Item', 'EPIC', 3),
-            'story_elysia_all_chapters': ('Rare Item', 'RARE', 2)
+            'affinity_gain': ('Common Item', 'COMMON', 1),
         }
         print(f"[DEBUG] Available daily rewards keys: {list(rewards.keys())}")
 
@@ -2602,50 +2534,6 @@ class BotSelector(commands.Bot):
             print(f"Error claiming weekly reward: {e}")
             traceback.print_exc()
             return False, "Error earning weekly rewards."
-
-    async def claim_levelup_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
-        """레벨업 보상을 지급합니다."""
-        try:
-            # quest_id 형식: levelup_{character}_{grade}
-            parts = quest_id.split('_')
-            if len(parts) != 3:
-                return False, "Invalid levelup quest ID"
-
-            character = parts[1]
-            grade = parts[2]
-
-            # 레벨업 플래그 설정
-            self.db.add_levelup_flag(user_id, character, grade)
-
-            # 보상 지급
-            reward_map = {
-                'Rookie': (GIFT_RARITY["COMMON"], 1),
-                'Iron': (GIFT_RARITY["COMMON"], 2),
-                'Bronze': (GIFT_RARITY["RARE"], 1),
-                'Silver': (GIFT_RARITY["EPIC"], 2)
-            }
-
-            rarity, count = reward_map.get(grade, (None, 0))
-
-            if not rarity:
-                return False, "No reward for this grade"
-
-            gift_ids = get_gifts_by_rarity_v2(rarity, count)
-
-            if gift_ids:
-                for gift_id in gift_ids:
-                    self.db.add_user_gift(user_id, gift_id, 1)
-                self.db.claim_quest(user_id, quest_id) # 통합된 claim 메서드 사용
-                reward_names = [f"{get_gift_details(g)['name']} x1" for g in gift_ids]
-                return True, ", ".join(reward_names)
-
-            return False, "Failed to generate reward"
-
-        except Exception as e:
-            print(f"Error claiming levelup reward: {e}")
-            import traceback
-            traceback.print_exc()
-            return False, "Error claiming levelup reward"
 
     async def claim_story_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         """스토리 퀘스트 보상을 지급합니다."""
