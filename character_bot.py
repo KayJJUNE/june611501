@@ -1285,11 +1285,19 @@ class NicknameInputButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         print("[DEBUG] NicknameInputButton.callback called")
-        if int(interaction.user.id) != self.user_id:
-            await interaction.response.send_message("Only you can set your nickname.", ephemeral=True)
-            return
-        modal = NicknameInputModal(self.bot, self.user_id, self.character)
-        await interaction.response.send_modal(modal)
+        try:
+            if int(interaction.user.id) != self.user_id:
+                await interaction.response.send_message("Only you can set your nickname.", ephemeral=True)
+                return
+            # modal = NicknameInputModal(self.bot, self.user_id, self.character)
+            # await interaction.response.send_modal(modal)
+            await interaction.response.send_message("모달 대신 메시지로 응답 테스트!", ephemeral=True)
+        except Exception as e:
+            print(f"[ERROR] NicknameInputButton.callback error: {e}")
+            import traceback
+            print(traceback.format_exc())
+            if not interaction.response.is_done():
+                await interaction.response.send_message("서버 오류가 발생했습니다.", ephemeral=True)
 
 class NicknameInputView(discord.ui.View):
     def __init__(self, bot, user_id, character):
