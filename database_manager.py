@@ -1043,7 +1043,7 @@ class DatabaseManager:
                 today_cst = get_today_cst()
                 start_of_week = today_cst - timedelta(days=today_cst.weekday())
                 end_of_week = start_of_week + timedelta(days=6)
-
+                
                 cursor.execute(
                     """
                     SELECT COUNT(*) FROM user_quest_events
@@ -1081,7 +1081,7 @@ class DatabaseManager:
             return []
         finally:
             self.return_connection(conn)
-
+            
     def complete_story_stage(self, user_id: int, character_name: str, stage_num: int):
         # 이 함수는 CST와 무관
         conn = None
@@ -1100,7 +1100,7 @@ class DatabaseManager:
             if conn: conn.rollback()
         finally:
             self.return_connection(conn)
-
+            
     def is_quest_claimed(self, user_id: int, quest_id: str) -> bool:
         """CST 기준으로 오늘 해당 퀘스트 보상을 수령했는지 확인합니다."""
         conn = None
@@ -1159,7 +1159,7 @@ class DatabaseManager:
             self.return_connection(conn)
 
     # --- 스토리 퀘스트 관련 함수들 ---
-
+    
     def is_story_quest_claimed(self, user_id: int, character_name: str, quest_type: str) -> bool:
         """스토리 퀘스트 보상을 이미 수령했는지 확인합니다."""
         conn = None
@@ -1219,3 +1219,22 @@ class DatabaseManager:
         """모든 챕터를 완료했는지 확인합니다."""
         completed = self.get_completed_chapters(user_id, character_name)
         return len(completed) >= total_chapters
+
+    def add_emotion_log(self, user_id: int, character_name: str, score: int, message: str, timestamp: datetime = None):
+        """emotion_log 테이블에 감정 로그를 기록합니다."""
+        conn = None
+        try:
+            if timestamp is None:
+                timestamp = datetime.utcnow()
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO emotion_log (user_id, character_name, score, message, timestamp) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, character_name, score, message, timestamp)
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"Error adding emotion log: {e}")
+            if conn: conn.rollback()
+        finally:
+            self.return_connection(conn)

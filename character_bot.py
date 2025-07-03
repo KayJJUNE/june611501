@@ -485,6 +485,9 @@ class CharacterBot(commands.Bot):
             context_task = asyncio.create_task(self.build_conversation_context(user_id, character, message.content))
             emotion_score, context = await asyncio.gather(emotion_task, context_task)
 
+            # [추가] 감정 로그 DB 기록 (모든 캐릭터 공통)
+            self.db.add_emotion_log(user_id, character, emotion_score, message.content, now)
+
             response = await self.get_ai_response(context)
             await self.send_bot_message(message.channel, response, user_id)
 
