@@ -7,6 +7,7 @@ from bot_selector import BotSelector
 from run_bots import CharacterBot
 from database_manager import DatabaseManager
 from config import CHARACTER_INFO
+from typing import Dict
 
 # Load environment variables
 load_dotenv()

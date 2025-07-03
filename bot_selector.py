@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import asyncio
+import time
 
 from flask.views import View
 from config import (
@@ -15,16 +16,19 @@ from config import (
     BASE_DIR,
     AFFINITY_THRESHOLDS,
     OPENAI_API_KEY,
-    MILESTONE_COLORS,
     SELECTOR_TOKEN as TOKEN,
     STORY_CHAPTERS,
-    STORY_CARD_REWARD
+    STORY_CARD_REWARD,
+    get_card_info_by_id,
+    KAGARI_TOKEN, EROS_TOKEN, ELYSIA_TOKEN,
+    DATABASE_URL, CHARACTER_PROMPTS,
+    CLOUDFLARE_IMAGE_BASE_URL,
 )
-from database_manager import DatabaseManager
+from database_manager import get_db_manager, DatabaseManager
 from typing import Dict, TYPE_CHECKING, Any, Self
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import langdetect
@@ -34,17 +38,62 @@ from math import ceil
 import urllib.parse
 from character_bot import CharacterBot
 import character_bot
-from story_mode import process_story_mode, classify_emotion, story_sessions
+from story_mode import story_sessions, get_chapter_info
+from story_mode import start_story_stage, process_story_message, handle_chapter3_gift_usage, handle_serve_command
 import openai
+import traceback
+import importlib
 
 # --- 상단 임포트/유틸 추가 ---
 from character_bot import CardClaimView
 from character_bot import get_affinity_grade
 
-# 마일스톤 리스트 정의
-def get_milestone_list():
-    # 10, 50, 100, 200 마일스톤
-    return [10, 50, 100, 200]
+# 강제로 gift_manager 모듈을 다시 로드하여 캐시 문제를 해결합니다.
+import gift_manager
+importlib.reload(gift_manager)
+
+from gift_manager import (
+    get_gift_details, 
+    ALL_GIFTS, 
+    get_gift_emoji, 
+    check_gift_preference, 
+    get_gift_reaction,
+    GIFT_RARITY,
+    CHARACTER_GIFT_REACTIONS,
+    get_gifts_by_rarity_v2
+)
+
+# --- 캐릭터별 리액션 메시지 (Eros 챕터2, 대화체+이모티콘) ---
+character_reactions = {
+    "Kagari": {
+        "success": "Kagari: \"Oh... Did you really make this for me? (blushes) Thank you!\" 🌸",
+        "fail": "Kagari: \"Hmm... I think you missed something, but I appreciate the effort!\" 😅"
+    },
+    "Elysia": {
+        "success": "Elysia: \"Nya~! This is purr-fect! You know me so well!\" 🐾",
+        "fail": "Elysia: \"Nya? It's not quite right, but thanks for trying!\" 🐾"
+    },
+    "Cang": {
+        "success": "Cang: \"Haha, you remembered my favorite! You're amazing.\" 🥭",
+        "fail": "Cang: \"Hmm, not quite what I expected, but thanks anyway!\" 🤔"
+    },
+    "Ira": {
+        "success": "Ira: \"Whoa, this is exactly what I needed. Thanks, partner!\" ☕️",
+        "fail": "Ira: \"Close, but not quite my style. Still, thanks!\" 😅"
+    },
+    "Dolores": {
+        "success": "Dolores: \"Oh! The aroma is wonderful... You have great taste.\" 💜",
+        "fail": "Dolores: \"Hmm... It's a bit different, but I appreciate your effort!\" 💜"
+    },
+    "Nyxara": {
+        "success": "Nyxara: \"Mmm, marshmallows! You really get me, don't you?\" 🍫",
+        "fail": "Nyxara: \"Not quite what I wanted, but thanks for the treat!\" 🍫"
+    },
+    "Lunethis": {
+        "success": "Lunethis: \"Warm and gentle, just like you. Thank you so much.\" 🍵",
+        "fail": "Lunethis: \"It's a little different, but I still appreciate it.\" 🍵"
+    }
+}
 
 # 랭킹 뷰 정의
 class RankingView(discord.ui.View):
@@ -58,22 +107,22 @@ class RankingSelect(discord.ui.Select):
         options = [
             discord.SelectOption(
                 label="Kagari Chat Ranking 🌸",
-                description="Top 10 users by affinity and chat count with Kagari",
+                description="Top 20 users by affinity and chat count with Kagari",
                 value="kagari"
             ),
             discord.SelectOption(
                 label="Eros Chat Ranking 💝",
-                description="Top 10 users by affinity and chat count with Eros",
+                description="Top 20 users by affinity and chat count with Eros",
                 value="eros"
             ),
             discord.SelectOption(
                 label="Elysia Chat Ranking 🦋",
-                description="Top 10 users by affinity and chat count with Elysia",
+                description="Top 20 users by affinity and chat count with Elysia",
                 value="elysia"
             ),
             discord.SelectOption(
                 label="Total Chat Ranking 👑",
-                description="Top 10 users by total affinity and chat count across all characters",
+                description="Top 20 users by total affinity and chat count across all characters",
                 value="total"
             )
         ]
@@ -92,34 +141,60 @@ class RankingSelect(discord.ui.Select):
                 color=discord.Color.gold()
             )
 
+            user_id = interaction.user.id
+            guild = interaction.guild
+
             if ranking_type == "kagari":
                 rankings = self.view.db.get_character_ranking("Kagari")
                 embed.title = "🌸 Kagari Chat Ranking"
+                user_rank = self.view.db.get_user_character_rank(user_id, "Kagari")
+                user_stats = self.view.db.get_user_stats(user_id, "Kagari")
             elif ranking_type == "eros":
                 rankings = self.view.db.get_character_ranking("Eros")
                 embed.title = "💝 Eros Chat Ranking"
+                user_rank = self.view.db.get_user_character_rank(user_id, "Eros")
+                user_stats = self.view.db.get_user_stats(user_id, "Eros")
             elif ranking_type == "elysia":
                 rankings = self.view.db.get_character_ranking("Elysia")
                 embed.title = "🦋 Elysia Chat Ranking"
+                user_rank = self.view.db.get_user_character_rank(user_id, "Elysia")
+                user_stats = self.view.db.get_user_stats(user_id, "Elysia")
             else:  # total
                 rankings = self.view.db.get_total_ranking()
                 embed.title = "👑 Total Chat Ranking"
+                user_rank = self.view.db.get_user_total_rank(user_id)
+                user_stats = self.view.db.get_user_stats(user_id)
 
+            # top20 표시
             if not rankings or len(rankings) == 0:
                 embed.description = "No ranking data available yet."
             else:
                 ranking_text = ""
-                for i, row in enumerate(rankings[:10], 1):
-                    # row는 (user_id, score, count) 또는 (user_id, total_emotion, total_messages)
-                    user_id = row[0]
+                for i, row in enumerate(rankings[:20], 1):
+                    user_id_row = row[0]
                     score = row[1]
                     count = row[2] if len(row) > 2 else 0
-                    user = interaction.guild.get_member(user_id)
-                    if user:
-                        ranking_text += f"{i}. {user.display_name} - Score: {score} (Chats: {count})\n"
+                    user = guild.get_member(user_id_row)
+                    display_name = user.display_name if user else f"User{user_id_row}"
+                    ranking_text += f"{i}. {display_name} - Score: {score} (Chats: {count})\n"
                 embed.description = ranking_text or "No ranking data available yet."
 
-            # edit_message로만 수정
+            # 내 랭킹이 top20 밖이면 하단에 별도 표시
+            in_top20 = False
+            for i, row in enumerate(rankings[:20], 1):
+                if row[0] == user_id:
+                    in_top20 = True
+                    break
+            if not in_top20:
+                # 내 점수/메시지수/랭킹 표시
+                my_score = user_stats.get('affinity', user_stats.get('total_emotion', 0))
+                my_count = user_stats.get('messages', user_stats.get('total_messages', 0))
+                embed.add_field(
+                    name="Your Ranking",
+                    value=f"Rank: {user_rank if user_rank < 999999 else 'Unranked'} | Score: {my_score} | Chats: {my_count}",
+                    inline=False
+                )
+
             await interaction.response.edit_message(embed=embed, view=self.view)
 
         except Exception as e:
@@ -144,11 +219,13 @@ try:
     get_affinity_grade
 except NameError:
     def get_affinity_grade(emotion_score):
-        if emotion_score >= 200:
+        if emotion_score >= 100:
             return "Gold"
-        elif emotion_score >= 100:
-            return "Silver"
         elif emotion_score >= 50:
+            return "Silver"
+        elif emotion_score >= 30:
+            return "Bronze"
+        elif emotion_score >= 10:
             return "Iron"
         else:
             return "Rookie"
@@ -175,14 +252,25 @@ except NameError:
         def __init__(self, character_name):
             super().__init__()
             self.character_name = character_name
-            self.user_role = discord.ui.TextInput(label="Your Role", max_length=350)
-            self.character_role = discord.ui.TextInput(label="Character Role", max_length=350)
-            self.story_line = discord.ui.TextInput(label="Story Line", max_length=1000) 
+            self.user_role = discord.ui.TextInput(label="Your Role", max_length=150, required=True)
+            self.character_role = discord.ui.TextInput(label="Character Role", max_length=150, required=True)
+            self.story_line = discord.ui.TextInput(label="Story Line", max_length=1500, required=True, style=discord.TextStyle.paragraph)
             self.add_item(self.user_role)
             self.add_item(self.character_role)
             self.add_item(self.story_line)
 
         async def on_submit(self, interaction: discord.Interaction):
+            # 글자수 초과 체크 (혹시 모를 예외 상황 대비)
+            if len(self.user_role.value) > 150 or len(self.character_role.value) > 150:
+                await interaction.response.send_message(
+                    "❌ 'Your Role'과 'Character Role'은 150자 이내로 입력해야 합니다.", ephemeral=True
+                )
+                return
+            if len(self.story_line.value) > 1500:
+                await interaction.response.send_message(
+                    "❌ 'Story Line'은 1500자 이내로 입력해야 합니다.", ephemeral=True
+                )
+                return
             try:
                 bot_selector = interaction.client
                 if not hasattr(bot_selector, "roleplay_sessions"):
@@ -202,6 +290,7 @@ except NameError:
                 channel = await guild.create_text_channel(
                     name=channel_name,
                     category=category,
+                    topic=f"Roleplay with {self.character_name} for {interaction.user.name}",
                     overwrites=overwrites
                 )
 
@@ -380,10 +469,14 @@ class LanguageSelect(discord.ui.Select):
                     "ja": f"(システム) 言語を{SUPPORTED_LANGUAGES[selected_language]['name']}に設定しました。"
                 }
 
-                await interaction.response.send_message(
-                    success_messages.get(selected_language, success_messages["en"]),
-                    ephemeral=True
-                )
+                try:
+                    await interaction.response.send_message(
+                        success_messages.get(selected_language, success_messages["en"]),
+                        ephemeral=True
+                    )
+                except discord.errors.NotFound:
+                    print("Interaction expired during language selection")
+                    await interaction.channel.send(success_messages.get(selected_language, success_messages["en"]), delete_after=5)
 
                 # 시작 메시지 전송
                 welcome_messages = {
@@ -400,14 +493,29 @@ class LanguageSelect(discord.ui.Select):
                     selected_language,
                     ERROR_MESSAGES["processing_error"]["en"]
                 )
-                await interaction.response.send_message(error_msg, ephemeral=True)
+                try:
+                    await interaction.response.send_message(error_msg, ephemeral=True)
+                except discord.errors.NotFound:
+                    await interaction.channel.send(error_msg, delete_after=5)
 
+        except discord.errors.NotFound:
+            print("Interaction expired during language selection")
+            try:
+                await interaction.channel.send("Interaction expired. Please try again.", delete_after=5)
+            except:
+                pass
         except Exception as e:
             print(f"Error in language selection callback: {e}")
-            await interaction.response.send_message(
-                "An error occurred while processing your language selection.",
-                ephemeral=True
-            )
+            try:
+                await interaction.response.send_message(
+                    "An error occurred while processing your language selection.",
+                    ephemeral=True
+                )
+            except discord.errors.NotFound:
+                try:
+                    await interaction.channel.send("An error occurred while processing your language selection.", delete_after=5)
+                except:
+                    pass
 
 class LanguageSelectView(discord.ui.View):
     def __init__(self, db, user_id: int, character_name: str, timeout: float = None):
@@ -419,14 +527,14 @@ class CharacterSelect(discord.ui.Select):
         self.bot_selector = bot_selector
         options = []
         from config import CHARACTER_INFO
-        
+
         for char, info in CHARACTER_INFO.items():
             options.append(discord.SelectOption(
                 label=char,
                 description=f"{info['description']}",
                 value=char
             ))
-        
+
         super().__init__(
             placeholder="Please select a character to chat with...",
             min_values=1,
@@ -437,83 +545,52 @@ class CharacterSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         try:
             selected_char = self.values[0]
+            print(f"[DEBUG] 선택된 캐릭터: {selected_char}")
 
-            # 채널 생성 및 설정
-            category = discord.utils.get(interaction.guild.categories, name="chatbot")
-            if not category:
+            # 선택된 캐릭터 봇 찾기
+            selected_bot = self.bot_selector.character_bots.get(selected_char)
+            if not selected_bot:
+                print(f"[DEBUG] 캐릭터 봇을 찾을 수 없음: {selected_char}")
                 try:
-                    category = await interaction.guild.create_category("chatbot")
-                except Exception as e:
-                    print(f"Category creation error: {e}")
                     if not interaction.response.is_done():
                         await interaction.response.send_message(
-                            "Please check bot permissions.",
+                            "The selected character was not found.",
                             ephemeral=True
                         )
                     else:
                         await interaction.followup.send(
-                            "Please check bot permissions.",
+                            "The selected character was not found.",
                             ephemeral=True
                         )
-                    return
-
-            channel_name = f"{selected_char.lower()}-{interaction.user.name.lower()}"
-            overwrites = {
-                interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                interaction.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-            }
-
-            try:
-                # 채널 생성
-                channel = await interaction.guild.create_text_channel(
-                    name=channel_name,
-                    category=category,
-                    overwrites=overwrites
-                )
-            except Exception as e:
-                print(f"Channel creation errors: {e}")
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(
-                        "Channel creation failed, please check bot permissions.",
-                        ephemeral=True
-                    )
-                else:
-                    await interaction.followup.send(
-                        "Channel creation failed, please check bot permissions.",
-                        ephemeral=True
-                    )
+                except discord.errors.NotFound:
+                    print("Interaction already expired, sending message to channel instead")
+                    await interaction.channel.send("The selected character was not found.", delete_after=5)
                 return
 
-            # 최근 대화 10개 출력 (임베드)
-            try:
-                recent_messages = self.bot_selector.db.get_user_character_messages(interaction.user.id, selected_char, limit=10)
-                if recent_messages:
-                    history_lines = []
-                    for msg in recent_messages:
-                        if msg["role"] == "user":
-                            history_lines.append(f"Me: {msg['content']}")
-                        else:
-                            history_lines.append(f"{selected_char}: {msg['content']}")
-                    history_text = '\n'.join(history_lines)
-                    embed = discord.Embed(
-                        title=f"Previous conversations (last 10)",
-                        description=f"```{history_text}```",
-                        color=discord.Color.dark_grey()
-                    )
-                    await channel.send(embed=embed)
-            except Exception as e:
-                print(f"Error displaying previous conversation embed: {e}")
+            # 사용자별 채널 생성
+            channel_name = f"chat-{selected_char.lower()}-{interaction.user.name}"
+            print(f"[DEBUG] 생성할 채널명: {channel_name}")
 
-            # 선택된 캐릭터 봇에 채널 추가
-            selected_bot = self.bot_selector.character_bots.get(selected_char)
-            if selected_bot:
-                print("[DEBUG] add_channel 호출 전")
-                success, message = await selected_bot.add_channel(channel.id, interaction.user.id)
-                print("[DEBUG] add_channel 호출 후")
+            # 기존 채널 확인 및 삭제
+            existing_channel = discord.utils.get(interaction.guild.channels, name=channel_name)
+            if existing_channel:
+                print(f"[DEBUG] 기존 채널 삭제: {existing_channel.name}")
+                await existing_channel.delete()
 
-                if success:
-                    # 채널 생성 알림 메시지
+            # 새 채널 생성
+            channel = await interaction.guild.create_text_channel(
+                name=channel_name,
+                topic=f"Private chat with {selected_char} for {interaction.user.name}"
+            )
+            print(f"[DEBUG] 새 채널 생성 완료: {channel.name}")
+
+            # 채널 등록
+            success, message = await selected_bot.add_channel(channel.id, interaction.user.id)
+            print("[DEBUG] add_channel 호출 후")
+
+            if success:
+                # 채널 생성 알림 메시지
+                try:
                     if not interaction.response.is_done():
                         await interaction.response.send_message(
                             f"Start chatting with {selected_char} in {channel.mention}!",
@@ -524,62 +601,66 @@ class CharacterSelect(discord.ui.Select):
                             f"Start chatting with {selected_char} in {channel.mention}!",
                             ephemeral=True
                         )
+                except discord.errors.NotFound:
+                    print("Interaction expired, sending message to channel instead")
+                    await channel.send(f"Start chatting with {selected_char}!", delete_after=10)
 
-                    # 언어 선택 임베드 생성
-                    embed = discord.Embed(
-                        title="🌍 Language Selection",
-                        description="Please select the language for conversation.",
-                        color=discord.Color.blue()
-                    )
+                # 언어 선택 임베드 생성
+                embed = discord.Embed(
+                    title="🌍 Language Selection",
+                    description="Please select the language for conversation.",
+                    color=discord.Color.blue()
+                )
 
-                    # 언어별 설명 추가
-                    languages = {
-                        "English": "English - Start conversation in English",
-                        "[ベータ] 日本語": "Japanese - 日本語で会話を 始めます",
-                        "[Beta版] 中文": "Chinese - 开始用中文对话"
-                    }
+                # 언어별 설명 추가
+                languages = {
+                    "English": "English - Start conversation in English",
+                    "[ベータ] 日本語": "Japanese - 日本語で会話を 始めます",
+                    "[Beta版] 中文": "Chinese - 开始用中文对话"
+                }
 
-                    language_description = "\n".join([f"• {key}: {value}" for key, value in languages.items()])
-                    embed.add_field(
-                        name="Available Languages",
-                        value=language_description,
-                        inline=False
-                    )
+                language_description = "\n".join([f"• {key}: {value}" for key, value in languages.items()])
+                embed.add_field(
+                    name="Available Languages",
+                    value=language_description,
+                    inline=False
+                )
 
-                    # 언어 선택 뷰 생성
-                    view = LanguageSelectView(self.bot_selector.db, interaction.user.id, selected_char)
+                # 언어 선택 뷰 생성
+                view = LanguageSelectView(self.bot_selector.db, interaction.user.id, selected_char)
 
-                    # 새로 생성된 채널에 임베드와 언어 선택 버튼 전송
-                    await channel.send(content="**Please select your language**", embed=embed, view=view)
-                else:
-                    await channel.send("Channel registration failed. Please create a new channel.")
-                    await channel.delete()
+                # 새로 생성된 채널에 임베드와 언어 선택 버튼 전송
+                await channel.send(content="**Please select your language**", embed=embed, view=view)
             else:
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(
-                        "Selected character not found.",
-                        ephemeral=True
-                    )
-                else:
-                    await interaction.followup.send(
-                        "Selected character not found.",
-                        ephemeral=True
-                    )
-
+                await channel.send("채널 등록 중 오류가 발생했습니다. 채널을 다시 생성해주세요.")
+                await channel.delete()
+        except discord.errors.NotFound:
+            print("Interaction expired during character selection")
+            try:
+                await interaction.channel.send("Interaction expired. Please try the command again.", delete_after=5)
+            except:
+                pass
         except Exception as e:
             print(f"Error in channel creation: {e}")
             import traceback
             print(traceback.format_exc())
-            if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "An error occurred, please try again.",
-                    ephemeral=True
-                )
-            else:
-                await interaction.followup.send(
-                    "An error occurred, please try again.",
-                    ephemeral=True
-                )
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "An error occurred, please try again.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        "An error occurred, please try again.",
+                        ephemeral=True
+                    )
+            except discord.errors.NotFound:
+                print("Interaction expired during error handling")
+                try:
+                    await interaction.channel.send("An error occurred, please try again.", delete_after=5)
+                except:
+                    pass
 
 class SettingsManager:
     def __init__(self):
@@ -619,53 +700,34 @@ class SettingsManager:
 
 class BotSelector(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.all()
-        super().__init__(
-            command_prefix='/', 
-            intents=intents,
-            status=discord.Status.online,
-            activity=discord.Game(name="Bot Selector")
-        )
-
-        self.character_bots = {}
-        self.settings = SettingsManager()
-        self.db = DatabaseManager()
-
-        # 캐릭터 봇 초기화
-        from config import CHARACTER_INFO
-        for char_name in CHARACTER_INFO.keys():
-            self.character_bots[char_name] = CharacterBot(self, char_name)
-            print(f"Initialized {char_name} bot")
-            print("[DEBUG] 생성된 CharacterBot 객체:", dir(self.character_bots[char_name]))
-            print("[DEBUG] CharacterBot 실제 경로:", self.character_bots[char_name].__class__.__module__)
-
-        # 카드 확률 설정
-        self.card_probabilities = {
-            'C': 0.40,  # 40% 확률
-            'B': 0.30,  # 30% 확률
-            'A': 0.20,  # 20% 확률
-            'S': 0.08,  # 8% 확률
-            'Special': 0.02  # 2% 확률
-        }
-
-        # 각 티어별 카드 수
-        self.tier_card_counts = {
-            'C': 10,
-            'B': 7,
-            'A': 5,
-            'S': 5,
-            'Special': 2
-        }
-
+        intents = discord.Intents.default()
+        intents.messages = True
+        intents.guilds = True
+        intents.message_content = True
+        intents.members = True
+        super().__init__(command_prefix="!", intents=intents)
+        self.character_bots: Dict[str, "CharacterBot"] = {}
+        self.db = get_db_manager()
+        self.settings_manager = SettingsManager()
+        self.active_channels: Dict[int, str] = {}
+        self.user_languages: Dict[int, str] = {}
         self.setup_commands()
-        self.add_listener(self.on_message)  # ← 여기서 self로 호출!
+        self.roleplay_sessions = {}
+        self.story_sessions = {}
+
+    async def setup_hook(self) -> None:
+        """ 봇이 시작될 때 필요한 비동기 설정을 수행합니다. """
+        # Cog 로드를 제거하고, 명령어는 setup_commands에서 직접 등록
+        await self.tree.sync()
 
     async def on_ready(self):
-        print(f"Logged in as {self.user}")
-        await self.tree.sync()
-        print("Slash commands synced.")
+        print(f'{self.user} has connected to Discord!')
+        # self.tree.sync()는 setup_hook으로 이동했습니다.
+        self.load_active_channels()
 
     async def get_ai_response(self, messages: list, emotion_score: int = 0) -> str:
+        if not OPENAI_API_KEY:
+            return "OpenAI API key is not set."
         grade = get_affinity_grade(emotion_score)
         system_message = {
             "role": "system",
@@ -688,7 +750,10 @@ class BotSelector(commands.Bot):
         }
         formatted_messages = [system_message] + messages
 
-        for attempt in range(3):
+        max_retries = 3
+        base_delay = 1.0
+
+        for attempt in range(max_retries):
             try:
                 response = openai.chat.completions.create(
                     model="gpt-4o",
@@ -699,13 +764,41 @@ class BotSelector(commands.Bot):
                 ai_response = response.choices[0].message.content.strip()
                 return ai_response
             except Exception as e:
-                print(f"Error in get_ai_response (attempt {attempt+1}): {e}")
-                if (hasattr(e, 'http_status') and e.http_status == 500) or \
-                   (hasattr(e, 'status_code') and e.status_code == 500) or \
-                   (hasattr(e, 'args') and 'server had an error' in str(e.args[0])):
-                    await asyncio.sleep(1.5)
+                print(f"Error in get_ai_response (attempt {attempt + 1}/{max_retries}): {e}")
+
+                # 네트워크 관련 에러인지 확인
+                is_network_error = (
+                    "Connection reset by peer" in str(e) or
+                    "Connection reset" in str(e) or
+                    "Connection closed" in str(e) or
+                    "Connection timeout" in str(e) or
+                    "ClientOSError" in str(e) or
+                    "aiohttp.client_exceptions.ClientOSError" in str(e) or
+                    "aiohttp.client_exceptions.ClientConnectorError" in str(e) or
+                    "aiohttp.client_exceptions.ServerDisconnectedError" in str(e) or
+                    "aiohttp.client_exceptions.ClientResponseError" in str(e)
+                )
+
+                # 기존 서버 에러 체크
+                is_server_error = (
+                    (hasattr(e, 'http_status') and e.http_status == 500) or
+                    (hasattr(e, 'status_code') and e.status_code == 500) or
+                    (hasattr(e, 'args') and 'server had an error' in str(e.args[0]))
+                )
+
+                # 마지막 시도가 아니고 (네트워크 에러 또는 서버 에러)인 경우 재시도
+                if attempt < max_retries - 1 and (is_network_error or is_server_error):
+                    delay = base_delay * (2 ** attempt)  # 지수 백오프
+                    print(f"Network/Server error detected, retrying in {delay} seconds...")
+                    await asyncio.sleep(delay)
                     continue
-                break
+                else:
+                    # 에러가 아니거나 마지막 시도인 경우
+                    if is_network_error:
+                        return "Sorry, there was a temporary network issue. Please try again in a moment."
+                    else:
+                        return "There was a temporary issue with the AI server. Please try again in a moment."
+
         return "There was a temporary issue with the AI server. Please try again in a moment."
 
     def setup_commands(self):
@@ -713,7 +806,7 @@ class BotSelector(commands.Bot):
             name="bot",
             description="Open character selection menu"
         )
-        async def bot_command(self, interaction: discord.Interaction):
+        async def bot_command(interaction: discord.Interaction):
             try:
                 if not isinstance(interaction.channel, discord.TextChannel):
                     await interaction.response.send_message(
@@ -722,85 +815,46 @@ class BotSelector(commands.Bot):
                     )
                     return
 
-                from config import CHARACTER_INFO, CHARACTER_IMAGES 
-                print("Available characters:", CHARACTER_INFO.keys())
-                print("Image paths:", CHARACTER_IMAGES)
+                embed = discord.Embed(
+                    title="🌸 Select Your Character!",
+                    description="Please choose your favorite character below.",
+                    color=discord.Color.gold()
+                )
+                embed.add_field(
+                    name="🌸 Kagari",
+                    value="Cold-hearted Yokai Warrior",
+                    inline=True
+                )
+                embed.add_field(
+                    name="💝 Eros",
+                    value="Cute Honeybee",
+                    inline=True
+                )
+                embed.add_field(
+                    name="⚔️ Elysia",
+                    value="Nya Kitty Girl",
+                    inline=True
+                )
+                banner_url = "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4c2404ce-0626-436d-2f4e-fdafc3ba5400/public"
+                embed.set_image(url=banner_url)
 
                 view = discord.ui.View()
                 view.add_item(CharacterSelect(self))
 
-                # 모든 임베드를 리스트로 관리
-                embeds = []
-                files = []
-
-                # 각 캐릭터의 이미지와 정보를 개별 임베드로 추가
-                for char_name, char_info in CHARACTER_INFO.items():
-                    try:
-                        img_path = CHARACTER_IMAGES.get(char_name)
-                        print(f"Processing {char_name}:")
-                        print(f"  Path: {img_path}")
-                        print(f"  Exists: {os.path.exists(img_path) if img_path else False}")
-                        if img_path and os.path.exists(img_path):
-                            print(f"  Adding file for {char_name}")
-                            file = discord.File(img_path, filename=f"{char_name.lower()}.png")
-                            files.append(file)
-
-                            # 캐릭터별 임베드 생성
-                            char_embed = discord.Embed(
-                                title=f"{char_info['emoji']} {char_name}",
-                                description=char_info['description'],
-                                color=char_info.get('color', discord.Color.blue())
-                            )
-                            char_embed.set_image(url=f"attachment://{char_name.lower()}.png")
-                            embeds.append(char_embed)
-
-                    except Exception as e:
-                        print(f"Error processing {char_name}: {e}")
-                        continue
-
-                # 마지막 선택 임베드 추가
-                selection_embed = discord.Embed(
-                    title="✨ ",
-                    description="Which character would you like to talk to?",
-                    color=discord.Color.gold()
-                )
-
-                # 사용 가능한 캐릭터 목록 추가
-                character_list = []
-                for char_name, char_info in CHARACTER_INFO.items():
-                    character_list.append(f"{char_info['emoji']} **{char_name}** - {char_info['description']}")
-
-                selection_embed.add_field(
-                    name="Available Characters",
-                    value="\n".join(character_list),
-                    inline=False
-                )
-                embeds.append(selection_embed)
-
-                print(f"Sending message with {len(embeds)} embeds and {len(files)} files")
-                # 중복 전송 방지: followup.send만 사용
-                await interaction.followup.send(
-                    embeds=embeds,
-                    files=files,
+                await interaction.response.send_message(
+                    embed=embed,
                     view=view,
                     ephemeral=True
                 )
-
             except Exception as e:
                 print(f"Error in bot_command: {e}")
                 import traceback
                 print(traceback.format_exc())
                 try:
-                    if not interaction.response.is_done():
-                        await interaction.response.send_message(
-                            "An error occurred while loading the character selection menu. Please try again.",
-                            ephemeral=True
-                        )
-                    else:
-                        await interaction.followup.send(
-                            "An error occurred while loading the character selection menu. Please try again.",
-                            ephemeral=True
-                        )
+                    await interaction.response.send_message(
+                        "An error occurred while loading the character selection menu. Please try again.",
+                        ephemeral=True
+                    )
                 except Exception as followup_error:
                     print(f"Error sending error message: {followup_error}")
 
@@ -815,6 +869,13 @@ class BotSelector(commands.Bot):
                     return
 
                 channel = interaction.channel
+
+                # ====== 디버깅 로그 추가 시작 ======
+                print(f"[DEBUG] /close 명령어 호출 - channel.id: {channel.id}, channel.name: {channel.name}, category: {getattr(channel.category, 'name', None)}")
+                print(f"[DEBUG] BotSelector.active_channels: {self.active_channels}")
+                for char_name, bot in self.character_bots.items():
+                    print(f"[DEBUG] {char_name} active_channels: {getattr(bot, 'active_channels', None)}")
+                # ====== 디버깅 로그 추가 끝 ======
 
                 if not channel.category or channel.category.name.lower() != "chatbot":
                     await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
@@ -840,6 +901,8 @@ class BotSelector(commands.Bot):
                 # 캐릭터 봇에서 채널 제거
                 for bot in self.character_bots.values():
                     bot.remove_channel(channel.id)
+                if hasattr(self, 'remove_channel'):
+                    self.remove_channel(channel.id)
 
                 # 응답 전송 후 채널 삭제 (중복 응답 방지)
                 if not interaction.response.is_done():
@@ -872,12 +935,12 @@ class BotSelector(commands.Bot):
 
             embed.add_field(
                 name="Daily Message Limit",
-                value=f"{self.settings.daily_limit} messages",
+                value=f"{self.settings_manager.daily_limit} messages",
                 inline=False
             )
 
             admin_roles = []
-            for role_id in self.settings.admin_roles:
+            for role_id in self.settings_manager.admin_roles:
                 role = interaction.guild.get_role(role_id)
                 if role:
                     admin_roles.append(role.name)
@@ -888,7 +951,7 @@ class BotSelector(commands.Bot):
                 inline=False
             )
 
-            if self.settings.is_admin(interaction.user):
+            if self.settings_manager.is_admin(interaction.user):
                 embed.add_field(
                     name="Admin Commands",
                     value="""
@@ -908,7 +971,7 @@ class BotSelector(commands.Bot):
         @app_commands.default_permissions(administrator=True)
         async def reset_affinity(interaction: discord.Interaction, target: discord.Member = None):
             # 관리자 권한 확인
-            if not self.settings.is_admin(interaction.user):
+            if not self.settings_manager.is_admin(interaction.user):
                 await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
                 return
 
@@ -955,7 +1018,7 @@ class BotSelector(commands.Bot):
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
                 return
 
-            self.settings.add_admin_role(role.id)
+            self.settings_manager.add_admin_role(role.id)
             await interaction.response.send_message(f"{role.name} role has been added to the admin role.", ephemeral=True)
 
         @self.tree.command(
@@ -964,18 +1027,47 @@ class BotSelector(commands.Bot):
         )
         async def ranking_command(interaction: discord.Interaction):
             try:
-                # 랭킹 선택 UI 생성
                 view = RankingView(self.db)
-                await interaction.response.send_message("Please select a ranking type:", view=view, ephemeral=True)
+
+                # 초기 임베드 생성
+                embed = discord.Embed(
+                    title="🏆 Ranking System",
+                    description="Please select the ranking you want to check from the menu below.",
+                    color=discord.Color.blue()
+                )
+
+                embed.add_field(
+                    name="Kagari Chat Ranking 🌸",
+                    value="Top 20 users by affinity and chat count with Kagari",
+                    inline=False
+                )
+                embed.add_field(
+                    name="Eros Chat Ranking 💝",
+                    value="Top 20 users by affinity and chat count with Eros",
+                    inline=False
+                )
+                embed.add_field(
+                    name="Elysia Chat Ranking 🦋",
+                    value="Top 20 users by affinity and chat count with Elysia",
+                    inline=False
+                )
+                embed.add_field(
+                    name="Total Chat Ranking 👑",
+                    value="Top 20 users by total affinity and chat count across all characters",
+                    inline=False
+                )
+
+                # followup.send 대신 response.send_message 사용
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
             except Exception as e:
                 print(f"Error in ranking command: {e}")
-                try:
-                    if interaction.response.is_done():
-                        await interaction.followup.send("An error occurred while loading the ranking information.", ephemeral=True)
-                    else:
-                        await interaction.response.send_message("An error occurred while loading the ranking information.", ephemeral=True)
-                except Exception as followup_error:
-                    print(f"Error sending error message: {followup_error}")
+                import traceback
+                print(traceback.format_exc())
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("An error occurred while loading ranking information.", ephemeral=True)
+                else:
+                    await interaction.followup.send("An error occurred while loading ranking information.", ephemeral=True)
 
         @self.tree.command(
             name="affinity",
@@ -1005,39 +1097,25 @@ class BotSelector(commands.Bot):
                 affinity_info = current_bot.db.get_affinity(interaction.user.id, current_bot.character_name)
                 print(f"Affinity info: {affinity_info}")
 
-                current_affinity = affinity_info['emotion_score']
-                affinity_grade = get_affinity_grade(current_affinity)
+                if not affinity_info:
+                    current_affinity = 0
+                    affinity_grade = get_affinity_grade(0)
+                    daily_message_count = 0
+                    last_message_time = "N/A"
+                else:
+                    current_affinity = affinity_info['emotion_score']
+                    affinity_grade = get_affinity_grade(current_affinity)
+                    daily_message_count = affinity_info['daily_message_count']
+                    last_message_time = affinity_info.get('last_message_time', "N/A")
 
-                # Check for missing cards (cards for milestones below current affinity)
-                missing_cards = []
-                last_claimed = self.db.get_last_claimed_milestone(interaction.user.id, current_bot.character_name)  # 마지막 지급 마일스톤
-
-                for milestone in get_milestone_list():
-                    if milestone > last_claimed and current_affinity >= milestone:
-                        # 지급 이력 기록 및 카드 지급
-                        if not self.db.has_claimed_milestone(interaction.user.id, current_bot.character_name, milestone):
-                            # 카드 지급 로직
-                            tier, card_id = self.get_random_card(current_bot.character_name, interaction.user.id)
-                            if card_id:
-                                self.db.add_user_card(interaction.user.id, current_bot.character_name, card_id)
-                                self.db.set_claimed_milestone(interaction.user.id, current_bot.character_name, milestone)
-                                card_info = CHARACTER_CARD_INFO[current_bot.character_name][card_id]
-                                embed = discord.Embed(
-                                    title=f"🎉 New Card Acquired!",
-                                    description=f"Congratulations! You have received the {current_bot.character_name} {card_id} card!",
-                                    color=discord.Color.green()
-                                )
-                                image_path = card_info.get("image_path")
-                                if image_path and os.path.exists(image_path):
-                                    file = discord.File(image_path, filename=f"card_{card_id}.png")
-                                    embed.set_image(url=f"attachment://{card_id}.png")
-                                    await interaction.channel.send(embed=embed, file=file)
-                                else:
-                                    await interaction.channel.send(embed=embed)
-                            else:
-                                await interaction.channel.send("You have already collected all available cards!")
-                        else:
-                            missing_cards.append(milestone)
+                # Grade emoji mapping
+                grade_emoji = {
+                    "Rookie": "🌱",
+                    "Iron": "⚔️",
+                    "Bronze": "🥉",
+                    "Silver": "🥈",
+                    "Gold": "🏆"
+                }
 
                 # Affinity embed
                 char_info = CHARACTER_INFO.get(current_bot.character_name, {})
@@ -1051,23 +1129,23 @@ class BotSelector(commands.Bot):
 
                 embed.add_field(
                     name="Affinity Score",
-                    value=f"```{affinity_info['emotion_score']} points```",
+                    value=f"```{current_affinity} points```",
                     inline=True
                 )
                 embed.add_field(
                     name="Today's Conversations",
-                    value=f"```{affinity_info['daily_count']} times```",
+                    value=f"```{daily_message_count} times```",
                     inline=True
                 )
                 embed.add_field(
                     name="Affinity Grade",
-                    value=f"**{affinity_grade}**",
+                    value=f"{grade_emoji.get(affinity_grade, '❓')} **{affinity_grade}**",
                     inline=True
                 )
 
-                if affinity_info.get('last_message_time'):
+                if last_message_time and last_message_time != "N/A":
                     try:
-                        last_time_str = affinity_info['last_message_time'].split('.')[0]
+                        last_time_str = last_message_time.split('.')[0]
                         last_time = datetime.strptime(last_time_str, '%Y-%m-%d %H:%M:%S')
                         formatted_time = last_time.strftime('%Y-%m-%d %H:%M')
 
@@ -1080,44 +1158,24 @@ class BotSelector(commands.Bot):
                         print(f"Date parsing error: {e}")
                         embed.add_field(
                             name="Last Conversation",
-                            value=f"```{affinity_info['last_message_time']}```",
+                            value=f"```{last_message_time}```",
                             inline=False
                         )
-
-                # If there are missing cards, add a notification
-                if missing_cards:
+                else:
                     embed.add_field(
-                        name="📢 Claimable Cards",
-                        value=f"You can claim cards for affinity milestones: {', '.join(map(str, missing_cards))}!",
+                        name="Last Conversation",
+                        value=f"```N/A```",
                         inline=False
                     )
 
                 print("Embed created")
 
-                # Add character image
-                char_image = CHARACTER_IMAGES.get(current_bot.character_name)
-                if char_image and os.path.exists(char_image):
-                    print(f"Adding character image: {char_image}")
-                    embed.set_thumbnail(url=f"attachment://{current_bot.character_name.lower()}.png")
-                    file = discord.File(char_image, filename=f"{current_bot.character_name.lower()}.png")
-                    await interaction.response.send_message(embed=embed, file=file)
-                else:
-                    print("No character image")
-                    await interaction.response.send_message(embed=embed)
+                # Get the correct image URL from config.py
+                char_image_url = CHARACTER_IMAGES.get(current_bot.character_name)
+                if char_image_url:
+                    embed.set_thumbnail(url=char_image_url)
 
-                # If there are missing cards, show claim button for each
-                for milestone in missing_cards:
-                    card_id = milestone_to_card_id(milestone)
-                    card_embed = discord.Embed(
-                        title="🎉 Affinity Milestone Card",
-                        description=f"You have not yet claimed the card for reaching affinity {milestone}.",
-                        color=discord.Color.gold()
-                    )
-                    if card_id:
-                        view = CardClaimView(interaction.user.id, card_id, current_bot.character_name, self.db)
-                        await interaction.channel.send(embed=card_embed, view=view)
-                    else:
-                        await interaction.channel.send(embed=card_embed)
+                await interaction.response.send_message(embed=embed)
 
                 print("[Affinity check complete]")
 
@@ -1125,7 +1183,10 @@ class BotSelector(commands.Bot):
                 print(f"Error during affinity command: {e}")
                 import traceback
                 print(traceback.format_exc())
-                await interaction.response.send_message("An error occurred while loading affinity information.", ephemeral=True)
+                try:
+                    await interaction.response.send_message("An error occurred while loading affinity information.", ephemeral=True)
+                except:
+                    await interaction.followup.send("An error occurred while loading affinity information.", ephemeral=True)
 
         @self.tree.command(
             name="remove_admin_role",
@@ -1137,8 +1198,8 @@ class BotSelector(commands.Bot):
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
                 return
 
-            if role.id in self.settings.admin_roles:
-                self.settings.remove_admin_role(role.id)
+            if role.id in self.settings_manager.admin_roles:
+                self.settings_manager.remove_admin_role(role.id)
                 await interaction.response.send_message(f"{role.name} role has been removed from the admin role.", ephemeral=True)
             else:
                 await interaction.response.send_message(f"{role.name} role is not an admin role.", ephemeral=True)
@@ -1149,7 +1210,7 @@ class BotSelector(commands.Bot):
         )
         @app_commands.default_permissions(administrator=True)
         async def set_daily_limit(interaction: discord.Interaction, limit: int):
-            if not self.settings.is_admin(interaction.user):
+            if not self.settings_manager.is_admin(interaction.user):
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
                 return
 
@@ -1157,7 +1218,7 @@ class BotSelector(commands.Bot):
                 await interaction.response.send_message("The limit must be 1 or more.", ephemeral=True)
                 return
 
-            self.settings.set_daily_limit(limit)
+            self.settings_manager.set_daily_limit(limit)
 
             embed = discord.Embed(
                 title="Settings changed",
@@ -1214,7 +1275,7 @@ class BotSelector(commands.Bot):
 
         @self.tree.command(
             name="mycard",
-            description="Check your character cards."
+            description="Check the cards you have."
         )
         async def mycard_command(interaction: discord.Interaction):
             try:
@@ -1226,211 +1287,112 @@ class BotSelector(commands.Bot):
                         break
 
                 if not current_bot:
-                    await interaction.response.send_message(
-                        "This command can only be used in character chat channels.", 
-                        ephemeral=True
-                    )
+                    await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
                     return
 
-                user_id = interaction.user.id
                 character_name = current_bot.character_name
+                user_id = int(interaction.user.id)  # 항상 int로 변환
 
-                # 카드 정보 조회
-                from config import CHARACTER_CARD_INFO
-                user_cards = self.db.get_user_cards(user_id, character_name)
+                # 해당 캐릭터의 카드만 조회
+                user_cards = [card for card in get_user_cards(user_id) if card['character_name'] == character_name]
 
-                # 카드 티어별 수집 현황 계산 (최신 개수 반영)
-                tier_counts = {
-                    'C': {'total': 10, 'collected': 0},
-                    'B': {'total': 7, 'collected': 0},
-                    'A': {'total': 5, 'collected': 0},
-                    'S': {'total': 5, 'collected': 0},  # 3 → 5
-                    'Special': {'total': 2, 'collected': 0}
-                }
+                # 티어별 카드 분류
+                tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
+                total_cards = {'C': 10, 'B': 7, 'A': 5, 'S': 4}
+                for card in user_cards:
+                    card_info = get_card_info_by_id(character_name, card['card_id'])
+                    if card_info and 'tier' in card_info:
+                        tier = card_info['tier']
+                        if tier in tier_counts:
+                            tier_counts[tier] += 1
 
-                # 수집한 카드 수 계산
-                for card_id in user_cards:
-                    if card_id.startswith('C'):
-                        tier_counts['C']['collected'] += 1
-                    elif card_id.startswith('B'):
-                        tier_counts['B']['collected'] += 1
-                    elif card_id.startswith('A'):
-                        tier_counts['A']['collected'] += 1
-                    elif card_id.startswith('S') or card_id.startswith('kagaris'):
-                        tier_counts['S']['collected'] += 1
-                    elif card_id.startswith('Special'):
-                        tier_counts['Special']['collected'] += 1
-
-                # 수집 현황 임베드 생성 (디자인 개선)
+                # --- 진행 바를 각 티어별 카드 수에 맞게 동적으로 생성 ---
                 collection_embed = discord.Embed(
-                    title=f"🎴 {character_name} Card Collection Status",
-                    description="**Check your collection progress and show off your cards!**",
+                    title=f"🎴 {character_name} Card Collection Progress",
+                    description=f"Your current collection status for {character_name} cards",
                     color=discord.Color.gold()
                 )
-
-                # 이모지 매핑
-                tier_emojis = {
-                    'C': '🥉',
-                    'B': '🥈',
-                    'A': '🥇',
-                    'S': '🏆',
-                    'Special': '✨'
-                }
-                bar_emojis = {
-                    'C': '🟩',
-                    'B': '🟦',
-                    'A': '🟨',
-                    'S': '🟪',
-                    'Special': '⬛'
-                }
-                def get_progress_bar(percent, color_emoji, empty_emoji='⬜', length=10):
-                    filled = int(percent * length)
-                    empty = length - filled
+                tier_emojis = {'C': '🥉', 'B': '🥈', 'A': '🥇', 'S': '🏆'}
+                bar_emojis = {'C': '🟩', 'B': '🟦', 'A': '🟨', 'S': '🟪'}
+                def get_progress_bar(count, total, color_emoji, empty_emoji='⬜'):
+                    filled = count
+                    empty = total - count
                     return color_emoji * filled + empty_emoji * empty
-
-                for tier, counts in tier_counts.items():
-                    percent = counts['collected'] / counts['total'] if counts['total'] else 0
+                for tier in ['C', 'B', 'A', 'S']:
+                    count = tier_counts[tier]
+                    total = total_cards[tier]
                     emoji = tier_emojis.get(tier, '')
                     color = bar_emojis.get(tier, '⬜')
-                    progress_bar = get_progress_bar(percent, color)
+                    progress_bar = get_progress_bar(count, total, color)
                     collection_embed.add_field(
                         name=f"{tier} Tier {emoji}",
-                        value=f"{progress_bar}  ({percent*100:.1f}%)",
-                        inline=False
+                        value=f"{progress_bar}  ({count}/{total})",
+                        inline=True
                     )
-
-                total_cards = sum(counts['total'] for counts in tier_counts.values())
-                total_collected = sum(counts['collected'] for counts in tier_counts.values())
-                total_progress = (total_collected / total_cards) * 100
-
+                total_collected = sum(tier_counts.values())
+                total_possible = sum(total_cards.values())
+                total_percent = (total_collected / total_possible) * 100 if total_possible > 0 else 0
                 collection_embed.add_field(
                     name="Total Collection",
-                    value=f"**{total_collected} / {total_cards}**  ({total_progress:.1f}%)",
+                    value=f"**{total_collected} / {total_possible}**  ({total_percent:.1f}%)",
                     inline=False
                 )
+                collection_embed.add_field(name="", value="━━━━━━━━━━━━━━━━━━", inline=False)
 
+                # collection_embed를 전송
                 await interaction.response.send_message(embed=collection_embed, ephemeral=True)
 
-                # 카드 임베드 슬라이드 뷰 정의
-                class CardSliderView(discord.ui.View):
-                    def __init__(self, user_id, cards, character_name, card_info_dict):
-                        super().__init__(timeout=180)
-                        self.user_id = user_id
-                        self.cards = cards
-                        self.character_name = character_name
-                        self.card_info_dict = card_info_dict
-                        self.index = 0
-                        self.total = len(cards)
-                        self.update_buttons()
+                if not user_cards:
+                    await interaction.followup.send(f"You don't have any {character_name} cards yet.", ephemeral=True)
+                    return
 
-                    def update_buttons(self):
-                        self.clear_items()
-                        self.add_item(CardNavButton('⬅️ Previous', self, -1))
-                        self.add_item(CardNavButton('Next ➡️', self, 1))
-                        card_id = self.cards[self.index]
-                        card_info = self.card_info_dict[self.character_name][card_id]
-                        self.add_item(DiscordShareButton(
-                            f"{self.character_name} {card_id}",
-                            card_info.get("description", ""),
-                            card_info.get("image_path", ""),
-                            835838633126002721
-                        ))
+                # 카드 슬라이더 뷰
+                card_info_dict = {
+                    card['card_id']: get_card_info_by_id(character_name, card['card_id'])
+                    for card in user_cards if get_card_info_by_id(character_name, card['card_id'])
+                }
 
-                    async def update_message(self, interaction):
-                        card_id = self.cards[self.index]
-                        card_info = self.card_info_dict[self.character_name][card_id]
-                        # 전체 서버 기준 발급 순번 조회
-                        issued_number = self.card_info_dict[self.character_name].get(f"{card_id}_issued_number", None)
-                        if issued_number is None:
-                            # DB에서 발급 순번 조회 (없으면 1로)
-                            try:
-                                issued_number = interaction.client.db.get_card_issued_number(self.character_name, card_id)
-                            except Exception:
-                                issued_number = 1
-                        embed = discord.Embed(
-                            title=f"My {self.character_name} Card Collection",
-                            description=card_info.get("description", "No description available."),
-                            color=discord.Color.from_rgb(255, 215, 0)
-                        )
-                        # kagaris로 시작하는 카드 ID는 S 티어로 표시
-                        tier = "S" if card_id.startswith("kagaris") else card_id[0]
-                        embed.add_field(name="Tier", value=tier, inline=True)
-                        # Card Number: C7  #001
-                        card_number_str = f"{card_id}  #{issued_number:03d}"
-                        embed.add_field(name="Card Number", value=card_number_str, inline=True)
-                        embed.add_field(name=" ", value="━━━━━━━━━━━━━━━━━━", inline=False)
-                        if os.path.exists(card_info["image_path"]):
-                            file = discord.File(card_info["image_path"], filename=f"card_{card_id}.png")
-                            embed.set_image(url=f"attachment://{card_id}.png")
-                            embed.set_footer(text=f"Card {self.index+1} of {self.total}")
-                            await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
-                        else:
-                            embed.add_field(name="Notice", value="Card image not found.")
-                            embed.set_footer(text=f"Card {self.index+1} of {self.total}")
-                            await interaction.response.edit_message(embed=embed, view=self)
+                def get_tier_order(card_id):
+                    tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
+                    tier_order = {'C': 0, 'B': 1, 'A': 2, 'S': 3}
+                    return tier_order.get(tier, 4)
 
-                class CardNavButton(discord.ui.Button):
-                    def __init__(self, label, view, direction):
-                        super().__init__(label=label, style=discord.ButtonStyle.primary)
-                        self.view_ref = view
-                        self.direction = direction
+                sorted_cards = sorted(list(card_info_dict.keys()), key=get_tier_order)
 
-                    async def callback(self, interaction: discord.Interaction):
-                        if interaction.user.id != self.view_ref.user_id:
-                            await interaction.response.send_message("Only you can navigate your cards.", ephemeral=True)
-                            return
-                        self.view_ref.index = (self.view_ref.index + self.direction) % self.view_ref.total
-                        self.view_ref.update_buttons()
-                        await self.view_ref.update_message(interaction)
+                if not sorted_cards:
+                     await interaction.followup.send(f"You don't seem to have any valid cards for {character_name}.", ephemeral=True)
+                     return
 
-                if user_cards:
-                    slider_view = CardSliderView(interaction.user.id, sorted(user_cards), character_name, CHARACTER_CARD_INFO)
-                    first_card_id = sorted(user_cards)[0]
-                    first_card_info = CHARACTER_CARD_INFO[character_name][first_card_id]
-                    embed = discord.Embed(
-                        title=f"{character_name} {first_card_id} Card",
-                        description=first_card_info.get("description", "No description available."),
-                        color=discord.Color.from_rgb(255, 215, 0)
-                    )
-                    # 이모지 매핑
-                    tier_emojis = {
-                        'C': '🥉',
-                        'B': '🥈',
-                        'A': '🥇',
-                        'S': '🏆',
-                        'Special': '✨'
-                    }
-                    tier_emoji = tier_emojis.get(first_card_id[0], '')
-                    embed.add_field(name="Tier", value=f"{first_card_id[0]} Tier {tier_emoji}", inline=True)
-                    embed.add_field(name="Card Number", value=first_card_id, inline=True)
-                    embed.add_field(name=" ", value="━━━━━━━━━━━━━━━━━━", inline=False)
-                    if os.path.exists(first_card_info["image_path"]):
-                        file = discord.File(first_card_info["image_path"], filename=f"card_{first_card_id}.png")
-                        embed.set_image(url=f"attachment://card_{first_card_id}.png")
-                        embed.set_footer(text=f"Card 1 of {len(user_cards)}")
-                        await interaction.followup.send(embed=embed, file=file, view=slider_view, ephemeral=True)
-                    else:
-                        embed.add_field(name="Notice", value="Card image not found.")
-                        embed.set_footer(text=f"Card 1 of {len(user_cards)}")
-                        await interaction.followup.send(embed=embed, view=slider_view, ephemeral=True)
-                else:
-                    await interaction.followup.send(
-                        "You have not collected any cards yet.", 
-                        ephemeral=True
-                    )
+                slider_view = CardSliderView(
+                    user_id=user_id,
+                    cards=sorted_cards,
+                    character_name=character_name,
+                    card_info_dict=card_info_dict,
+                    db=self.db  # db 인스턴스 전달
+                )
+
+                # Send the initial message using the new method
+                await slider_view.initial_message(interaction)
 
             except Exception as e:
-                print(f"Error in mycard command: {e}")
+                print(f"Error in mycard command: {str(e)}")
                 import traceback
                 print(traceback.format_exc())
-                await interaction.response.send_message(
-                    "An error occurred while loading card information.", 
-                    ephemeral=True
-                )
+                # Ensure the interaction is responded to, even if an error occurs
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        "An error occurred while loading your cards. Please try again.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.followup.send(
+                        "An error occurred while loading your cards. Please try again.",
+                        ephemeral=True
+                    )
 
         @self.tree.command(
             name="check_language",
-            description="현재 채널의 언어를 확인합니다."
+            description="Check the language of the current channel."
         )
         async def check_language_command(interaction: discord.Interaction):
             try:
@@ -1487,283 +1449,38 @@ class BotSelector(commands.Bot):
             description="Play story chapters for each character."
         )
         async def story_command(interaction: discord.Interaction):
-            from config import CHARACTER_INFO, STORY_CHAPTERS
+            """Initiates the story mode UI."""
+            view = NewStoryView(self)
+            await interaction.response.send_message("Please select a character to start the story with.", view=view, ephemeral=True)
 
-            # 현재 채널의 캐릭터 봇 찾기
-            current_bot = None
-            for char_name, bot in self.character_bots.items():
-                if interaction.channel.id in bot.active_channels:
-                    current_bot = bot
-                    break
+        @self.tree.command(
+            name="reset_story",
+            description="Admin: Reset story progress for a user."
+        )
+        @app_commands.default_permissions(administrator=True)
+        @app_commands.describe(
+            user="The user whose story progress you want to reset.",
+            character="The character whose story you want to reset."
+        )
+        @app_commands.choices(character=[
+            discord.app_commands.Choice(name=name, value=name) for name in CHARACTER_INFO.keys()
+        ])
+        async def reset_story_command(interaction: discord.Interaction, user: discord.Member, character: str):
+            """Resets story progress for a specific user and character."""
+            try:
+                success = self.db.reset_story_progress(user.id, character)
+                if success:
+                    await interaction.response.send_message(f"Successfully reset story progress for {user.display_name} with {character}.", ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"Failed to reset story progress for {user.display_name} with {character}.", ephemeral=True)
+            except Exception as e:
+                print(f"Error in reset_story_command: {e}")
+                traceback.print_exc()
+                await interaction.response.send_message("An error occurred while resetting story progress.", ephemeral=True)
 
-            if not current_bot:
-                await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
-                return
-
-            # 친밀도 등급 체크
-            affinity_info = current_bot.db.get_affinity(interaction.user.id, current_bot.character_name)
-            current_affinity = affinity_info['emotion_score']
-            affinity_grade = get_affinity_grade(current_affinity)
-
-            # 골드 레벨이 아닌 경우 경고 메시지 표시
-            if affinity_grade != "Gold":
-                embed = discord.Embed(
-                    title="⚠️ Story Mode Locked",
-                    description="Story mode is only available for Gold level users.",
-                    color=discord.Color.red()
-                )
-                embed.add_field(
-                    name="Current Level",
-                    value=f"**{affinity_grade}**",
-                    inline=True
-                )
-                embed.add_field(
-                    name="Required Level",
-                    value="**Gold**",
-                    inline=True
-                )
-                embed.add_field(
-                    name="How to Unlock",
-                    value="Keep chatting with the character to increase your affinity level!",
-                    inline=False
-                )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                return
-
-            # 골드 레벨인 경우 기존 스토리 모드 진행
-            options = [
-                discord.SelectOption(
-                    label=selected_char,
-                    description=CHARACTER_INFO[selected_char]['description'],
-                    value=selected_char
-                )
-                for selected_char in CHARACTER_INFO.keys()
-            ]
-            select = discord.ui.Select(
-                placeholder="Please select a character to chat with...",
-                min_values=1,
-                max_values=1,
-                options=options
-            )
-
-            async def select_callback(select_interaction: discord.Interaction):
-                selected_char = select.values[0]
-                if selected_char != current_bot.character_name:
-                    await select_interaction.response.send_message(
-                        "Please use it on the character channel.", ephemeral=True
-                    )
-                    return
-                try:
-                    user_id = select_interaction.user.id
-                    character_bot = self.character_bots.get(selected_char)
-                    if not character_bot:
-                        await select_interaction.response.send_message("The character bot cannot be found..", ephemeral=True)
-                        return
-
-                    # 챕터 리스트 생성
-                    chapters = STORY_CHAPTERS.get(selected_char, [])
-                    if not chapters:
-                        await select_interaction.response.send_message("There is no story chapter for this character..", ephemeral=True)
-                        return
-
-                    chapter_options = [
-                        discord.SelectOption(
-                            label=f"{c['emoji']} {c['title']}",
-                            description=c.get('content', ''),
-                            value=str(c['id'])
-                        ) for c in chapters
-                    ]
-                    chapter_select = discord.ui.Select(
-                        placeholder="Please select a chapter to play.",
-                        min_values=1,
-                        max_values=1,
-                        options=chapter_options
-                    )
-
-                    async def chapter_callback(chapter_interaction: discord.Interaction):
-                        try:
-                            await chapter_interaction.response.defer(ephemeral=True)
-                            chapter_id = int(chapter_select.values[0])
-
-                            # 새로운 스토리 채널 생성
-                            guild = chapter_interaction.guild
-                            channel_name = f"{selected_char.lower()}-story-{chapter_interaction.user.name.lower()}"
-                            category = discord.utils.get(guild.categories, name="chatbot")
-                            if not category:
-                                category = await guild.create_category("chatbot")
-
-                            # 기존 스토리 채널이 있다면 삭제
-                            existing_channel = discord.utils.get(category.text_channels, name=channel_name)
-                            if existing_channel:
-                                await existing_channel.delete()
-
-                            # 새 채널 생성
-                            overwrites = {
-                                guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                                chapter_interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-                            }
-                            channel = await guild.create_text_channel(
-                                name=channel_name,
-                                category=category,
-                                overwrites=overwrites
-                            )
-
-                            # 스토리 모드 시작
-                            chapter = STORY_CHAPTERS[selected_char][chapter_id - 1]
-                            embed = discord.Embed(
-                                title=chapter["title"],
-                                description=chapter.get("description", ""),
-                                color=CHARACTER_INFO[selected_char]["color"]
-                            )
-
-                            if selected_char == "Kagari":
-                                embed.add_field(
-                                    name="🌸 Welcome to a Special Moment",
-                                    value=(
-                                        "Welcome to a special 5-minute story under the cherry blossoms. "
-                                        "In this moment, you're spending quiet time with Kagari — a reserved, graceful half-yokai who rarely expresses her feelings. "
-                                        "But… somewhere behind her calm gaze, a soft heart quietly hopes for warmth. "
-                                        "Your goal is simple: ✨ Talk with her. Make her feel something. One word at a time."
-                                    ),
-                                    inline=False
-                                )
-                                embed.add_field(
-                                    name="💬 How it works",
-                                    value=(
-                                        "1. Kagari will gently guide the conversation, and your responses will affect how close she feels to you.\n"
-                                        "2. She doesn't say it out loud… but she's keeping score — based on how you make her feel.\n"
-                                        "3. Speak with sincerity and subtlety, and she might just open her heart.\n"
-                                        "4. Be too blunt or pushy? She'll retreat — and the moment might slip away."
-                                    ),
-                                    inline=False
-                                )
-                                embed.add_field(
-                                    name="🎴 Card Rewards",
-                                    value=(
-                                        "At the end of this story, Kagari will judge your connection — and based on how you made her feel, you may receive a special card.\n\n"
-                                        "🟥 **High score** (warm, sincere, respectful)\n"
-                                        "→ S-tier or Special Kagari Card 🌸\n\n"
-                                        "🟨 **Medium score** (neutral to light warmth)\n"
-                                        "→ Standard Kagari Card\n\n"
-                                        "⬛ **Low score** (awkward, cold, or too pushy)\n"
-                                        "→ No card... just a cold breeze and silence.\n\n"
-                                        "🌟 Your words matter. A simple sentence can shape the memory — and the reward."
-                                    ),
-                                    inline=False
-                                )
-                                embed.add_field(
-                                    name="🧭 Tone Tips",
-                                    value=(
-                                        "🕊 Start softly. Kagari opens up only to those who earn her trust.\n\n"
-                                        "💬 Use gentle, meaningful words — not flashy compliments.\n\n"
-                                        "🎭 Let the silence speak too. Kagari isn't chatty, but she listens deeply.\n\n"
-                                        "Her replies may feel distant at first:\n"
-                                        "\"...I see.\" / \"That's... unexpected.\" / \"Mm. Thank you, I suppose.\"\n\n"
-                                        "But as your words reach her — you might see a smile you'll never forget."
-                                    ),
-                                    inline=False
-                                )
-                                embed.add_field(
-                                    name="Ready to Begin?",
-                                    value="Then say something... and let's see where her heart leads.\n\n🌸🍃",
-                                    inline=False
-                                )
-                            elif selected_char == "Eros":
-                                embed.add_field(
-                                    name="🐝 Eros Story Mode – special detective story",
-                                    value=(
-                                        "Welcome to Eros's special detective story!\n"
-                                        "Her precious gift for the Spot Zero team has gone missing… and she needs your help to find the culprit. 💔\n"
-                                        "You'll chat with Eros over 20 turns, collect clues, and solve the mystery together."
-                                    ),
-                                    inline=False
-                                )
-                                embed.add_field(
-                                    name="🔍 Your Mission",
-                                    value=(
-                                        "Combine the clues Eros gives you to identify the thief after turn 20 — and help her recover the stolen gift!"
-                                    ),
-                                    inline=False
-                                )
-                                embed.add_field(
-                                    name="🧠 Tips for Talking to Eros",
-                                    value=(
-                                        "🗨️ She's emotional, so speak gently.\n\n"
-                                        "🚫 Don't use commands or be too forceful.\n\n"
-                                        "✅ Comfort her or ask thoughtful questions about the clues.\n\n"
-                                        "💬 Eros will use small expressions like (sniffles), (thinking), or (hopeful eyes) — pay attention to her feelings.\n\n"
-                                        "❗ She won't say \"thank you\" — she's focused on solving the case."
-                                    ),
-                                    inline=False
-                                )
-                                embed.add_field(
-                                    name="🎴 Card Rewards",
-                                    value=(
-                                        "Based on your emotional connection and the flow of your conversation,\n"
-                                        "you'll receive a final reward card depending on your score with Eros."
-                                    ),
-                                    inline=False
-                                )
-                                embed.add_field(
-                                    name="Ready to Begin?",
-                                    value="Are you ready to solve the case together? 🐾\nLet's begin… she's counting on you. 💛",
-                                    inline=False
-                                )
-
-                            if chapter.get("thumbnail"):
-                                embed.set_thumbnail(url=chapter["thumbnail"])
-                            await channel.send(embed=embed)
-
-                            # 하이퍼링크 메시지 전송
-                            story_link = f"https://discord.com/channels/{guild.id}/{channel.id}"
-                            await chapter_interaction.followup.send(
-                                f"[Go to your story channel]({story_link})\nStory has started!",
-                                ephemeral=True
-                            )
-
-                            # 스토리 모드 시작
-                            await run_story_scene(
-                                self, channel, chapter_interaction.user, selected_char, chapter_id, 1
-                            )
-
-                        except Exception as e:
-                            print(f"[ERROR] chapter_callback: {e}")
-                            import traceback
-                            print(traceback.format_exc())
-                            if not chapter_interaction.response.is_done():
-                                await chapter_interaction.response.send_message(
-                                    f"에러 발생: {e}",
-                                    ephemeral=True
-                                )
-                            else:
-                                await chapter_interaction.followup.send(
-                                    f"에러 발생: {e}",
-                                    ephemeral=True
-                                )
-
-                    chapter_select.callback = chapter_callback
-                    chapter_view = discord.ui.View()
-                    chapter_view.add_item(chapter_select)
-                    await select_interaction.response.send_message(
-                        'Please select a story chapter for ' + selected_char + ':',
-                        view=chapter_view,
-                        ephemeral=True
-                    )
-
-                except Exception as e:
-                    import traceback
-                    print(traceback.format_exc())
-                    await select_interaction.response.send_message(f"Error occurred: {e}", ephemeral=True)
-
-            select.callback = select_callback
-            view = discord.ui.View()
-            view.add_item(select)
-            await interaction.response.send_message(
-                "Please select a character:",
-                view=view,
-                ephemeral=True
-            )
+        async def story_character_select_callback(self, interaction: discord.Interaction, selected_char: str):
+            # 이 함수는 더 이상 사용되지 않지만, 다른 곳에서 호출될 경우를 대비해 유지합니다.
+            await interaction.response.send_message(f"Selected: {selected_char}. This part of story is under construction.", ephemeral=True)
 
         @self.tree.command(
             name="message_add",
@@ -1771,18 +1488,18 @@ class BotSelector(commands.Bot):
         )
         @app_commands.default_permissions(administrator=True)
         async def message_add_command(interaction: discord.Interaction, target: discord.Member, count: int, character: str):
-            if not self.settings.is_admin(interaction.user):
+            if not self.settings_manager.is_admin(interaction.user):
                 await interaction.response.send_message("Available to admins only.", ephemeral=True)
                 return
             # DB에 메시지 추가 (실제 메시지 insert)
             for _ in range(count):
-                await self.db.add_message(
-                    channel_id=0,  # 시스템 메시지이므로 0
-                    user_id=target.id,
-                    character_name=character,
-                    role="user",
-                    content="[Add an admin message]",
-                    language="en"
+                self.db.add_message(
+                    0,              # channel_id
+                    target.id,      # user_id
+                    character,      # character_name
+                    "user",        # role
+                    "[Add an admin message]",  # content
+                    "en"           # language
                 )
             embed = discord.Embed(
                 title="Finished adding the number of messages",
@@ -1797,7 +1514,7 @@ class BotSelector(commands.Bot):
         )
         @app_commands.default_permissions(administrator=True)
         async def affinity_set_command(interaction: discord.Interaction, target: discord.Member, value: int, character: str):
-            if not self.settings.is_admin(interaction.user):
+            if not self.settings_manager.is_admin(interaction.user):
                 await interaction.response.send_message("Available to admins only.", ephemeral=True)
                 return
             # affinity 직접 수정
@@ -1820,7 +1537,7 @@ class BotSelector(commands.Bot):
         )
         @app_commands.default_permissions(administrator=True)
         async def card_give_command(interaction: discord.Interaction, target: discord.Member, character: str, card_id: str):
-            if not self.settings.is_admin(interaction.user):
+            if not self.settings_manager.is_admin(interaction.user):
                 await interaction.response.send_message("Only admins can use this command.", ephemeral=True)
                 return
             success = self.db.add_user_card(target.id, character, card_id)
@@ -1844,7 +1561,7 @@ class BotSelector(commands.Bot):
         )
         @app_commands.default_permissions(administrator=True)
         async def message_add_total_command(interaction: discord.Interaction, target: discord.Member, total: int):
-            if not self.settings.is_admin(interaction.user):
+            if not self.settings_manager.is_admin(interaction.user):
                 await interaction.response.send_message("Only admins can use this command.", ephemeral=True)
                 return
             if total < 0:
@@ -1855,13 +1572,13 @@ class BotSelector(commands.Bot):
             to_add = total - current_count
             if to_add > 0:
                 for _ in range(to_add):
-                    await self.db.add_message(
-                        channel_id=0,  # 시스템 메시지이므로 0
-                        user_id=target.id,
-                        character_name="system",  # 또는 None/공백 등
-                        role="user",
-                        content="[Add an admin message]",
-                        language="en"
+                    self.db.add_message(
+                        0,              # channel_id
+                        target.id,      # user_id
+                        "system",      # character_name
+                        "user",        # role
+                        "[Add an admin message]",  # content
+                        "en"           # language
                     )
                 await interaction.response.send_message(f"{target.display_name}'s total message count is set to {total}.", ephemeral=True)
             elif to_add == 0:
@@ -1874,21 +1591,48 @@ class BotSelector(commands.Bot):
             description="How to use the chatbot, affinity, card, story, ranking, FAQ guide"
         )
         async def help_command(interaction: discord.Interaction):
-            help_topics = [
-                ("🤖 How to Use the Chatbot", "how_to_use"),
-                ("❤️ Affinity & Level System", "affinity"),
-                ("🎴 Card & Reward System", "card"),
-                ("🎭 Story Mode", "story"),
-                ("🏆 Ranking System", "ranking"),
-                ("❓ FAQ", "faq"),
-            ]
-            options = [
-                discord.SelectOption(label=title, value=key)
-                for title, key in help_topics
-            ]
             class HelpSelect(discord.ui.Select):
                 def __init__(self):
-                    super().__init__(placeholder="Select a help topic", min_values=1, max_values=1, options=options)
+                    options = [
+                        discord.SelectOption(
+                            label="How to Use",
+                            value="how_to_use",
+                            description="Basic guide for using the chatbot",
+                            emoji="🤖"
+                        ),
+                        discord.SelectOption(
+                            label="Affinity & Level",
+                            value="affinity",
+                            description="Learn about the affinity system",
+                            emoji="❤️"
+                        ),
+                        discord.SelectOption(
+                            label="Card System",
+                            value="card",
+                            description="Card collection and rewards",
+                            emoji="🎴"
+                        ),
+                        discord.SelectOption(
+                            label="Story Mode",
+                            value="story",
+                            description="Story mode guide",
+                            emoji="📖"
+                        ),
+                        discord.SelectOption(
+                            label="Ranking",
+                            value="ranking",
+                            description="Ranking system guide",
+                            emoji="🏆"
+                        ),
+                        discord.SelectOption(
+                            label="FAQ",
+                            value="faq",
+                            description="Frequently asked questions",
+                            emoji="❓"
+                        )
+                    ]
+                    super().__init__(placeholder="Choose a topic", options=options)
+
                 async def callback(self, interaction2: discord.Interaction):
                     topic = self.values[0]
                     embed = discord.Embed(color=discord.Color.blurple())
@@ -1897,26 +1641,28 @@ class BotSelector(commands.Bot):
                         embed.add_field(name="How to Talk with Characters", value="- Use /bot to create a private chat channel with a character like Kagari or Eros.\n- Supports multilingual input (EN/JP/ZH), responses are always in English.\n- Characters react to your emotions, tone, and depth of conversation.\n🧠 Pro Tip: The more emotionally engaging your dialogue, the faster you grow your bond!", inline=False)
                     elif topic == "affinity":
                         embed.title = "❤️ Affinity & Level System"
-                        embed.add_field(name="Level Up with Conversations", value="- Rookie (1–10 msgs): Basic chat only.\n- Iron (11–30): Unlock C-rank cards & light emotion.\n- Silver (31–60): A/B/C cards & story mood options.\n- Gold (61+): S-tier chance & story unlock.\n- Gold+ (100+): Higher A-rank chance + special tone.\nCommand: /affinity to check your current level, progress, and daily message stats.", inline=False)
+                        embed.add_field(name="Level Up with Conversations", value="- Rookie (0-9): Basic chat only.\n- ⚔️ Iron (10-29): Unlock basic emotions & C-rank cards.\n- 🥉 Bronze (30-49): B/C cards & more emotions.\n- Silver (50-99): A/B/C cards & story mood options.\n- Gold (100+): S-tier chance & story unlock.\nCommand: /affinity to check your current level, progress, and daily message stats.", inline=False)
                     elif topic == "card":
                         embed.title = "🎴 Card & Reward System"
-                        embed.add_field(name="How to Earn & Collect Cards", value="You earn cards through:\n- 🗣️ Emotional chat: score-based triggers (10/20/30)\n- 🎮 Story Mode completions\n- ❤️ Affinity milestone bonuses\nCard Tier Example (Gold user):\n- A (20%) / B (40%) / C (40%)\n- Gold+ user: A (35%) / B (35%) / C (30%)\n📜 Use /mycard to view your collection.", inline=False)
+                        embed.add_field(name="How to Earn & Collect Cards", value="You earn cards through:\n- 🗣️ Emotional chat: score-based triggers (10/20/30)\n- 🎮 Story Mode completions\n- ❤️ Affinity milestone bonuses\nCard Tier Example (Gold user):\n- A (20%) / B (30%) / C (50%)\n- Gold+ user: S (10%) / A (20%) / B (30%) / C (40%)\n📜 Use /mycard to view your collection.", inline=False)
                     elif topic == "story":
-                        embed.title = "🎭 Story Mode"
-                        embed.add_field(name="Play Story Chapters with Your Favorite Characters", value="Start with /story start [character]\nStory Mode is only open to users with Gold status or higher. Story Mode allows you to earn Tier Cards.\n\nScenarios:\n- Kagari: 🌸 Spring date under the cherry blossoms\n- Eros: 🕵️ Track down the mysterious gift thief\n🎯 30+ dialogue turns → score-based endings (positive/neutral/negative)\n🃏 Ending gives you a card (based on performance)", inline=False)
+                        embed.title = "📖 Story Mode Guide"
+                        embed.add_field(name="How to Play", value="1. Reach Gold level (100+ affinity)\n2. Use /story to start\n3. Choose a chapter\n4. Make choices that affect the story\n\nRewards:\n- Story completion rewards\n- Special card rewards\n- Bonus affinity points", inline=False)
                     elif topic == "ranking":
                         embed.title = "🏆 Ranking System"
-                        embed.add_field(name="Want to know who's building the strongest bond with each character?", value="Our Crush Rankings track the top players based on weekly interaction scores!\n\nHow it works:\n- Rankings are based on your weekly Crush Score from chats and stories\n- Updated every Monday 00:00 UTC (Sunday reset)\n- Rank = sum of crush points with that character\nCommands:\n- /ranking — View current top players", inline=False)
+                        embed.add_field(name="How Rankings Work", value="Rankings are based on:\n1. Total affinity across all characters\n2. Daily conversation count\n3. Story mode completion\n\nCheck your rank with /ranking", inline=False)
                     elif topic == "faq":
                         embed.title = "❓ FAQ"
-                        embed.add_field(name="Q1: How can I get Q cards or grade cards?", value="A: You can get A–C grade cards through 1:1 general chat with characters.\nHowever, your Crush level determines the probability and tier of the card you receive.\nCheck /help affinity & level system to see what tier unlocks which card grades.", inline=False)
+                        embed.add_field(name="Q1: How can I get higher grade cards?", value="A: Card grades depend on your affinity level:\n- Iron: Mainly C cards (80%), small chance for B (20%)\n- Bronze: Better chance for B cards (30%)\n- Silver: Can get A cards (20%)\n- Gold: Can get S cards (10%)\nHigher affinity = better card chances!", inline=False)
                         embed.add_field(name="Q2: How are rewards calculated in Story Mode?", value="A: There are two score systems in Story Mode:\n- Mission Clear Logic: Each story has a mission goal. If you clear it, you're guaranteed an S-tier card.\n- Affinity Score Logic: Your outcome is affected by how close you are with the character.\nIf your crush score is too low, you may not receive a card at all. Higher crush = higher card tier and more beautiful card art!", inline=False)
                         embed.add_field(name="Q3: What changes based on my Crush with the character?", value="A: Character tone, reaction, and card chances all change based on your Affinity level.\n- Higher Affinity = More natural or intimate dialogue\n- Higher Affinity = Better chance at A-tier or S-tier cards\n- Lower Affinity = Dull responses, chance of being rejected\nUse /affinity to track your current level with each character.", inline=False)
                     await interaction2.response.send_message(embed=embed, ephemeral=True)
+
             class HelpView(discord.ui.View):
                 def __init__(self):
                     super().__init__(timeout=180)
                     self.add_item(HelpSelect())
+
             embed = discord.Embed(
                 title="Help Menu",
                 description="Select a topic below to learn more!",
@@ -1948,8 +1694,29 @@ class BotSelector(commands.Bot):
                 # 2. 호감도 체크 (스토리 모드와 동일)
                 affinity_info = current_bot.db.get_affinity(interaction.user.id, current_bot.character_name)
                 affinity = affinity_info['emotion_score'] if affinity_info else 0
+                affinity_grade = get_affinity_grade(affinity)
                 if affinity < 100:
-                    await interaction.response.send_message("Roleplaying mode is only open to players with a favorability rating of 100 or higher.", ephemeral=True)
+                    embed = discord.Embed(
+                        title="⚠️ Roleplay Mode Locked",
+                        description="Roleplay mode is only available for Gold level users.",
+                        color=discord.Color.red()
+                    )
+                    embed.add_field(
+                        name="Current Level",
+                        value=f"**{affinity_grade}**",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="Required Level",
+                        value="**Gold**",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="How to Unlock",
+                        value="Keep chatting with the character to increase your affinity level!",
+                        inline=False
+                    )
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
                     return
 
                 # 3. 모달 표시
@@ -1960,57 +1727,1839 @@ class BotSelector(commands.Bot):
                 print(f"Error in /roleplay: {e}")
                 await interaction.response.send_message("An error occurred, please contact your administrator.", ephemeral=True)
 
-    async def on_message(self, message):
-        session = self.roleplay_sessions.get(message.channel.id) if hasattr(self, "roleplay_sessions") else None
-        if session and session["is_active"]:
-            if message.author.id != session["user_id"]:
-                return  # 유저만 입력 가능
-            session["turns_remaining"] -= 1
-            # 캐릭터 personality + 유저 입력값(역할, 스토리라인) 결합
-            from config import CHARACTER_INFO
-            char_info = CHARACTER_INFO.get(session["character_name"], {})
-            base_personality = char_info.get("personality", "")
-            user_role = session.get("user_role", "")
-            character_role = session.get("character_role", "")
-            story_line = session.get("story_line", "")
-            system_prompt = (
-                f"{base_personality}\n\n"
-                f"[Roleplay Setting]\n"
-                f"- User's Role: {user_role}\n"
-                f"- Character's Role: {character_role}\n"
-                f"- Story Line: {story_line}\n"
-                "IMPORTANT: Only reply with ONE sentence per user message. Never ask more than one question or make more than one statement per turn. "
-                "If you want to ask a question, do not add any extra explanation or follow-up. Never rephrase or repeat the same question in different words. If you have to choose, only say the most important thing. "
-                "Do NOT repeat or summarize previous messages. "
-                "Make the conversation feel like a real, playful, and romantic date. "
-                "Be emotionally responsive, curious, and occasionally a little shy or flirty. "
-                "Never break character. Do not use more than one set of parentheses for actions or feelings. "
-                "Never answer or discuss sexual, child abuse, political, or any other sensitive or controversial topics. Politely avoid or change the subject if such topics arise. "
-                "Your goal is to make the user feel emotionally engaged and immersed in the story. "
-            )
-            ai_response = openai.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message.content}
-                ],
-                temperature=0.7,
-                max_tokens=150
-            )
-            ai_text = ai_response.choices[0].message.content.strip()
-            import re
-            match = re.search(r'(.+?[.!?\n])', ai_text)
-            first_sentence = match.group(1).strip() if match else ai_text.split('\n')[0]
-            await message.channel.send(f"{char_info.get('emoji', '')} **{session['character_name']}**: {first_sentence}")
-            if session["turns_remaining"] <= 0:
-                session["is_active"] = False
-                await message.channel.send("Roleplay mode has ended.")
-            return
-        # 일반 메시지/스토리 모드 등은 기존대로 처리
-        await self.process_normal_message(message)
+        # --- 인벤토리 및 선물 명령어 통합 ---
 
-class BotSelectView(discord.ui.View):
-    def __init__(self, bot_selector):
-        super().__init__(timeout=180)  # 3분 타임아웃
-        self.bot_selector = bot_selector
-        self.add_item(CharacterSelect(bot_selector))
+        @self.tree.command(name="inventory", description="Check your gift inventory.")
+        async def inventory(interaction: discord.Interaction):
+            user_gifts = self.db.get_user_gifts(interaction.user.id)
+
+            if not user_gifts:
+                embed = discord.Embed(
+                    title=f"{interaction.user.display_name}'s Inventory",
+                    description="You don't have any gifts yet.\nComplete daily quests to earn gifts!",
+                    color=discord.Color.blue()
+                )
+                embed.set_thumbnail(url=interaction.user.display_avatar.url)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+
+            paginator = InventoryPaginator(interaction, user_gifts, self.db)
+            initial_embed = await paginator.get_page_embed()
+            await interaction.response.send_message(embed=initial_embed, view=paginator, ephemeral=True)
+
+        # gift_autocomplete를 원래의 데이터베이스 조회 로직으로 복원
+        async def gift_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+            try:
+                # get_db_manager()를 통해 안정적으로 DB 인스턴스 획득
+                db = get_db_manager()
+                user_gifts = db.get_user_gifts(interaction.user.id)
+
+                choices = []
+                if user_gifts:
+                    for gift_id, quantity in user_gifts:
+                        details = get_gift_details(gift_id)
+                        if details:
+                            choice_name = f"{details['name']} (Owned: {quantity})"
+                            if current.lower() in choice_name.lower():
+                                choices.append(app_commands.Choice(name=choice_name, value=gift_id))
+
+                return choices[:25]
+            except Exception as e:
+                print(f"[gift_autocomplete FINAL ERROR] {e}")
+                import traceback
+                print(traceback.format_exc())
+                return []
+
+        @self.tree.command(name="gift", description="Give a gift to the character in the current channel.")
+        @app_commands.describe(item="Select the gift to send.", quantity="Enter the quantity to send. (Default: 1)")
+        @app_commands.autocomplete(item=gift_autocomplete)
+        async def gift(interaction: discord.Interaction, item: str, quantity: int = 1):
+            """
+            현재 채널의 캐릭터에게 선물을 줍니다.
+            """
+            await interaction.response.defer(ephemeral=True)
+
+            # 디버깅 로그 추가
+            print(f"[DEBUG] /gift called in channel: {interaction.channel.id}")
+            from story_mode import story_sessions
+            print(f"[DEBUG] story_sessions keys: {list(story_sessions.keys())}")
+            session = story_sessions.get(interaction.channel.id)
+            print(f"[DEBUG] session: {session}")
+
+            # 스토리 모드 세션이 있는지 먼저 확인
+            if session and session.get("stage_num") == 3 and session.get("waiting_for_gift"):
+                # 카가리 챕터3에서만 챕터3 선물 로직 동작
+                if session.get("character_name", "").lower() == "kagari":
+                    # 챕터3 스토리 진행 중 - 선물 사용으로 클리어 시도
+                    success, result = await handle_chapter3_gift_usage(self, interaction.user.id, session["character_name"], item, interaction.channel.id)
+
+                    if success:
+                        success_embed, completion_embed = result
+                        await interaction.followup.send(embed=success_embed, ephemeral=True)
+                        await interaction.channel.send(embed=completion_embed)
+
+                        # 10초 후 채널 삭제
+                        await asyncio.sleep(10)
+                        try:
+                            await interaction.channel.delete()
+                        except:
+                            pass
+                        return
+                    else:
+                        await interaction.followup.send(f"Error: {result}", ephemeral=True)
+                        return
+                else:
+                    await interaction.followup.send("This command is only available in Kagari's last chapter.", ephemeral=True)
+                    return
+
+            # 현재 채널의 캐릭터 봇 찾기 (일반 채팅 채널용)
+            current_bot = None
+            for char_name, bot in self.character_bots.items():
+                if interaction.channel.id in bot.active_channels:
+                    current_bot = bot
+                    break
+
+            if not current_bot:
+                await interaction.followup.send("You can't give gifts in this channel. Please use this in a character's chat channel.", ephemeral=True)
+                return
+
+            character = current_bot.character_name
+            user_id = interaction.user.id
+
+            # 보유 수량 체크
+            user_gifts = self.db.get_user_gifts(user_id)
+            gift_info = next((g for g in user_gifts if g[0] == item), None)
+
+            if not gift_info:
+                await interaction.followup.send("You don't own this gift. Please check your inventory.", ephemeral=True)
+                return
+
+            owned_quantity = gift_info[1]
+            if quantity <= 0 or quantity > owned_quantity:
+                await interaction.followup.send(f"Please check the quantity. You currently have {owned_quantity}.", ephemeral=True)
+                return
+
+            # 일반 선물 사용 (기존 로직)
+            self.db.use_user_gift(user_id, item, quantity)
+
+            gift_details = get_gift_details(item)
+            reaction_message = get_gift_reaction(character, item)
+            gift_emoji = get_gift_emoji(item)
+
+            # 선물 종류와 선호도에 따른 호감도 변화량
+            is_preferred = check_gift_preference(character, item)
+            base_affinity = 5 if is_preferred else -1
+            affinity_change = base_affinity * quantity
+
+            self.db.update_affinity(
+                user_id=user_id,
+                character_name=character,
+                last_message=f"Gave {quantity} of '{gift_details['name']}'.",
+                last_message_time=datetime.utcnow(),
+                score_change=affinity_change
+            )
+
+            embed = discord.Embed(
+                title=f"🎁 To {character}",
+                description=f"You gave **{gift_details['name']} x{quantity}**.",
+                color=discord.Color.gold()
+            )
+            embed.add_field(name="Affinity Change", value=f"`{affinity_change:+}`", inline=False)
+            embed.add_field(name=f"{character}'s Reaction", value=f"💬 *{reaction_message}*", inline=False)
+            embed.set_thumbnail(url=interaction.user.display_avatar.url)
+            embed.set_footer(text="Your gift has been delivered!")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+            # 캐릭터 봇이 직접 리액션을 보내도록 수정
+            if current_bot:
+                await current_bot.send_reaction_message(
+                    channel_id=interaction.channel_id,
+                    text=f"*{reaction_message}*",
+                    emoji=gift_emoji
+                )
+
+        async def give_gift_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+            choices = []
+            for gift_id, details in ALL_GIFTS.items():
+                choice_name = f"{details['name']} ({gift_id})"
+                if current.lower() in choice_name.lower():
+                    choices.append(app_commands.Choice(name=choice_name, value=gift_id))
+            return choices[:25]
+
+        @self.tree.command(name="give_gift", description="[Admin] Give a gift to a specific user.")
+        @app_commands.describe(user="The user to receive the gift", gift_id="The ID of the gift to give", quantity="The quantity to give")
+        @app_commands.checks.has_permissions(administrator=True)
+        @app_commands.autocomplete(gift_id=give_gift_autocomplete)
+        async def give_gift(interaction: discord.Interaction, user: discord.User, gift_id: str, quantity: int = 1):
+            if gift_id not in ALL_GIFTS:
+                await interaction.response.send_message(f"Gift ID '{gift_id}' does not exist.", ephemeral=True)
+                return
+
+            if quantity < 1:
+                await interaction.response.send_message("Quantity must be 1 or greater.", ephemeral=True)
+                return
+
+            self.db.add_user_gift(user.id, gift_id, quantity)
+
+            gift_info = get_gift_details(gift_id)
+            embed = discord.Embed(
+                title="🎁 Gift Given",
+                description=f"Successfully gave {quantity} of **{gift_info['name']}** to {user.mention}.",
+                color=discord.Color.green()
+            )
+            await interaction.response.send_message(embed=embed)
+
+        @self.tree.command(
+            name="quest",
+            description="View All Quests"
+        )
+        async def quest_command(interaction: discord.Interaction):
+            try:
+                # 먼저 interaction 응답을 지연시킴
+                await interaction.response.defer(ephemeral=True)
+
+                user_id = interaction.user.id
+                quest_status = await self.get_quest_status(user_id)
+                embed = self.create_quest_embed(user_id, quest_status)
+                view = QuestView(user_id, quest_status, self)
+
+                # followup으로 메시지 전송
+                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+            except Exception as e:
+                print(f"Error in quest command: {e}")
+                import traceback
+                print(traceback.format_exc())
+                try:
+                    await interaction.followup.send("Error fetching quest information.", ephemeral=True)
+                except:
+                    # followup도 실패하면 일반 메시지로 전송
+                    await interaction.channel.send("Error fetching quest information.")
+
+        # /serve 자동완성: 음료 이름이 아닌, 레시피(재료 리스트)만 노출
+        async def serve_autocomplete(interaction: discord.Interaction, current: str):
+            session = story_sessions.get(interaction.channel.id)
+            if not session or session.get('character_name') != 'Eros' or session.get('stage_num') != 1:
+                return []
+            chapter_info = get_chapter_info('Eros', 1)
+            menu = chapter_info.get('menu', [])
+            # 각 메뉴의 재료 리스트를 쉼표+공백으로 연결해서 반환 (중복 없이)
+            recipes = [', '.join(drink['recipe']) for drink in menu]
+            # 현재 입력값이 포함된 레시피만 필터링 (대소문자 무관)
+            filtered = [r for r in recipes if current.lower() in r.lower()]
+            return [discord.app_commands.Choice(name=r, value=r) for r in (filtered if filtered else recipes)]
+
+        # /serve 명령어 등록부에 자동완성 연결
+        @self.tree.command(
+            name="serve",
+            description="Serve a drink to the current customer in Eros story mode (Chapter 1 or 2 only)."
+        )
+        @app_commands.describe(drink="Enter the drink ingredients (comma or space separated)")
+        @app_commands.autocomplete(drink=serve_autocomplete)
+        async def serve_command(interaction: discord.Interaction, drink: str):
+            session = story_sessions.get(interaction.channel.id)
+            if not session or session.get('character_name') != 'Eros' or session.get('stage_num') not in [1, 2]:
+                await interaction.response.send_message(
+                    "This command can only be used in Eros story Chapter 1 or 2.",
+                    ephemeral=True
+                )
+                return
+            await handle_serve_command(self, interaction, session['character_name'], drink)
+
+        # /serve_team 자동완성 함수 (챕터2 전용)
+        async def serve_team_character_autocomplete(interaction: discord.Interaction, current: str):
+            session = story_sessions.get(interaction.channel.id)
+            if not session or session.get('character_name') != 'Eros' or session.get('stage_num') != 2:
+                return []
+            chapter_info = get_chapter_info('Eros', 2)
+            answer_map = chapter_info.get('answer_map', {})
+            characters = list(answer_map.keys())
+            served = session.get('served_characters', set())
+            filtered = [c for c in characters if c not in served and current.lower() in c.lower()]
+            # 옵션 순서 무작위 섞기
+            random.shuffle(filtered)
+            if not filtered:
+                filtered = [c for c in characters if c not in served]
+                random.shuffle(filtered)
+            return [discord.app_commands.Choice(name=c, value=c) for c in filtered]
+
+        async def serve_team_drink_autocomplete(interaction: discord.Interaction, current: str):
+            session = story_sessions.get(interaction.channel.id)
+            if not session or session.get('character_name') != 'Eros' or session.get('stage_num') != 2:
+                return []
+            chapter_info = get_chapter_info('Eros', 2)
+            drink_list = chapter_info.get('drink_list', [])
+            drinks = [d['name'] for d in drink_list]
+            filtered = [d for d in drinks if current.lower() in d.lower()]
+            # 옵션 순서 무작위 섞기
+            random.shuffle(filtered)
+            if not filtered:
+                filtered = drinks[:]
+                random.shuffle(filtered)
+            return [discord.app_commands.Choice(name=d, value=d) for d in filtered]
+
+        @self.tree.command(
+            name="serve_team",
+            description="Serve a drink to a team member in Eros story mode (Chapter 2 only)."
+        )
+        @app_commands.describe(character="Team member name", drink="Drink name")
+        @app_commands.autocomplete(character=serve_team_character_autocomplete, drink=serve_team_drink_autocomplete)
+        async def serve_team_command(interaction: discord.Interaction, character: str, drink: str):
+            session = story_sessions.get(interaction.channel.id)
+            if not session or session.get('character_name') != 'Eros' or session.get('stage_num') != 2:
+                await interaction.response.send_message(
+                    "This command can only be used in Eros story Chapter 2.", ephemeral=True
+                )
+                return
+            chapter_info = get_chapter_info('Eros', 2)
+            answer_map = chapter_info.get('answer_map', {})
+            drink_list = chapter_info.get('drink_list', [])
+            total_characters = len(answer_map)
+            # --- 캐릭터별 리액션 메시지 ---
+            # (character_reactions는 이미 전역에 선언되어 있다고 가정)
+            correct_drink = answer_map.get(character)
+            is_correct = (drink.strip().lower() == correct_drink.strip().lower())
+            # --- 제출한 캐릭터 기록 (정답/오답 무관) ---
+            if 'served_characters' not in session:
+                session['served_characters'] = set()
+            session['served_characters'].add(character)
+            served_count = len(session['served_characters'])
+            # --- 리액션 임베드 (진행상황 포함) ---
+            if is_correct:
+                reaction_text = character_reactions.get(character, {}).get("success", f"Great! {character} is delighted with the {drink}!")
+                color = discord.Color.green()
+            else:
+                reaction_text = character_reactions.get(character, {}).get("fail", f"Hmm... {character} doesn't seem to like the {drink}. Try again!")
+                color = discord.Color.red()
+            embed = discord.Embed(
+                title=f"{character}'s Reaction ({served_count}/{total_characters})",
+                description=reaction_text,
+                color=color
+            )
+            await interaction.response.send_message(embed=embed)
+            # --- 모든 캐릭터에게 음료를 지급한 경우 결과/리워드 임베드 출력 ---
+            if served_count == total_characters:
+                # 리워드 지급 (커먼 2개)
+                from gift_manager import GIFT_RARITY, get_gifts_by_rarity_v2, get_gift_details
+                rarity_str = GIFT_RARITY['COMMON']
+                gift_ids = get_gifts_by_rarity_v2(rarity_str, 2)
+                user_id = interaction.user.id
+                if gift_ids:
+                    for gift_id in gift_ids:
+                        self.db.add_user_gift(user_id, gift_id, 1)
+                    gift_names = [get_gift_details(g)['name'] for g in gift_ids if get_gift_details(g)]
+                    reward_text = f"You received: **{', '.join(gift_names)}**\nCheck your inventory with `/inventory`."
+                else:
+                    reward_text = "You received: **No gifts available for this rarity.**\nCheck your inventory with `/inventory`."
+                complete_embed = discord.Embed(
+                    title="🍯 All Drinks Delivered!",
+                    description=f"You have served all {total_characters} team members!\n{reward_text}",
+                    color=discord.Color.gold()
+                )
+                await interaction.followup.send(embed=complete_embed)
+                # 챕터2 클리어 기록 및 챕터3 오픈 안내
+                self.db.complete_story_stage(user_id, 'Eros', 2)
+                transition_embed = discord.Embed(
+                    title="🔓 Chapter 3 is now unlocked!",
+                    description="Congratulations! You have unlocked Chapter 3: Find the Café Culprit!\nUse `/story` to start Chapter 3!",
+                    color=discord.Color.orange()
+                )
+                await interaction.followup.send(embed=transition_embed)
+                # 세션 종료 처리
+                session["is_active"] = False
+            story_sessions[interaction.channel.id] = session
+
+    def create_quest_embed(self, user_id: int, quest_status: dict) -> discord.Embed:
+        """
+        퀘스트 현황을 보여주는 임베드를 생성합니다.
+        """
+        embed = discord.Embed(
+            title="📜 Quest Board",
+            description="Check out daily, weekly, level-up, and story quests and earn rewards!",
+            color=discord.Color.dark_gold()
+        )
+        embed.set_footer(text="Click the [Claim] button to claim rewards for completed quests.")
+
+        # 일일 퀘스트
+        daily_quests_str = self.format_daily_quests(quest_status['daily'])
+        embed.add_field(name="📅 Daily Quests", value=daily_quests_str, inline=False)
+
+        # 주간 퀘스트
+        weekly_quests_str = self.format_weekly_quests(quest_status['weekly'])
+        embed.add_field(name="🗓️ Weekly Quests", value=weekly_quests_str, inline=False)
+
+        # 레벨업 퀘스트
+        levelup_quests_str = self.format_levelup_quests(quest_status['levelup'])
+        embed.add_field(name="🚀 Level-up Quests", value=levelup_quests_str, inline=False)
+
+        # 스토리 퀘스트
+        story_quests_str = self.format_story_quests(quest_status['story'])
+        embed.add_field(name="📖 Story Quests", value=story_quests_str, inline=False)
+
+        return embed
+
+    async def get_quest_status(self, user_id: int) -> dict:
+        """사용자의 퀘스트 상태를 조회합니다."""
+        try:
+            # 일일 퀘스트 상태
+            daily_quests = await self.check_daily_quests(user_id)
+
+            # 주간 퀘스트 상태
+            weekly_quests = await self.check_weekly_quests(user_id)
+
+            # 레벨업 퀘스트 상태
+            levelup_quests = await self.check_levelup_quests(user_id)
+
+            # 스토리 퀘스트 상태
+            story_quests = await self.check_story_quests(user_id)
+
+            return {
+                'daily': daily_quests,
+                'weekly': weekly_quests,
+                'levelup': levelup_quests,
+                'story': story_quests
+            }
+        except Exception as e:
+            print(f"Error getting quest status: {e}")
+            return {'daily': [], 'weekly': [], 'levelup': [], 'story': []}
+
+    async def check_daily_quests(self, user_id: int) -> list:
+        """일일 퀘스트 상태를 확인합니다."""
+        quests = []
+
+        # 1. 대화 20회 퀘스트
+        total_daily_messages = self.db.get_total_daily_messages(user_id)
+        quest_id = 'daily_conversation'
+        quests.append({
+            'id': quest_id,
+            'name': '💬 Daily Conversation',
+            'description': f'({total_daily_messages}/20)',
+            'progress': min(total_daily_messages, 20),
+            'max_progress': 20,
+            'completed': total_daily_messages >= 20,
+            'reward': 'Random Common Item x1',
+            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+        })
+
+        # 2. 카드 획득 퀘스트
+        today_cards = self.db.get_today_cards(user_id)
+        quest_id = 'daily_card_collection_1'
+        quests.append({
+            'id': quest_id,
+            'name': '🎴 Card Collection',
+            'description': f'Obtain 1 card ({today_cards}/1)',
+            'progress': min(today_cards, 1),
+            'max_progress': 1,
+            'completed': today_cards >= 1,
+            'reward': 'Random Common Item x1',
+            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+        })
+        return quests
+
+    async def check_weekly_quests(self, user_id: int) -> list:
+        """주간 퀘스트 상태를 확인합니다."""
+        quests = []
+
+        # 1. 7일 연속 로그인 퀘스트
+        login_streak = self.db.get_login_streak(user_id)
+        quest_id = 'weekly_login'
+        quests.append({
+            'id': quest_id,
+            'name': '📅 7-Day Login Streak',
+            'description': f'Login for 7 consecutive days ({login_streak}/7)',
+            'progress': min(login_streak, 7),
+            'max_progress': 7,
+            'completed': login_streak >= 7,
+            'reward': 'Random Epic Items x2',
+            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+        })
+
+        # 2. 카드 공유 퀘스트
+        card_shared = self.db.get_card_shared_this_week(user_id)
+        quest_id = 'weekly_share'
+        quests.append({
+            'id': quest_id,
+            'name': '🔗 Share Your Cards',
+            'description': f'Share a card from your collection ({card_shared}/1)',
+            'progress': card_shared,
+            'max_progress': 1,
+            'completed': card_shared >= 1,
+            'reward': 'Random Common Item x1',
+            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+        })
+        return quests
+
+    async def check_levelup_quests(self, user_id: int) -> list:
+        """레벨업 퀘스트 상태를 확인합니다."""
+        quests = []
+
+        try:
+            # 각 캐릭터별 레벨업 상태 확인
+            characters = ['Kagari', 'Eros', 'Elysia']
+
+            for character in characters:
+                affinity_info = self.db.get_affinity(user_id, character)
+                if not affinity_info:
+                    continue
+
+                current_score = affinity_info['emotion_score']
+                current_grade = get_affinity_grade(current_score)
+
+                # 레벨업 보상 체크
+                levelup_rewards = {
+                    'Rookie': {'next': 'Iron', 'reward': 'Common Item x1'},
+                    'Iron': {'next': 'Bronze', 'reward': 'Common Items x2'},
+                    'Bronze': {'next': 'Silver', 'reward': 'Rare Item x1'},
+                    'Silver': {'next': 'Gold', 'reward': 'Epic Items x2'}
+                }
+
+                if current_grade in levelup_rewards:
+                    next_grade = levelup_rewards[current_grade]['next']
+                    reward = levelup_rewards[current_grade]['reward']
+
+                    # 레벨업 플래그 확인
+                    has_claimed = self.db.has_levelup_flag(user_id, character, current_grade)
+
+                    quest = {
+                        'id': f'levelup_{character}_{current_grade}',
+                        'name': f'⭐ {character} Level-up',
+                        'description': f'Reach {next_grade} level with {character}',
+                        'progress': 1 if current_grade != 'Rookie' else 0,
+                        'max_progress': 1,
+                        'completed': not has_claimed and current_grade != 'Rookie',
+                        'reward': reward,
+                        'claimed': has_claimed,
+                        'character': character,
+                        'current_grade': current_grade
+                    }
+                    quests.append(quest)
+
+        except Exception as e:
+            print(f"Error checking levelup quests: {e}")
+
+        return quests
+
+    def format_daily_quests(self, quests: list) -> str:
+        if quests is None or len(quests) == 0:
+            return "No daily quests available."
+        quest_lines = []
+        for q in quests:
+            if q.get('claimed'):
+                status_icon = "✅"
+            elif q.get('completed'):
+                status_icon = "🎁"
+            else:
+                status_icon = "⏳"
+            title = f"**{status_icon} {q['name']}**"
+            progress_bar = self.create_progress_bar(q['progress'], q['max_progress'])
+            progress_info = f"{progress_bar} `({q['progress']}/{q['max_progress']})`"
+            if q.get('claimed'):
+                reward_info = f"└ `Reward: {q['reward']}`"
+            elif q.get('completed'):
+                reward_info = f"**└ ⬇️ Claim your reward with the button below!**"
+            else:
+                reward_info = f"└ `Reward: {q['reward']}`"
+            quest_lines.append(f"{title}\n{progress_info}\n{reward_info}")
+        return "\n\n".join(quest_lines)
+
+    def format_weekly_quests(self, quests: list) -> str:
+        if quests is None or len(quests) == 0:
+            return "No weekly quests available."
+        quest_lines = []
+        for q in quests:
+            if q.get('claimed'):
+                status_icon = "✅"
+            elif q.get('completed'):
+                status_icon = "🎁"
+            else:
+                status_icon = "⏳"
+            title = f"**{status_icon} {q['name']}**"
+            if q['id'] == 'weekly_login':
+                progress_info = self.create_streak_progress_bar(q['progress'], q['max_progress']) + f" `({q['progress']}/{q['max_progress']})`"
+            else:
+                progress_bar = self.create_progress_bar(q['progress'], q['max_progress'])
+                progress_info = f"{progress_bar} `({q['progress']}/{q['max_progress']})`"
+            if q.get('claimed'):
+                reward_info = f"└ `Reward: {q['reward']}`"
+            elif q.get('completed'):
+                reward_info = f"**└ ⬇️ Claim your reward with the button below!**"
+            else:
+                reward_info = f"└ `Reward: {q['reward']}`"
+            quest_lines.append(f"{title}\n{progress_info}\n{reward_info}")
+        return "\n\n".join(quest_lines)
+
+    def format_levelup_quests(self, quests: list) -> str:
+        if quests is None or len(quests) == 0:
+            return "No level-up quests available."
+        quest_lines = []
+        for q in quests:
+            if q.get('claimed'):
+                status_icon = "✅"
+            elif q.get('completed'):
+                status_icon = "🎁"
+            else:
+                status_icon = "⏳"
+            title = f"**{status_icon} {q['name']}** - {q['description']}"
+            if q.get('claimed'):
+                reward_info = f"└ `Reward: {q['reward']}`"
+            elif q.get('completed'):
+                reward_info = f"**└ ⬇️ Claim your reward with the button below!**"
+            else:
+                reward_info = f"└ `Reward: {q['reward']}`"
+            quest_lines.append(f"{title}\n{reward_info}")
+        return "\n\n".join(quest_lines)
+
+    def format_story_quests(self, quests: list) -> str:
+        if quests is None or len(quests) == 0:
+            return "No story quests available."
+        quest_lines = []
+        for q in quests:
+            if q.get('claimed'):
+                status_icon = "✅"
+            elif q.get('completed'):
+                status_icon = "🎁"
+            else:
+                status_icon = "⏳"
+            title = f"**{status_icon} {q['name']}**"
+            if 'progress' in q and 'max_progress' in q:
+                progress_bar = self.create_progress_bar(q['progress'], q['max_progress'])
+                progress_info = f"{progress_bar} `({q['progress']}/{q['max_progress']})`"
+            else:
+                progress_info = q['description']
+            if q.get('claimed'):
+                reward_info = f"└ `Reward: {q['reward']}`"
+            elif q.get('completed'):
+                reward_info = f"**└ ⬇️ Claim your reward with the button below!**"
+            else:
+                reward_info = f"└ `Reward: {q['reward']}`"
+            quest_lines.append(f"{title}\n{progress_info}\n{reward_info}")
+        return "\n\n".join(quest_lines)
+
+    def create_progress_bar(self, current: int, maximum: int, length: int = 10) -> str:
+        if maximum == 0:
+            return "`[ PROGRESS_BAR_ERROR ]`"
+        progress = int((current / maximum) * length)
+        return f"`[{'■' * progress}{'□' * (length - progress)}]`"
+
+    def create_streak_progress_bar(self, current: int, maximum: int = 7) -> str:
+        """
+        연속 로그인 퀘스트를 위한 시각적 진행 바를 생성합니다.
+        (예: 🔥✅✅✅⬜⬜⬜⬜)
+        """
+        if current >= maximum:
+            return f"🔥 {'✅' * maximum}"
+
+        streaks = '✅' * current
+        remaining = '⬜' * (maximum - current)
+        return f"🔥 {streaks}{remaining}"
+
+    async def claim_quest_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
+        """퀘스트 보상을 지급하고, 수령 상태를 기록합니다."""
+        try:
+            if quest_id.startswith('daily_'):
+                return await self.claim_daily_reward(user_id, quest_id)
+            elif quest_id.startswith('weekly_'):
+                return await self.claim_weekly_reward(user_id, quest_id)
+            elif quest_id.startswith('levelup_'):
+                return await self.claim_levelup_reward(user_id, quest_id)
+            elif quest_id.startswith('story_'):
+                return await self.claim_story_reward(user_id, quest_id)
+            else:
+                return False, "Invalid quest ID"
+
+        except Exception as e:
+            print(f"Error claiming quest reward: {e}")
+            return False, "Error claiming reward"
+
+    async def claim_daily_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
+        """일일 퀘스트 보상을 지급합니다."""
+        print(f"[DEBUG] claim_daily_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
+        # ID 형식: daily_{type}_{level} (type은 _ 포함 가능)
+        rest = quest_id.replace('daily_', '', 1)
+        type_parts = rest.rsplit('_', 1)
+        quest_type = type_parts[0]
+        print(f"[DEBUG] Parsed quest_type: '{quest_type}'")
+
+        # 보상 내용 정의
+        rewards = {
+            'conversation': ('Common Item', 'COMMON', 1),
+            'card_collection': ('Rare Item', 'RARE', 1)
+        }
+        print(f"[DEBUG] Available daily rewards keys: {list(rewards.keys())}")
+
+        reward_name, reward_rarity, reward_quantity = rewards.get(quest_type, (None, None, 0))
+        print(f"[DEBUG] Reward lookup result: name={reward_name}, rarity={reward_rarity}, quantity={reward_quantity}")
+
+        if not reward_name:
+            print(f"[DEBUG] Reward not found for quest_type: '{quest_type}'. Returning 'This is an unknown quest.'")
+            return False, "This is an unknown quest."
+
+        try:
+            # 아이템 지급
+            gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY[reward_rarity.upper()], reward_quantity)
+
+            for gift_id in gift_ids:
+                self.db.add_user_gift(user_id, gift_id, 1)
+
+            # 퀘스트 완료 플래그 저장
+            self.db.claim_quest(user_id, quest_id)
+
+            reward_names = [f"{get_gift_details(g_id)['name']} x1" for g_id in gift_ids]
+            return True, ", ".join(reward_names)
+
+        except Exception as e:
+            print(f"Error claiming daily reward: {e}")
+            traceback.print_exc()
+            return False, "An error occurred while trying to earn Daily Rewards."
+
+    async def claim_weekly_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
+        """주간 퀘스트 보상을 지급합니다."""
+        print(f"[DEBUG] claim_weekly_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
+        # ID 형식: weekly_{type}_{level} (type은 _ 포함 가능)
+        rest = quest_id.replace('weekly_', '', 1)
+        type_parts = rest.rsplit('_', 1)
+        quest_type = type_parts[0]
+        print(f"[DEBUG] Parsed quest_type: '{quest_type}'")
+
+        # 보상 내용 정의
+        rewards = {
+            'login': ('Epic Item', 'EPIC', 2),
+            'share': ('Common Item', 'COMMON', 1)
+        }
+        print(f"[DEBUG] Available weekly rewards keys: {list(rewards.keys())}")
+
+        reward_name, reward_rarity, reward_quantity = rewards.get(quest_type, (None, None, 0))
+        print(f"[DEBUG] Reward lookup result: name={reward_name}, rarity={reward_rarity}, quantity={reward_quantity}")
+
+        if not reward_name:
+            print(f"[DEBUG] Reward not found for quest_type: '{quest_type}'. Returning 'This is an unknown quest.'")
+            return False, "This is an unknown quest."
+
+        try:
+            # 아이템 지급
+            gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY[reward_rarity.upper()], reward_quantity)
+
+            for gift_id in gift_ids:
+                self.db.add_user_gift(user_id, gift_id, 1)
+
+            # 퀘스트 완료 플래그 저장
+            self.db.claim_quest(user_id, quest_id)
+
+            reward_names = [f"{get_gift_details(g_id)['name']} x1" for g_id in gift_ids]
+            return True, ", ".join(reward_names)
+
+        except Exception as e:
+            print(f"Error claiming weekly reward: {e}")
+            traceback.print_exc()
+            return False, "Error earning weekly rewards."
+
+    async def claim_levelup_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
+        """레벨업 보상을 지급합니다."""
+        try:
+            # quest_id 형식: levelup_{character}_{grade}
+            parts = quest_id.split('_')
+            if len(parts) != 3:
+                return False, "Invalid levelup quest ID"
+
+            character = parts[1]
+            grade = parts[2]
+
+            # 레벨업 플래그 설정
+            self.db.add_levelup_flag(user_id, character, grade)
+
+            # 보상 지급
+            reward_map = {
+                'Rookie': (GIFT_RARITY["COMMON"], 1),
+                'Iron': (GIFT_RARITY["COMMON"], 2),
+                'Bronze': (GIFT_RARITY["RARE"], 1),
+                'Silver': (GIFT_RARITY["EPIC"], 2)
+            }
+
+            rarity, count = reward_map.get(grade, (None, 0))
+
+            if not rarity:
+                return False, "No reward for this grade"
+
+            gift_ids = get_gifts_by_rarity_v2(rarity, count)
+
+            if gift_ids:
+                for gift_id in gift_ids:
+                    self.db.add_user_gift(user_id, gift_id, 1)
+                self.db.claim_quest(user_id, quest_id) # 통합된 claim 메서드 사용
+                reward_names = [f"{get_gift_details(g)['name']} x1" for g in gift_ids]
+                return True, ", ".join(reward_names)
+
+            return False, "Failed to generate reward"
+
+        except Exception as e:
+            print(f"Error claiming levelup reward: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, "Error claiming levelup reward"
+
+    async def claim_story_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
+        """스토리 퀘스트 보상을 지급합니다."""
+        try:
+            # quest_id 형식: story_{character}_{quest_type}
+            parts = quest_id.split('_')
+            if len(parts) != 3:
+                return False, "Invalid story quest ID"
+
+            character = parts[1]
+            quest_type = parts[2]
+
+            # 카가리 스토리 퀘스트 (모든 챕터 완료)
+            if character == 'kagari' and quest_type == 'all_chapters':
+                # 모든 챕터 완료 확인
+                completed_chapters = self.db.get_completed_chapters(user_id, 'Kagari')
+                if len(completed_chapters) < 3:
+                    return False, "You need to complete all 3 chapters of Kagari's story first"
+
+                # 이미 보상을 받았는지 확인
+                if self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters'):
+                    return False, "You have already claimed this reward"
+
+                # 에픽 선물 3개 지급
+                from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+                gift_ids = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+
+                for gift_id in gift_ids:
+                    self.db.add_user_gift(user_id, gift_id, 1)
+
+                # 스토리 퀘스트 완료 플래그 저장
+                self.db.claim_story_quest(user_id, 'Kagari', 'all_chapters')
+
+                reward_names = [get_gift_details(g_id)['name'] for g_id in gift_ids]
+                return True, f"Congratulations! You completed all Kagari story chapters! You received: **{', '.join(reward_names)}**"
+
+            return False, "Unknown story quest"
+
+        except Exception as e:
+            print(f"Error claiming story reward: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, "An error occurred while claiming story reward"
+
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or not message.guild:
+            return
+
+        # --- Story Mode Message Handling ---
+        if any(f'-s{i}-' in message.channel.name for i in range(1, 10)):
+            await process_story_message(self, message)
+            return
+        # --- End of Story Mode Handling ---
+
+        # 롤플레잉 채널 처리
+        if message.channel.name.startswith("rp-"):
+            session = self.roleplay_sessions.get(message.channel.id)
+            if session and session.get("is_active"):
+                await self.process_roleplay_message(message, session)
+            return
+
+        # 기존 1:1 채널 처리
+        active_character, character_name = self.get_character_for_channel(message.channel.id)
+        if not active_character:
+            return
+
+        # --- Quest System: Daily Login Streak ---
+        try:
+            today = datetime.now(timezone('Asia/Seoul')).date()
+            last_login = self.db.get_last_login_date(message.author.id)
+            if last_login is None or last_login < today:
+                self.db.update_login_streak(message.author.id)
+        except Exception as e:
+            print(f"Error updating login streak for {message.author.id}: {e}")
+
+        # --- Normal Message Processing ---
+        if active_character:
+            await active_character.process_normal_message(message)
+
+    # 롤플레잉 모드 전용 답장 함수
+    async def process_roleplay_message(self, message, session):
+        import asyncio
+        import discord
+        import re
+        from config import CHARACTER_PROMPTS
+        user_role = session.get("user_role", "")
+        character_role = session.get("character_role", "")
+        story_line = session.get("story_line", "")
+        character_name = session.get("character_name", "")
+
+        # 턴 카운트 관리
+        if "turn_count" not in session:
+            session["turn_count"] = 1
+        else:
+            session["turn_count"] += 1
+
+        turn_str = f"({session['turn_count']}/30)"
+
+        # 캐릭터별 성격 프롬프트 추가
+        character_prompt = CHARACTER_PROMPTS.get(character_name, "")
+
+        # system prompt 생성
+        system_prompt = (
+            f"{character_prompt}\n"
+            f"You are now roleplaying as {character_name}.\n"
+            f"User's role: {user_role}\n"
+            f"Your role: {character_role}\n"
+            f"Scenario: {story_line}\n"
+            "Stay in character and continue the romantic roleplay. "
+            "Do NOT break character. Do NOT mention you are an AI. "
+            "Respond naturally and emotionally, as if you are really in this situation. "
+            f"Always start your reply with '{character_name}: ' as prefix. "
+            f"At the end of your reply, add '{turn_str}'. "
+            "All replies must be in English."
+        )
+
+        # 대화 기록 세션에 저장
+        if "history" not in session:
+            session["history"] = []
+        session["history"].append({"role": "user", "content": message.content})
+
+        # OpenAI 호출
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ] + session["history"]
+        ai_response = await self.get_ai_response(messages)
+
+        # 답장에 캐릭터 이름 prefix 보장 (혹시라도 누락될 경우)
+        if not ai_response.strip().startswith(f"{character_name}:"):
+            ai_response = f"{character_name}: {ai_response.strip()}"
+
+        # (n/30) 중복 방지: 여러 번 등장하면 1개만 남기고 모두 제거
+        ai_response = re.sub(r"(\(\d{1,2}/30\))(?=.*\(\d{1,2}/30\))", "", ai_response)
+        if not re.search(r"\(\d{1,2}/30\)", ai_response):
+            ai_response = f"{ai_response} {turn_str}"
+
+        await message.channel.send(ai_response)
+        session["history"].append({"role": "assistant", "content": ai_response})
+
+        # 30턴 종료 처리
+        if session["turn_count"] >= 30:
+            embed = discord.Embed(
+                title="💌 Roleplay Session Ended",
+                description="All 30 turns of your special date are over!\n\nThank you for sharing this story together. See you next time!",
+                color=discord.Color.pink()
+            )
+            await message.channel.send(embed=embed)
+            await asyncio.sleep(3)
+            try:
+                await message.channel.delete()
+            except Exception as e:
+                print(f"Channel deletion failed: {e}")
+
+    def remove_channel(self, channel_id):
+        # 활성화된 채널 목록에서 제거
+        for bot in self.character_bots.values():
+            bot.remove_channel(channel_id)
+        if hasattr(self, 'remove_channel'):
+            self.remove_channel(channel_id)
+
+    def get_random_card(self, character_name: str, user_id: int) -> tuple[str, str]:
+        """랜덤 카드 획득"""
+        try:
+            card_info = CHARACTER_CARD_INFO.get(character_name, {})
+            if not card_info:
+                return None, None
+            user_cards = self.db.get_user_cards(user_id, character_name)
+            user_card_ids = user_cards  # user_cards는 이미 카드ID 문자열 리스트임
+            available_cards = []
+            for card_id in card_info:
+                if card_id not in user_card_ids:
+                    available_cards.append(card_id)
+            if not available_cards:
+                return None, None
+            import random
+            card_id = random.choice(available_cards)
+            return None, card_id
+        except Exception as e:
+            print(f"Error in get_random_card: {e}")
+            return None, None
+
+# === get_story_content 함수 추가 ===
+def get_story_content(character_name, chapter_number):
+    """
+    config.py의 STORY_CHAPTERS에서 캐릭터명과 챕터 번호로 스토리 내용을 반환합니다.
+    """
+    chapters = STORY_CHAPTERS.get(character_name, [])
+    for chapter in chapters:
+        if chapter.get('id') == chapter_number:
+            return chapter
+    return None
+
+class CardSliderView(discord.ui.View):
+    def __init__(self, user_id, cards, character_name, card_info_dict, db):
+        super().__init__(timeout=180)
+        self.user_id = user_id
+        self.cards = cards
+        self.character_name = character_name
+        self.card_info_dict = card_info_dict
+        self.db = db  # db 인스턴스 저장
+        self.index = 0
+        self.total = len(cards)
+
+        self.prev_button = discord.ui.Button(label="Previous", style=discord.ButtonStyle.secondary, emoji="⬅️")
+        self.prev_button.callback = self.on_previous
+        self.add_item(self.prev_button)
+
+        self.next_button = discord.ui.Button(label="Next", style=discord.ButtonStyle.secondary, emoji="➡️")
+        self.next_button.callback = self.on_next
+        self.add_item(self.next_button)
+
+        self.share_button = ShareCardButton(
+            user_id=self.user_id,
+            character_name=self.character_name,
+            card_id=self.cards[self.index],
+            card_info_dict=self.card_info_dict
+        )
+        self.add_item(self.share_button)
+
+    async def create_embed(self):
+        card_id = self.cards[self.index]
+        card_info = self.card_info_dict.get(card_id, {})
+
+        # 게임같은 느낌의 임베드 생성
+        embed = discord.Embed(
+            title=f"🎴 {self.character_name} Card Collection",
+            description=f"**{self.index + 1}** / **{self.total}** Cards Collected",
+            color=discord.Color.purple()
+        )
+
+        # 티어 정보와 이모지
+        tier = card_info.get('tier', 'Unknown')
+        tier_emojis = {'C': '🥉', 'B': '🥈', 'A': '🥇', 'S': '🏆'}
+        tier_emoji = tier_emojis.get(tier, '❓')
+
+        # 티어별 색상 설정
+        tier_colors = {
+            'C': discord.Color.light_grey(),
+            'B': discord.Color.blue(), 
+            'A': discord.Color.gold(),
+            'S': discord.Color.purple()
+        }
+        embed.color = tier_colors.get(tier, discord.Color.purple())
+
+        # 카드 넘버링 (총 유저 카드 지급 순서)
+        card_number = get_card_issued_number(self.character_name, card_id)
+
+        # 게임 스타일 필드들
+        embed.add_field(
+            name="⚔️ **Tier**", 
+            value=f"```{tier} {tier_emoji}```", 
+            inline=True
+        )
+        embed.add_field(
+            name="🆔 **Card ID**", 
+            value=f"```{card_id.upper()}```", 
+            inline=True
+        )
+        embed.add_field(
+            name="🔢 **Card Number**", 
+            value=f"```#{card_number}```", 
+            inline=True
+        )
+        embed.add_field(
+            name="✨ **Ability**", 
+            value="```????```", 
+            inline=False
+        )
+
+        # 구분선 추가
+        embed.add_field(name="", value="━━━━━━━━━━━━━━━━━━", inline=False)
+
+        # 카드 설명 (있는 경우에만)
+        if card_info.get("description"):
+            embed.add_field(
+                name="📖 **Description**",
+                value=f"*{card_info.get('description', 'No description available.')}*",
+                inline=False
+            )
+
+        # 카드 이미지 설정
+        image_url = card_info.get("image_path")
+        if image_url:
+            cache_bust_url = f"{image_url}?t={int(time.time())}"
+            embed.set_image(url=cache_bust_url)
+        else:
+            embed.set_footer(text="🎴 Card image not found")
+
+        # 게임 스타일 푸터
+        embed.set_footer(text=f"🎮 {self.character_name} Card Collection • Use ⬅️ ➡️ to navigate")
+
+        return embed
+
+    async def initial_message(self, interaction: discord.Interaction):
+        embed = await self.create_embed()
+        await interaction.followup.send(embed=embed, view=self, ephemeral=True)
+
+    async def on_previous(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.index = (self.index - 1 + self.total) % self.total
+        self.share_button.update_card(self.cards[self.index])
+        embed = await self.create_embed()
+        await interaction.edit_original_response(embed=embed, view=self)
+
+    async def on_next(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.index = (self.index + 1) % self.total
+        self.share_button.update_card(self.cards[self.index])
+        embed = await self.create_embed()
+        await interaction.edit_original_response(embed=embed, view=self)
+
+class ShareCardButton(discord.ui.Button):
+    def __init__(self, user_id, character_name, card_id, card_info_dict):
+        super().__init__(label="Share Card", style=discord.ButtonStyle.primary, emoji="🎴")
+        self.user_id = user_id
+        self.character_name = character_name
+        self.card_id = card_id
+        self.card_info_dict = card_info_dict
+
+    def update_card(self, card_id):
+        self.card_id = card_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("This action is not for you.", ephemeral=True)
+            return
+
+        # self.view를 통해 CardSliderView의 db에 접근
+        if not hasattr(self.view, 'db'):
+            print("Error: The parent view (CardSliderView) does not have a 'db' attribute.")
+            await interaction.response.send_message("An internal error occurred while sharing the card.", ephemeral=True)
+            return
+
+        card_info = self.card_info_dict.get(self.card_id, {})
+
+        # 게임 스타일 공유 임베드
+        share_embed = discord.Embed(
+            title=f"🎴 Card Share",
+            description=f"{interaction.user.mention} shared a **{self.character_name}** card!",
+            color=discord.Color.blue()
+        )
+
+        # 티어 정보 추가
+        tier = card_info.get('tier', 'Unknown')
+        tier_emojis = {'C': '🥉', 'B': '🥈', 'A': '🥇', 'S': '🏆'}
+        tier_emoji = tier_emojis.get(tier, '❓')
+
+        share_embed.add_field(
+            name="⚔️ **Tier**", 
+            value=f"{tier} {tier_emoji}", 
+            inline=True
+        )
+        share_embed.add_field(
+            name="🆔 **Card ID**", 
+            value=self.card_id.upper(), 
+            inline=True
+        )
+
+        # 카드 넘버링 추가
+        card_number = get_card_issued_number(self.character_name, self.card_id)
+        share_embed.add_field(
+            name="🔢 **Card Number**", 
+            value=f"#{card_number}", 
+            inline=True
+        )
+
+        image_path = card_info.get("image_path", "")
+        if image_path:
+            share_embed.set_image(url=image_path)
+
+        share_embed.set_footer(text=f"🎮 {self.character_name} Card Collection")
+
+        await interaction.response.send_message(embed=share_embed)
+
+        # 카드 공유 기록 (퀘스트용)
+        try:
+            # self.view.db를 사용하여 DB에 기록
+            self.view.db.record_card_share(interaction.user.id, self.character_name, self.card_id)
+        except Exception as e:
+            print(f"Error recording card share: {e}")
+
+    async def check_story_quests(self, user_id: int) -> list:
+        """스토리 퀘스트 상태를 확인합니다."""
+        quests = []
+
+        try:
+            # 카가리 스토리 퀘스트 (챕터 1,2,3 모두 완료)
+            kagari_completed = self.db.get_completed_chapters(user_id, 'Kagari')
+            kagari_all_completed = len(kagari_completed) >= 3
+            kagari_quest_id = 'story_kagari_all_chapters'
+
+            quests.append({
+                'id': kagari_quest_id,
+                'name': '🌸 Kagari Story Complete',
+                'description': f'Complete all 3 chapters of Kagari\'s story ({len(kagari_completed)}/3)',
+                'progress': len(kagari_completed),
+                'max_progress': 3,
+                'completed': kagari_all_completed,
+                'reward': 'Epic Gifts x3',
+                'claimed': self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters'),
+                'character': 'Kagari',
+                'quest_type': 'all_chapters'
+            })
+
+        except Exception as e:
+            print(f"Error checking story quests: {e}")
+
+        return quests
+
+import psycopg2
+from psycopg2 import pool
+from config import DATABASE_CONFIG
+
+# PostgreSQL 연결 풀 생성
+connection_pool = psycopg2.pool.SimpleConnectionPool(
+    1,  # 최소 연결 수
+    10, # 최대 연결 수
+    host=DATABASE_CONFIG['host'],
+    database=DATABASE_CONFIG['database'],
+    user=DATABASE_CONFIG['user'],
+    password=DATABASE_CONFIG['password'],
+    port=DATABASE_CONFIG['port'],
+    sslmode=DATABASE_CONFIG['sslmode']
+)
+
+def get_user_cards(user_id: str) -> list:
+    """PostgreSQL에서 사용자의 모든 카드 정보를 가져오며, 각 카드의 발급 순번(issued_number)도 포함합니다."""
+    try:
+        conn = connection_pool.getconn()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT character_name, card_id, obtained_at, emotion_score_at_obtain,
+                (
+                    SELECT COUNT(*)
+                    FROM user_cards AS uc2
+                    WHERE uc2.character_name = uc1.character_name
+                      AND uc2.card_id = uc1.card_id
+                      AND uc2.obtained_at <= uc1.obtained_at
+                ) AS issued_number
+            FROM user_cards AS uc1
+            WHERE user_id = %s
+            ORDER BY character_name, obtained_at
+            """, (user_id,)
+        )
+        cards = []
+        for row in cursor.fetchall():
+            cards.append({
+                'character_name': row[0],
+                'card_id': row[1],
+                'obtained_at': row[2],
+                'emotion_score_at_obtain': row[3],
+                'issued_number': row[4]
+            })
+        cursor.close()
+        connection_pool.putconn(conn)
+        return cards
+    except Exception as e:
+        print(f"Error getting user cards: {str(e)}")
+        return []
+
+def get_card_issued_number(character_name: str, card_id: str) -> int:
+    """카드의 발급 번호를 PostgreSQL DB에서 가져옵니다."""
+    try:
+        conn = connection_pool.getconn()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT COUNT(*) + 1
+            FROM user_cards
+            WHERE character_name = %s AND card_id = %s
+        """, (character_name, card_id))
+
+        issued_number = cursor.fetchone()[0]
+        cursor.close()
+        connection_pool.putconn(conn)
+        return issued_number
+    except Exception as e:
+        print(f"Error getting card issued number: {str(e)}")
+        return 1
+
+class CardNavButton(discord.ui.Button):
+    def __init__(self, label, slider_view, direction):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary)
+        self.slider_view = slider_view
+        self.direction = direction
+
+    async def callback(self, interaction: discord.Interaction):
+        self.slider_view.index = (self.slider_view.index + self.direction) % self.slider_view.total
+        await self.slider_view.update_message(interaction)
+
+# --- 인벤토리 및 선물하기 기능 관련 클래스 ---
+
+class InventoryPaginator(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction, user_gifts: list, db_manager: DatabaseManager):
+        super().__init__(timeout=180)
+        self.interaction = interaction
+        self.user_gifts = user_gifts
+        self.db = db_manager
+        self.current_page = 0
+        self.items_per_page = 9 # 3x3 grid
+
+    async def get_page_embed(self) -> discord.Embed:
+        user = self.interaction.user
+        embed = discord.Embed(
+            title=f"{user.display_name}'s Inventory",
+            color=discord.Color.blue()
+        )
+        embed.set_thumbnail(url=user.display_avatar.url)
+
+        start_index = self.current_page * self.items_per_page
+        end_index = start_index + self.items_per_page
+        current_gifts = self.user_gifts[start_index:end_index]
+
+        if not current_gifts:
+            embed.description = "You don't have any gifts yet.\nComplete daily quests to earn gifts!"
+            return embed
+
+        description = "Check your gifts and give them to characters to increase your affinity.\n\n"
+        for gift_id, quantity in current_gifts:
+            gift_info = get_gift_details(gift_id)
+            emoji = get_gift_emoji(gift_id)
+            description += f"{emoji} **{gift_info['name']}** (x{quantity})\n"
+
+        embed.description = description
+        total_pages = ceil(len(self.user_gifts) / self.items_per_page)
+        embed.set_footer(text=f"Page {self.current_page + 1}/{total_pages}")
+
+        self.update_buttons(total_pages)
+        return embed
+
+    def update_buttons(self, total_pages: int):
+        self.children[0].disabled = self.current_page == 0 # type: ignore
+        self.children[1].disabled = self.current_page >= total_pages - 1 # type: ignore
+
+    @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.grey)
+    async def previous_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        embed = await self.get_page_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.grey)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        embed = await self.get_page_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+class GiftSelect(discord.ui.Select):
+    def __init__(self, user_gifts: list):
+        options = []
+        for gift_id, quantity in user_gifts:
+            gift_info = get_gift_details(gift_id)
+            emoji = get_gift_emoji(gift_id)
+            options.append(
+                discord.SelectOption(
+                    label=f"{gift_info['name']} (x{quantity})",
+                    description=gift_info['description'],
+                    value=gift_id,
+                    emoji=emoji
+                )
+            )
+
+        super().__init__(
+            placeholder="선물할 아이템을 선택하세요...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.selected_gift = self.values[0] # type: ignore
+        self.disabled = True
+        self.view.children[1].disabled = False # type: ignore
+        await interaction.response.edit_message(view=self.view)
+
+
+class GiftConfirmButton(discord.ui.Button['GiftView']):
+    def __init__(self):
+        super().__init__(label="Send Gift", style=discord.ButtonStyle.green, disabled=True)
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        user_id = interaction.user.id
+        gift_id = view.selected_gift
+        character_name = view.character_name
+
+        success = view.db.use_user_gift(user_id, gift_id)
+
+        if not success:
+            await interaction.response.edit_message(content="Failed to use the gift. Please try again.", view=None, embed=None)
+            return
+
+        gift_info = get_gift_details(gift_id)
+        is_preferred = check_gift_preference(character_name, gift_id)
+
+        affinity_change = 5 if is_preferred else 1
+
+        view.db.update_affinity(
+            user_id=user_id,
+            character_name=character_name,
+            score_change=affinity_change,
+            last_message=f"Gave {gift_info['name']}",
+            last_message_time=datetime.utcnow()
+        )
+
+        embed = discord.Embed(
+            title=f"🎁 Gift sent to {character_name}!",
+            description=f"You gave **{gift_info['name']}** and your affinity changed by **{affinity_change:+}**.",
+            color=discord.Color.pink()
+        )
+        await interaction.response.edit_message(embed=embed, view=None)
+
+        thank_you_message = get_gift_reaction(character_name, gift_id)
+        await interaction.channel.send(f"{interaction.user.mention}, {thank_you_message}")
+
+        # Check for level up after affinity change
+        await self.check_and_give_levelup_rewards(interaction, user_id, character_name)
+
+    async def check_and_give_levelup_rewards(self, interaction: discord.Interaction, user_id: int, character_name: str):
+        """
+        Checks for affinity level-ups and sends rewards accordingly.
+        Prevents duplicate card rewards.
+        """
+        try:
+            affinity_info = self.db.get_affinity(user_id, character_name)
+            if not affinity_info:
+                return
+
+            current_score = affinity_info['emotion_score']
+
+            # This assumes that the affinity score *before* the gift was lower.
+            # A more robust solution would be to pass the old score as an argument.
+            # For now, let's check against all thresholds lower than current score.
+
+            for grade, threshold in AFFINITY_THRESHOLDS.items():
+                if current_score >= threshold and (current_score - affinity_info.get('last_change', 1)) < threshold:
+
+                    # --- Level up detected ---
+                    prev_grade = get_affinity_grade(current_score - affinity_info.get('last_change', 5))
+                    new_grade = get_affinity_grade(current_score)
+
+                    if new_grade == prev_grade: continue
+
+                    # 1. Send Level Up Embed
+                    level_up_embed = self.create_level_up_embed(character_name, prev_grade, new_grade)
+                    await interaction.channel.send(embed=level_up_embed)
+
+                    # 2. Check for and give card reward
+                    card_id_to_give = milestone_to_card_id(threshold)
+                    if not card_id_to_give:
+                        continue
+
+                    user_cards = self.db.get_user_cards(user_id, character_name)
+                    has_card = any(card[0] == card_id_to_give for card in user_cards)
+
+                    if not has_card:
+                        card_embed = discord.Embed(
+                            title="🎉 Get a new card!",
+                            description=f"Congratulations! {character_name} has sent you a token of affection.\nYou got a {get_card_info_by_id(card_id_to_give)['tier']} tier card!\nClick claim to receive your card.",
+                            color=discord.Color.gold()
+                        )
+                        card_info = get_card_info_by_id(card_id_to_give)
+                        if card_info and card_info.get('image_url_small'):
+                           card_embed.set_image(url=f"{CLOUDFLARE_IMAGE_BASE_URL}/{card_info['image_url_small']}")
+
+                        view = CardClaimView(user_id, character_name, card_id_to_give, self.db)
+                        await interaction.channel.send(embed=card_embed, view=view)
+
+                    break # Process only one level up at a time
+        except Exception as e:
+            print(f"Error checking for level up rewards: {e}")
+            traceback.print_exc()
+
+    def create_level_up_embed(self, character_name: str, prev_grade: str, new_grade: str) -> discord.Embed:
+        """레벨업 임베드 생성"""
+        # ... (이 함수는 character_bot.py에서 가져오거나 여기에 정의되어 있어야 합니다)
+        char_info = CHARACTER_INFO.get(character_name, {})
+        char_color = char_info.get('color', discord.Color.purple())
+
+        level_messages = {
+            ("Rookie", "Iron"): f"Congratulations! {character_name} has started to take an interest in you!",
+            ("Iron", "Bronze"): f"Great job! {character_name} is opening up and becoming a bit more comfortable with you.",
+            ("Bronze", "Silver"): f"Nice! {character_name} is now showing real trust and warmth in your conversations!",
+            ("Silver", "Gold"): f"Amazing! {character_name} really enjoys talking with you! You could become great friends!"
+        }
+
+        embed = discord.Embed(
+            title="🎉 Affinity Level Up!",
+            description=level_messages.get((prev_grade, new_grade), "Your relationship has grown stronger!"),
+            color=char_color
+        )
+
+        level_icons = AFFINITY_LEVELS # Ensure this is defined or imported
+        embed.add_field(
+            name="Level Change",
+            value=f"{level_icons.get(prev_grade,{}).get('emoji','')} {prev_grade} → {level_icons.get(new_grade,{}).get('emoji','')} {new_grade}",
+            inline=False
+        )
+
+        char_image_url = CHARACTER_IMAGES.get(character_name)
+        if char_image_url:
+            embed.set_thumbnail(url=char_image_url)
+
+        return embed
+
+class GiftView(discord.ui.View):
+    def __init__(self, bot: "BotSelector", character_name: str, user_gifts: list):
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.db = bot.db
+        self.character_name = character_name
+        self.selected_gift: str | None = None
+
+        self.add_item(GiftSelect(user_gifts))
+        self.add_item(GiftConfirmButton())
+
+class QuestClaimSelect(discord.ui.Select):
+    """
+    Dropdown menu to select a quest to claim rewards for.
+    """
+    def __init__(self, claimable_quests: list, bot_instance: 'BotSelector'):
+        options = []
+        for quest in claimable_quests:
+            clean_name = re.sub(r'^\W+\s*', '', quest['name'])
+            label = f"{quest['reward']}"
+            if len(label) > 100:
+                label = label[:97] + "..."
+
+            options.append(discord.SelectOption(
+                label=clean_name,
+                description=label,
+                value=quest['id'],
+                emoji=quest['name'].split(' ')[0]
+            ))
+
+        super().__init__(
+            placeholder="Select a quest to claim reward...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+        self.bot = bot_instance
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        user_id = interaction.user.id
+        quest_id = self.values[0]
+
+        success, message = await self.bot.claim_quest_reward(user_id, quest_id)
+
+        if success:
+            response_embed = discord.Embed(
+                title="🎁 Quest Reward Claimed!",
+                description=f"You received: **{message}**",
+                color=discord.Color.green()
+            )
+            response_embed.set_footer(text="Check your inventory with /inventory")
+            await interaction.followup.send(embed=response_embed, ephemeral=True)
+
+            # Update the original quest board message
+            new_quest_status = await self.bot.get_quest_status(user_id)
+            new_embed = self.bot.create_quest_embed(user_id, new_quest_status)
+            new_view = QuestView(user_id, new_quest_status, self.bot)
+            await interaction.edit_original_response(embed=new_embed, view=new_view)
+        else:
+            await interaction.followup.send(f"❌ {message}", ephemeral=True)
+
+class QuestView(discord.ui.View):
+    def __init__(self, user_id: int, quest_status: dict, bot_instance: 'BotSelector'):
+        super().__init__(timeout=None)
+
+        claimable_quests = [
+            q for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', []))
+            if q.get('completed') and not q.get('claimed')
+        ]
+
+        if claimable_quests:
+            self.add_item(QuestClaimSelect(claimable_quests, bot_instance))
+
+    class StoryCharacterSelectView(discord.ui.View):
+        def __init__(self, bot_instance: "BotSelector"):
+            super().__init__(timeout=180)
+            self.bot = bot_instance
+            options = [
+                discord.SelectOption(label=name, value=name, emoji=info.get('emoji'))
+                for name, info in CHARACTER_INFO.items()
+            ]
+            self.add_item(self.CharacterSelect(options, self.bot))
+
+        class CharacterSelect(discord.ui.Select):
+            def __init__(self, options: list, bot_instance: "BotSelector"):
+                super().__init__(placeholder="Choose a character...", options=options)
+                self.bot = bot_instance
+
+            async def callback(self, interaction: discord.Interaction):
+                selected_char = self.values[0]
+                # story_character_select_callback 호출
+                await self.bot.story_character_select_callback(interaction, selected_char)
+
+
+    class StoryStageSelectView(discord.ui.View):
+        def __init__(self, user, character_name, progress, bot_instance):
+            super().__init__()
+
+            story_stages = STORY_CHAPTERS.get(character_name, [])
+
+            # 마지막으로 완료한 스테이지 계산
+            completed_stages = [p['stage_num'] for p in progress if p.get('status') == 'completed']
+            last_completed_stage = max(completed_stages) if completed_stages else 0
+
+            for stage_info in story_stages:
+                stage_num = stage_info['id']
+                # next() 함수에 기본값 None 추가
+                stage_progress = next((p for p in progress if p.get('stage_num') == stage_num), None)
+
+                is_completed = stage_progress and stage_progress.get('status') == 'completed'
+                # is_locked 조건 수정
+                is_locked = not is_completed and stage_num > last_completed_stage + 1
+
+                button_label = f"Stage {stage_num}: {stage_info['title']}"
+                if is_completed:
+                    button_label = f"✅ {button_label} [Cleared]"
+
+                self.add_item(self.StoryStageButton(
+                    label=button_label, 
+                    style=discord.ButtonStyle.secondary if is_locked else discord.ButtonStyle.primary,
+                    disabled=is_locked or is_completed,
+                    custom_id=f"story_{character_name}_{stage_num}",
+                    bot_selector=bot_instance,
+                    character_name=character_name,
+                    stage_num=stage_num
+                ))
+
+        class StoryStageButton(discord.ui.Button):
+            def __init__(self, *, label: str, style: discord.ButtonStyle, disabled: bool, custom_id: str, bot_selector, character_name: str, stage_num: int):
+                super().__init__(label=label, style=style, disabled=disabled, custom_id=custom_id)
+                self.bot_selector = bot_selector
+                self.character_name = character_name
+                self.stage_num = stage_num
+
+            async def callback(self, interaction: discord.Interaction):
+                await interaction.response.send_message(f"Starting Stage {self.stage_num}...", ephemeral=True)
+                channel = await start_story_stage(self.bot_selector, interaction.user, self.character_name, self.stage_num)
+                await interaction.followup.send(f"Your story begins in {channel.mention}!", ephemeral=True)
+
+    # ... (rest of the BotSelector class)
+
+# --- 새로운 스토리 UI ---
+class NewStoryCharacterSelect(discord.ui.Select):
+    def __init__(self, bot_instance: "BotSelector"):
+        options = [
+            discord.SelectOption(label=name, value=name, emoji=info.get('emoji'))
+            for name, info in CHARACTER_INFO.items()
+        ]
+        super().__init__(placeholder="Choose a character...", options=options)
+        self.bot = bot_instance
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            print("[DEBUG] NewStoryCharacterSelect callback initiated.")
+            await interaction.response.defer()
+
+            character_name = self.values[0]
+            print(f"[DEBUG] Selected character: {character_name}")
+            user_id = interaction.user.id
+
+            # 선택된 캐릭터의 스토리 정보 가져오기
+            story_info = STORY_CHAPTERS.get(character_name)
+            if not story_info:
+                print(f"[DEBUG] No story info found for {character_name}.")
+                await interaction.followup.send("This character's story is not yet available.", ephemeral=True)
+                return
+            print(f"[DEBUG] Story info found for {character_name}.")
+
+            # 스토리 진행 상황 가져오기
+            print(f"[DEBUG] Getting story progress for user {user_id} and character {character_name}...")
+            progress = self.bot.db.get_story_progress(user_id, character_name)
+            print(f"[DEBUG] Story progress received: {progress}")
+
+            # 새로운 임베드 생성 (요청사항 반영)
+            if character_name == "Eros":
+                embed = discord.Embed(
+                    title=f"☕ {character_name}'s Story",
+                    description="A heartwarming story at Spot Zero Cafe!",
+                    color=discord.Color.purple()
+                )
+            else:
+                embed = discord.Embed(
+                    title=f"🌙 {character_name}'s Story",
+                    description=f"Listen to {character_name}'s hidden story and claim incredible rewards.",
+                    color=discord.Color.purple()
+                )
+
+            # 시나리오 목록 생성
+            chapters = story_info.get('chapters', [])
+            chapter_emojis = {1: "☕", 2: "🍵", 3: "💌"} if character_name == "Eros" else {1: "🌸", 2: "🍵", 3: "💌"}
+
+            # 마지막으로 완료한 챕터 번호 계산
+            last_completed_chapter = max([p['stage_num'] for p in progress if p.get('status') == 'completed']) if progress else 0
+
+            chapter_list_str = ""
+            if character_name == "Elysia":
+                # Elysia는 챕터1만 표시
+                chapter_info_config = next((c for c in chapters if c['id'] == 1), None)
+                emoji = chapter_emojis.get(1, '📖')
+                is_completed = any(p['stage_num'] == 1 and p.get('status') == 'completed' for p in progress)
+                if chapter_info_config:
+                    title = chapter_info_config['title']
+                    if is_completed:
+                        chapter_list_str += f"{emoji} ✅ Chapter 1: {title} [Completed]\n"
+                    else:
+                        chapter_list_str += f"{emoji} Chapter 1: {title}\n"
+            else:
+                for i in range(1, 4):
+                    chapter_info_config = next((c for c in chapters if c['id'] == i), None)
+                    emoji = chapter_emojis.get(i, '📖')
+                    is_completed = any(p['stage_num'] == i and p.get('status') == 'completed' for p in progress)
+                    is_locked = not is_completed and i > last_completed_chapter + 1
+                    if character_name == "Eros" and i == 1:
+                        if is_completed:
+                            chapter_list_str += f"{emoji} ✅ Scenario 1: A Happy Day at Spot Zero Cafe [Completed]\n"
+                        elif is_locked:
+                            chapter_list_str += f"{emoji} 🔒 Scenario 1: A Happy Day at Spot Zero Cafe [Locked]\n"
+                        else:
+                            chapter_list_str += f"{emoji} Scenario 1: A Happy Day at Spot Zero Cafe\n"
+                    elif chapter_info_config:
+                        title = chapter_info_config['title']
+                        if is_completed:
+                            chapter_list_str += f"{emoji} ✅ Chapter {i}: {title} [Completed]\n"
+                        elif is_locked:
+                            chapter_list_str += f"{emoji} 🔒 Chapter {i}: {title} [Locked]\n"
+                        else:
+                            chapter_list_str += f"{emoji} Chapter {i}: {title}\n"
+                    elif i == 3:
+                        if is_completed:
+                            chapter_list_str += f"{emoji} ✅ Chapter 3: 이 기억을 영원히 [Completed]\n"
+                        elif is_locked:
+                            chapter_list_str += f"{emoji} 🔒 Chapter 3: 이 기억을 영원히 [Locked]\n"
+                        else:
+                            chapter_list_str += f"{emoji} Chapter 3: 이 기억을 영원히\n"
+
+            # 보상 목록 생성
+            if character_name == "Elysia":
+                # Elysia는 챕터1만 있으므로 Rare Gift만 표시
+                rewards_str = "🎁 Rare Gift"
+            else:
+                # 다른 캐릭터들은 모든 보상 표시
+                rewards_str = (
+                    "🎁 Rare Gift\n"
+                    "💝 Common Gift\n"
+                    "🎴 Special Tier Card"
+                )
+
+            embed.set_image(url=story_info['banner_image'])
+            embed.add_field(name="Scenarios", value=chapter_list_str, inline=True)
+            embed.add_field(name="Rewards", value=rewards_str, inline=True)
+            print("[DEBUG] Embed created.")
+
+            # 부모 View에 접근하여 아이템 교체
+            self.view.clear_items()
+            self.view.add_item(NewStoryChapterSelect(self.bot, character_name, progress))
+            print("[DEBUG] View items cleared and new chapter select added.")
+
+            await interaction.edit_original_response(embed=embed, view=self.view)
+            print("[DEBUG] Original response edited successfully.")
+
+        except Exception as e:
+            print(f"An error occurred in NewStoryCharacterSelect callback: {e}")
+            import traceback
+            traceback.print_exc()
+            # 오류 발생 시 사용자에게 알림
+            if not interaction.response.is_done():
+                await interaction.response.send_message("An error occurred while loading the character story.", ephemeral=True)
+            else:
+                await interaction.followup.send("An error occurred while loading the character story.", ephemeral=True)
+
+class NewStoryChapterSelect(discord.ui.Select):
+    def __init__(self, bot_instance: "BotSelector", character_name: str, progress: list):
+        self.bot = bot_instance
+        self.character_name = character_name
+        story_info = STORY_CHAPTERS.get(character_name)
+
+        self.completed_stages = {p['stage_num'] for p in progress if p.get('status') == 'completed'}
+
+        # 마지막으로 완료한 챕터 번호 계산
+        last_completed_chapter = max(self.completed_stages) if self.completed_stages else 0
+
+        options = []
+        for chapter in story_info.get('chapters', []):
+            chapter_id = chapter['id']
+            is_completed = chapter_id in self.completed_stages
+
+            # 순서 규칙: 이전 챕터를 클리어하지 않으면 다음 챕터는 선택 불가
+            is_locked = not is_completed and chapter_id > last_completed_chapter + 1
+
+            # 선택 가능한 챕터만 옵션에 추가 (클리어했거나 잠긴 챕터는 제외)
+            if not is_completed and not is_locked:
+                options.append(discord.SelectOption(
+                    label=f"Chapter {chapter_id}: {chapter['title']}",
+                    value=str(chapter_id)
+                ))
+
+        # 선택 가능한 옵션이 없으면 기본 메시지 추가
+        if not options:
+            options.append(discord.SelectOption(
+                label="No chapters available",
+                value="none"
+            ))
+
+        super().__init__(placeholder="Select a chapter to begin...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        # "none" 값 처리
+        if self.values[0] == "none":
+            await interaction.followup.send("No chapters are currently available.", ephemeral=True)
+            return
+
+        stage_num = int(self.values[0])
+
+        # 이미 완료된 챕터인지 확인 (이미 필터링되었지만 안전을 위해)
+        if stage_num in self.completed_stages:
+            await interaction.followup.send("You have already completed this chapter.", ephemeral=True)
+            return
+
+        # 순서 규칙 확인: 이전 챕터를 클리어하지 않았는지 확인
+        last_completed_chapter = max(self.completed_stages) if self.completed_stages else 0
+        if stage_num > last_completed_chapter + 1:
+            await interaction.followup.send(
+                f"You must complete Chapter {last_completed_chapter + 1} first before starting Chapter {stage_num}.", 
+                ephemeral=True
+            )
+            return
+
+        user = interaction.user
+
+        # 호감도 체크
+        affinity_info = self.bot.db.get_affinity(user.id, self.character_name)
+        current_affinity = affinity_info.get('emotion_score', 0) if affinity_info else 0
+
+        chapter_info = next((c for c in STORY_CHAPTERS[self.character_name]['chapters'] if c['id'] == stage_num), None)
+        affinity_gate = chapter_info.get('affinity_gate', 0)
+
+        if current_affinity < affinity_gate:
+            embed = discord.Embed(
+                title="🔒 Story Locked",
+                description=f"You need at least **{affinity_gate}** affinity with {self.character_name} to start this chapter.\nYour current affinity: **{current_affinity}**",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        channel = await start_story_stage(self.bot, user, self.character_name, stage_num)
+        await interaction.followup.send(f"Your story begins in {channel.mention}!", ephemeral=True)
+
+class NewStoryView(discord.ui.View):
+    def __init__(self, bot_instance: "BotSelector"):
+        super().__init__(timeout=300)
+        self.add_item(NewStoryCharacterSelect(bot_instance))
+
+
+async def main():
+    intents = discord.Intents.all()
+    bot = BotSelector()
+    await bot.start(TOKEN)

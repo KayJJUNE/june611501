@@ -5,9 +5,21 @@ from typing import Optional, Dict
 import asyncio
 import random
 import sqlite3
+from discord import app_commands
+
+# 캐릭터 이미지 경로
+CLOUDFLARE_IMAGE_BASE_URL = "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw"
+CHARACTER_IMAGES = {
+    "kagari": f"{CLOUDFLARE_IMAGE_BASE_URL}/kagari/public",
+    "eros": f"{CLOUDFLARE_IMAGE_BASE_URL}/eros/public",
+    "elysia": f"{CLOUDFLARE_IMAGE_BASE_URL}/elysia/public"
+}
+
+# OpenAI API 키 로드
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 class CharacterBot(commands.Bot):
-    def __init__(self):
+    def __init__(self, character_name: str):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
@@ -18,16 +30,11 @@ class CharacterBot(commands.Bot):
             help_command=None
         )
 
-        # Character images
-        self.character_images = {
-            "kagari": "/home/runner/workspace/assets/kagari.png",
-            "eros": "/home/runner/workspace/assets/eros.png",
-            "elysia": "/home/runner/workspace/assets/elysia.png"
-        }
-
         # Active channels for auto-questions
         self.active_channels: Dict[int, bool] = {}
         self.question_interval = 300  # 5 minutes
+        self.character_name = character_name
+        self.image_url = CHARACTER_IMAGES.get(self.character_name.lower())
 
     async def setup_hook(self):
         """Initial setup after the bot is ready"""
@@ -64,14 +71,12 @@ class CharacterBot(commands.Bot):
         await ctx.send("자동 질문 기능이 비활성화되었습니다!")
 
     @commands.command()
-    async def character(self, ctx, name: str):
+    async def character(self, ctx):
         """Show character information with image"""
-        name = name.lower()
-        if name in self.character_images:
-            file = discord.File(self.character_images[name])
-            embed = discord.Embed(title=f"{name.capitalize()} 캐릭터", color=discord.Color.blue())
-            embed.set_image(url=f"attachment://{os.path.basename(self.character_images[name])}")
-            await ctx.send(file=file, embed=embed)
+        if self.image_url:
+            embed = discord.Embed(title=f"{self.character_name.capitalize()} 캐릭터", color=discord.Color.blue())
+            embed.set_image(url=self.image_url)
+            await ctx.send(embed=embed)
         else:
             await ctx.send("해당 캐릭터를 찾을 수 없습니다.")
 

@@ -29,6 +29,7 @@ def create_all_tables():
                     emotion_score INTEGER DEFAULT 0,
                     daily_message_count INTEGER DEFAULT 0,
                     last_daily_reset DATE DEFAULT CURRENT_DATE,
+                    last_quest_reward_date DATE,
                     last_message_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_message_content TEXT,
                     UNIQUE(user_id, character_name)
@@ -52,7 +53,7 @@ def create_all_tables():
                     user_id BIGINT,
                     character_name TEXT,
                     card_id TEXT,
-                    obtained_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     emotion_score_at_obtain INTEGER,
                     PRIMARY KEY (user_id, character_name, card_id)
                 )
@@ -163,6 +164,133 @@ def create_all_tables():
                     score INTEGER,
                     message TEXT,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            # user_gifts
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_gifts (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    gift_id VARCHAR(50) NOT NULL,
+                    quantity INTEGER NOT NULL DEFAULT 1,
+                    obtained_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, gift_id)
+                )
+            ''')
+            # --- 퀘스트 시스템을 위한 테이블 ---
+            # 로그인 스트릭
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_login_streaks (
+                    user_id BIGINT PRIMARY KEY,
+                    current_streak INTEGER DEFAULT 0,
+                    last_login_date DATE
+                )
+            ''')
+            # 퀘스트 이벤트
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_quest_events (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    event_type TEXT NOT NULL, -- 'card_share' 등
+                    event_date DATE DEFAULT CURRENT_DATE
+                )
+            ''')
+            # 퀘스트 완료 기록
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS quest_claims (
+                    user_id BIGINT,
+                    quest_id TEXT,
+                    claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, quest_id)
+                )
+            ''')
+            # 스토리 퀘스트 완료 기록
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS story_quest_claims (
+                    user_id BIGINT,
+                    character_name TEXT,
+                    quest_type TEXT, -- 'all_chapters', 'single_chapter'
+                    claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, character_name, quest_type)
+                )
+            ''')
+            # memory_summaries
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS memory_summaries (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    character_name TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    quality_score FLOAT DEFAULT 0.0,
+                    token_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            # user_nicknames
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_nicknames (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    character_name TEXT NOT NULL,
+                    nickname TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, character_name)
+                )
+            ''')
+            # user_keywords
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_keywords (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    character_name TEXT NOT NULL,
+                    keyword TEXT NOT NULL,
+                    context TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, character_name, keyword)
+                )
+            ''')
+            # profiles
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS profiles (
+                    user_id BIGINT,
+                    character TEXT,
+                    key TEXT,
+                    value TEXT,
+                    PRIMARY KEY (user_id, character, key)
+                )
+            ''')
+            # episodes
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS episodes (
+                    user_id BIGINT,
+                    character TEXT,
+                    episode_id SERIAL,
+                    summary TEXT,
+                    timestamp TIMESTAMP,
+                    PRIMARY KEY (user_id, character, episode_id)
+                )
+            ''')
+            # states
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS states (
+                    user_id BIGINT,
+                    character TEXT,
+                    emotion_type TEXT,
+                    score REAL,
+                    last_updated TIMESTAMP,
+                    PRIMARY KEY (user_id, character, emotion_type)
+                )
+            ''')
+            # user_story_progress
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_story_progress (
+                    user_id BIGINT,
+                    character_name TEXT,
+                    stage_num INTEGER,
+                    status TEXT DEFAULT 'unlocked', -- 'unlocked', 'completed'
+                    completed_at TIMESTAMP WITH TIME ZONE,
+                    PRIMARY KEY (user_id, character_name, stage_num)
                 )
             ''')
         conn.commit()
