@@ -2288,7 +2288,8 @@ class BotSelector(commands.Bot):
 
     def format_daily_quests(self, quests: list) -> str:
         if quests is None or len(quests) == 0:
-            return "No daily quests available."
+            # 기본 예시 퀘스트를 반환 (진행도 0)
+            return "⏳ 💬 Daily Conversation\n`[□□□□□□□□□□]` (0/20)\n└ Reward: Random Common Item x1"
         quest_lines = []
         for q in quests:
             if q.get('claimed'):
@@ -2311,7 +2312,7 @@ class BotSelector(commands.Bot):
 
     def format_weekly_quests(self, quests: list) -> str:
         if quests is None or len(quests) == 0:
-            return "No weekly quests available."
+            return "⏳ 📅 7-Day Login Streak\n🔥 ⬜⬜⬜⬜⬜⬜⬜ (0/7)\n└ Reward: Random Epic Items x2"
         quest_lines = []
         for q in quests:
             if q.get('claimed'):
@@ -2337,7 +2338,7 @@ class BotSelector(commands.Bot):
 
     def format_levelup_quests(self, quests: list) -> str:
         if quests is None or len(quests) == 0:
-            return "No level-up quests available."
+            return "⏳ ⭐ Level-up Quest\n`[□□□□□□□□□□]` (0/1)\n└ Reward: Common Item x1"
         quest_lines = []
         for q in quests:
             if q.get('claimed'):
@@ -2358,7 +2359,7 @@ class BotSelector(commands.Bot):
 
     def format_story_quests(self, quests: list) -> str:
         if quests is None or len(quests) == 0:
-            return "No story quests available."
+            return "⏳ 📖 Story Quest\n`[□□□□□□□□□□]` (0/1)\n└ Reward: Epic Gifts x3"
         quest_lines = []
         for q in quests:
             if q.get('claimed'):
