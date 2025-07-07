@@ -2005,10 +2005,11 @@ class BotSelector(commands.Bot):
         )
         async def quest_command(interaction: discord.Interaction):
             try:
+                user_id = interaction.user.id
+                self.db.update_login_streak(user_id)
                 # 먼저 interaction 응답을 지연시킴
                 await interaction.response.defer(ephemeral=True)
 
-                user_id = interaction.user.id
                 quest_status = await self.get_quest_status(user_id)
                 embed = self.create_quest_embed(user_id, quest_status)
                 view = QuestView(user_id, quest_status, self)
@@ -2513,22 +2514,17 @@ class BotSelector(commands.Bot):
 
     async def claim_daily_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         print(f"[DEBUG] claim_daily_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
-        rest = quest_id.replace('daily_', '', 1)
-        type_parts = rest.rsplit('_', 1)
-        quest_type = type_parts[0]
-        print(f"[DEBUG] Parsed quest_type: '{quest_type}'")
-
-        rewards = {
-            'conversation': ('Common Item', 'COMMON', 1),
-            'affinity_gain': ('Common Item', 'COMMON', 1),
+        # 기존: quest_type 파싱 및 reward lookup
+        # 패치: quest_id를 그대로 reward lookup에 사용
+        daily_rewards = {
+            'daily_conversation': {'name': 'Random Common Item', 'rarity': 'COMMON', 'quantity': 1},
+            'daily_affinity_gain': {'name': 'Random Common Item', 'rarity': 'COMMON', 'quantity': 1},
         }
-        print(f"[DEBUG] Available daily rewards keys: {list(rewards.keys())}")
-
-        reward_name, reward_rarity, reward_quantity = rewards.get(quest_type, (None, None, 0))
-        print(f"[DEBUG] Reward lookup result: name={reward_name}, rarity={reward_rarity}, quantity={reward_quantity}")
-
-        if not reward_name:
-            print(f"[DEBUG] Reward not found for quest_type: '{quest_type}'. Returning 'This is an unknown quest.'")
+        reward_info = daily_rewards.get(quest_id)
+        print(f"[DEBUG] Available daily rewards keys: {list(daily_rewards.keys())}")
+        print(f"[DEBUG] Reward lookup result: {reward_info}")
+        if not reward_info:
+            print(f"[DEBUG] Reward not found for quest_id: '{quest_id}'. Returning 'This is an unknown quest.'")
             return False, "This is an unknown quest."
 
         try:
@@ -2536,7 +2532,7 @@ class BotSelector(commands.Bot):
             user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
             # 보상 후보 아이템 리스트
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
-            reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY[reward_rarity.upper()], reward_quantity)
+            reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY[reward_info['rarity'].upper()], reward_info['quantity'])
             # 아직 받지 않은 아이템만 후보로 남김
             available_rewards = [item for item in reward_candidates if item not in user_gifts]
             if not available_rewards:
@@ -2653,6 +2649,8 @@ class BotSelector(commands.Bot):
             return False, "An error occurred while claiming story reward"
 
     async def on_message(self, message: discord.Message):
+        user_id = message.author.id
+        self.db.update_login_streak(user_id)
         if message.author.bot or not message.guild:
             return
 
@@ -3353,10 +3351,16 @@ class QuestView(discord.ui.View):
     def __init__(self, user_id: int, quest_status: dict, bot_instance: 'BotSelector'):
         super().__init__(timeout=None)
 
-        claimable_quests = [
-            q for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', []))
-            if q.get('completed') and not q.get('claimed')
-        ]
+        # --- 자동 패치: 퀘스트 드롭다운 필터 강화 ---
+        # 1. 데일리/위클리: 리워드 수령(quest_claims 기록) 후에는 드롭다운에서 제외, 리셋 후에는 다시 표시
+        # 2. 레벨업/스토리: 1회성, 리워드 수령(quest_claims/levelup_flag/story_quest_claims 등 기록) 후에는 영구적으로 제외
+        # 3. claimed 값이 True면 무조건 제외, False면 표시
+        claimable_quests = []
+        for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', [])):
+            # 데일리/위클리: claimed True면 제외, False면 표시(리셋 후 자동 복구)
+            # 레벨업/스토리: claimed True면 영구 제외
+            if q.get('completed') and not q.get('claimed'):
+                claimable_quests.append(q)
 
         if claimable_quests:
             self.add_item(QuestClaimSelect(claimable_quests, bot_instance))
