@@ -1121,11 +1121,14 @@ class DatabaseManager:
 
     def claim_quest(self, user_id: int, quest_id: str):
         """퀘스트 보상 수령 상태를 CST 기준으로 기록합니다."""
+        from datetime import datetime
+        print(f"[DEBUG] claim_quest called: user_id={user_id}, quest_id={quest_id}")
         conn = None
         try:
+            now_cst = datetime.now(CST)
+            print(f"[DEBUG] claim_quest - now_cst: {now_cst}")
             conn = self.get_connection()
             with conn.cursor() as cursor:
-                now_cst = datetime.now(CST)
                 cursor.execute("""
                     INSERT INTO quest_claims (user_id, quest_id, claimed_at)
                     VALUES (%s, %s, %s)
@@ -1133,8 +1136,9 @@ class DatabaseManager:
                     DO NOTHING; 
                 """, (user_id, quest_id, now_cst))
             conn.commit()
+            print(f"[DEBUG] claim_quest - DB commit success for user_id={user_id}, quest_id={quest_id}")
         except Exception as e:
-            print(f"Error in claim_quest: {e}")
+            print(f"[DEBUG] claim_quest - Error: {e}")
             if conn: conn.rollback()
         finally:
             self.return_connection(conn)
