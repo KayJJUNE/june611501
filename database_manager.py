@@ -1221,7 +1221,7 @@ class DatabaseManager:
         return len(completed) >= total_chapters
 
     def add_emotion_log(self, user_id: int, character_name: str, score: int, message: str, timestamp: datetime = None):
-        """emotion_log 테이블에 감정 로그를 기록합니다."""
+        print(f"[DEBUG] add_emotion_log called: user_id={user_id}, character_name={character_name}, score={score}, message={message}, timestamp={timestamp}")
         conn = None
         try:
             if timestamp is None:
@@ -1229,7 +1229,7 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO emotion_log (user_id, character_name, score, message, timestamp) VALUES (%s, %s, %s, %s, %s)",
+                    "INSERT INTO affinity_log (user_id, character_name, score_change, message, timestamp) VALUES (%s, %s, %s, %s, %s)",
                     (user_id, character_name, score, message, timestamp)
                 )
             conn.commit()
