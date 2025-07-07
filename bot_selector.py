@@ -2253,7 +2253,8 @@ class BotSelector(commands.Bot):
             if affinity_info:
                 total_daily_messages += affinity_info.get('daily_message_count', 0)
         quest_id = 'daily_conversation'
-        claimed = self.db.is_quest_claimed(user_id, quest_id)  # quest_claims 테이블 기준으로만 판단
+        # --- claimed 값은 반드시 quest_claims 테이블 기준으로만 판단 ---
+        claimed = self.db.is_quest_claimed(user_id, quest_id)
         reward_name = None
         if claimed:
             user_gifts = self.db.get_user_gifts(user_id)
@@ -2272,7 +2273,8 @@ class BotSelector(commands.Bot):
         # 2. 호감도 +5 퀘스트
         affinity_gain = self.db.get_today_affinity_gain(user_id)
         quest_id = 'daily_affinity_gain'
-        claimed = self.db.is_quest_claimed(user_id, quest_id)  # quest_claims 테이블 기준으로만 판단
+        # --- claimed 값은 반드시 quest_claims 테이블 기준으로만 판단 ---
+        claimed = self.db.is_quest_claimed(user_id, quest_id)
         reward_name = None
         if claimed:
             user_gifts = self.db.get_user_gifts(user_id)
@@ -3355,18 +3357,11 @@ class QuestClaimSelect(discord.ui.Select):
 class QuestView(discord.ui.View):
     def __init__(self, user_id: int, quest_status: dict, bot_instance: 'BotSelector'):
         super().__init__(timeout=None)
-
-        # --- 자동 패치: 퀘스트 드롭다운 필터 강화 ---
-        # 1. 데일리/위클리: 리워드 수령(quest_claims 기록) 후에는 드롭다운에서 제외, 리셋 후에는 다시 표시
-        # 2. 레벨업/스토리: 1회성, 리워드 수령(quest_claims/levelup_flag/story_quest_claims 등 기록) 후에는 영구적으로 제외
-        # 3. claimed 값이 True면 무조건 제외, False면 표시
+        # --- claimed 값은 반드시 quest_claims 기준으로만 판단 ---
         claimable_quests = []
         for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', [])):
-            # 데일리/위클리: claimed True면 제외, False면 표시(리셋 후 자동 복구)
-            # 레벨업/스토리: claimed True면 영구 제외
             if q.get('completed') and not q.get('claimed'):
                 claimable_quests.append(q)
-
         if claimable_quests:
             self.add_item(QuestClaimSelect(claimable_quests, bot_instance))
 
