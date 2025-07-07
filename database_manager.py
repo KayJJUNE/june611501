@@ -159,7 +159,7 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute(
-                    "SELECT emotion_score, daily_message_count, last_daily_reset, last_quest_reward_date, highest_milestone_achieved FROM affinity WHERE user_id = %s AND character_name = %s",
+                    "SELECT emotion_score, daily_message_count, last_daily_reset, last_quest_reward_date, highest_milestone_achieved, last_message_time FROM affinity WHERE user_id = %s AND character_name = %s",
                     (user_id, character_name)
                 )
                 result = cursor.fetchone()

@@ -2235,12 +2235,23 @@ class BotSelector(commands.Bot):
             return {'daily': [], 'weekly': [], 'levelup': [], 'story': []}
 
     async def check_daily_quests(self, user_id: int) -> list:
-        """일일 퀘스트 상태를 확인합니다."""
+        """일일 퀘스트 상태를 affinity DB의 실시간 값으로 정확히 반영합니다."""
         quests = []
 
         # 1. 대화 20회 퀘스트
-        total_daily_messages = self.db.get_total_daily_messages(user_id)
+        # affinity 테이블의 daily_message_count 사용
+        total_daily_messages = 0
+        for char in ['Kagari', 'Eros', 'Elysia']:
+            affinity_info = self.db.get_affinity(user_id, char)
+            if affinity_info:
+                total_daily_messages += affinity_info.get('daily_message_count', 0)
         quest_id = 'daily_conversation'
+        claimed = self.db.is_quest_claimed(user_id, quest_id)
+        reward_name = None
+        if claimed:
+            # 이미 수령한 경우, 최근 받은 커먼 선물명 조회
+            user_gifts = self.db.get_user_gifts(user_id)
+            reward_name = user_gifts[0][0] if user_gifts else None
         quests.append({
             'id': quest_id,
             'name': '💬 Daily Conversation',
@@ -2248,21 +2259,27 @@ class BotSelector(commands.Bot):
             'progress': min(total_daily_messages, 20),
             'max_progress': 20,
             'completed': total_daily_messages >= 20,
-            'reward': 'Random Common Item x1',
-            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+            'reward': f'Random Common Item x1' + (f'\nGifts received: {reward_name}' if reward_name else ''),
+            'claimed': claimed
         })
-        # 2. 호감도 +5 달성 퀘스트 (오늘 하루 동안 어떤 캐릭터든 호감도 증가량 5 이상)
-        affinity_gain = self.db.get_today_affinity_gain(user_id)  # 이 함수는 DB에서 오늘 하루 동안의 총 호감도 증가량을 반환해야 함
-        quest_id = 'daily_affinity_gain_5'
+
+        # 2. 호감도 +5 퀘스트
+        affinity_gain = self.db.get_today_affinity_gain(user_id)
+        quest_id = 'daily_affinity_gain'
+        claimed = self.db.is_quest_claimed(user_id, quest_id)
+        reward_name = None
+        if claimed:
+            user_gifts = self.db.get_user_gifts(user_id)
+            reward_name = user_gifts[0][0] if user_gifts else None
         quests.append({
             'id': quest_id,
             'name': '💖 Affinity +5',
-            'description': f'Gain +5 affinity with any character today ({affinity_gain}/5)',
+            'description': f'({affinity_gain}/5)',
             'progress': min(affinity_gain, 5),
             'max_progress': 5,
             'completed': affinity_gain >= 5,
-            'reward': 'Random Common Item x1',
-            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+            'reward': f'Random Common Item x1' + (f'\nGifts received: {reward_name}' if reward_name else ''),
+            'claimed': claimed
         })
 
         return quests
