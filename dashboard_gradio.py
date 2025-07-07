@@ -3,6 +3,9 @@ import pandas as pd
 import psycopg2
 import os
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import plotly.express as px
+from wordcloud import WordCloud
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -426,9 +429,101 @@ def get_all_story_progress():
     conn.close()
     return story_stats
 
+def get_basic_stats():
+    conn = get_conn()
+    total_turns = pd.read_sql_query("SELECT COUNT(*) FROM conversations WHERE message_role='user'", conn).iloc[0,0]
+    total_cards = pd.read_sql_query("SELECT COUNT(*) FROM user_cards", conn).iloc[0,0]
+    card_tiers = pd.read_sql_query("SELECT SUBSTRING(card_id,1,1) as tier, COUNT(*) as count FROM user_cards GROUP BY tier", conn)
+    total_users = pd.read_sql_query("SELECT COUNT(DISTINCT user_id) FROM conversations", conn).iloc[0,0]
+    rank_dist = pd.read_sql_query("""WITH user_levels AS (
+        SELECT user_id,
+            CASE 
+                WHEN SUM(emotion_score) < 10 THEN 'Rookie'
+                WHEN SUM(emotion_score) < 30 THEN 'Iron'
+                WHEN SUM(emotion_score) < 50 THEN 'Bronze'
+                WHEN SUM(emotion_score) < 100 THEN 'Silver'
+                ELSE 'Gold'
+            END as level
+        FROM affinity GROUP BY user_id
+    ) SELECT level, COUNT(*) as count FROM user_levels GROUP BY level ORDER BY level""", conn)
+    total_gifts = pd.read_sql_query("SELECT SUM(quantity) FROM user_gifts", conn).iloc[0,0]
+    conn.close()
+    return total_turns, total_cards, card_tiers, total_users, rank_dist, total_gifts
+
+def plot_card_tiers(card_tiers):
+    fig = px.pie(card_tiers, names='tier', values='count', title='카드 티어별 분포')
+    return fig
+
+def plot_rank_dist(rank_dist):
+    fig = px.pie(rank_dist, names='level', values='count', title='랭킹 분포')
+    return fig
+
+def plot_keyword_distribution():
+    conn = get_conn()
+    df = pd.read_sql_query("SELECT keyword, COUNT(*) as count FROM user_keywords GROUP BY keyword ORDER BY count DESC", conn)
+    conn.close()
+    fig = px.bar(df, x='keyword', y='count', title='키워드 분포')
+    return fig
+
+def plot_gift_distribution():
+    conn = get_conn()
+    df = pd.read_sql_query("SELECT gift_id, SUM(quantity) as total FROM user_gifts GROUP BY gift_id ORDER BY total DESC", conn)
+    conn.close()
+    fig = px.bar(df, x='gift_id', y='total', title='선물 지급 분포')
+    return fig
+
+def plot_story_completion():
+    conn = get_conn()
+    df = pd.read_sql_query("""
+        SELECT character_name, chapter_number, COUNT(DISTINCT user_id) as completed_users
+        FROM story_progress
+        WHERE completed_at IS NOT NULL
+        GROUP BY character_name, chapter_number
+        ORDER BY character_name, chapter_number
+    """, conn)
+    conn.close()
+    fig = px.bar(df, x='character_name', y='completed_users', color='chapter_number', barmode='group', title='스토리 챕터별 완성 유저수')
+    return fig
+
 if __name__ == "__main__":
     with gr.Blocks(title="디스코드 챗봇 통합 대시보드") as demo:
         gr.Markdown("# 디스코드 챗봇 통합 대시보드")
+
+        with gr.Tab("기본 데이터/현황"):
+            gr.Markdown("## 기본 데이터 및 현황")
+            total_turns, total_cards, card_tiers, total_users, rank_dist, total_gifts = get_basic_stats()
+            gr.Markdown(f"총 턴 수: {total_turns}")
+            gr.Markdown(f"총 카드 수: {total_cards}")
+            gr.Markdown(f"총 유저 수: {total_users}")
+            gr.Markdown(f"총 선물 지급 수: {total_gifts}")
+            gr.Plot(plot_card_tiers(card_tiers))
+            gr.Plot(plot_rank_dist(rank_dist))
+            gr.Plot(plot_gift_distribution())
+
+        with gr.Tab("랭킹"):
+            gr.Markdown("## 캐릭터별 호감도/대화수/로그인 랭킹")
+            kagari = get_full_character_ranking("Kagari")
+            eros = get_full_character_ranking("Eros")
+            elysia = get_full_character_ranking("Elysia")
+            gr.Dataframe(kagari, label="Kagari 호감도 랭킹")
+            gr.Dataframe(eros, label="Eros 호감도 랭킹")
+            gr.Dataframe(elysia, label="Elysia 호감도 랭킹")
+            gr.Dataframe(get_login_streak_ranking(), label="연속 로그인 랭킹")
+
+        with gr.Tab("AI/키워드/서머리"):
+            gr.Markdown("## 키워드 분포 및 대화 서머리")
+            gr.Plot(plot_keyword_distribution())
+            gr.Dataframe(get_user_summaries(), label="유저 대화 서머리")
+
+        with gr.Tab("퀘스트/스토리/선물"):
+            gr.Markdown("## 퀘스트/스토리/선물 현황")
+            daily_conv, daily_aff, weekly_login, weekly_share = get_quest_completion_all()
+            gr.Dataframe(daily_conv, label="일일 대화 퀘스트 달성률")
+            gr.Dataframe(daily_aff, label="일일 호감도 퀘스트 달성률")
+            gr.Dataframe(weekly_login, label="주간 로그인 퀘스트 달성률")
+            gr.Dataframe(weekly_share, label="주간 카드 공유 퀘스트 달성률")
+            gr.Plot(plot_story_completion())
+            gr.Plot(plot_gift_distribution())
 
         with gr.Tab("유저 검색"):
             gr.Markdown("## 유저 정보 검색")
@@ -438,24 +533,5 @@ if __name__ == "__main__":
                 "기본 정보", "캐릭터별 친밀도", "카드 목록", "카드 등급 비율", "캐릭터별 카드 분류", "최근 획득 카드", "주간 대화 수", "주간 카드 획득", "스토리 진행 현황", "로그인 정보", "선물 정보", "키워드 정보", "닉네임 정보", "에피소드 정보"
             ]]
             btn.click(user_dashboard, inputs=user_id, outputs=outs)
-
-        with gr.Tab("전체 통계"):
-            gr.Markdown("## 전체 통계 요약")
-            gr.Dataframe(get_user_info(), label="캐릭터별 친밀도/메시지수")
-            gr.Dataframe(get_daily_affinity_gain(), label="일일 호감도 증가량")
-            gr.Dataframe(get_login_streak_ranking(), label="연속 로그인 랭킹")
-            gr.Dataframe(get_message_trend(), label="전체 메시지/대화량 추이")
-
-        with gr.Tab("퀘스트/랭킹/진행률"):
-            gr.Markdown("## 퀘스트/랭킹/진행률")
-            gr.Dataframe(get_quest_completion_rate('daily_conversation'), label="일일 대화 퀘스트 달성률")
-            gr.Dataframe(get_quest_completion_rate('daily_affinity_gain'), label="일일 호감도 퀘스트 달성률")
-            gr.Dataframe(get_quest_completion_rate('weekly_login'), label="주간 로그인 퀘스트 달성률")
-            gr.Dataframe(get_quest_completion_rate('weekly_share'), label="주간 카드 공유 퀘스트 달성률")
-
-        with gr.Tab("카드/스토리/에피소드"):
-            gr.Markdown("## 카드/스토리/에피소드 현황")
-            gr.Dataframe(get_user_cards(), label="전체 카드 보유 현황")
-            gr.Dataframe(get_all_story_progress(), label="전체 스토리 진행 현황")
 
     demo.launch(share=True)
