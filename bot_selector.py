@@ -2208,6 +2208,13 @@ class BotSelector(commands.Bot):
         story_quests_str = self.format_story_quests(quest_status['story'])
         embed.add_field(name="📖 Story Quests", value=story_quests_str, inline=False)
 
+        # 하단에 Terms of Service, Privacy Policy 하이퍼링크 추가
+        embed.add_field(
+            name="\u200b",  # 빈 이름(공백) 필드로 하단에 추가
+            value="[Terms of Service](https://spotzero.tartagames.com/privacy/terms)  |  [Privacy Policy](https://spotzero.tartagames.com/privacy)",
+            inline=False
+        )
+
         return embed
 
     async def get_quest_status(self, user_id: int) -> dict:
@@ -2240,17 +2247,15 @@ class BotSelector(commands.Bot):
         quests = []
 
         # 1. 대화 20회 퀘스트
-        # affinity 테이블의 daily_message_count 사용
         total_daily_messages = 0
         for char in ['Kagari', 'Eros', 'Elysia']:
             affinity_info = self.db.get_affinity(user_id, char)
             if affinity_info:
                 total_daily_messages += affinity_info.get('daily_message_count', 0)
         quest_id = 'daily_conversation'
-        claimed = self.db.is_quest_claimed(user_id, quest_id)
+        claimed = self.db.is_quest_claimed(user_id, quest_id)  # quest_claims 테이블 기준으로만 판단
         reward_name = None
         if claimed:
-            # 이미 수령한 경우, 최근 받은 커먼 선물명 조회
             user_gifts = self.db.get_user_gifts(user_id)
             reward_name = user_gifts[0][0] if user_gifts else None
         quests.append({
@@ -2267,7 +2272,7 @@ class BotSelector(commands.Bot):
         # 2. 호감도 +5 퀘스트
         affinity_gain = self.db.get_today_affinity_gain(user_id)
         quest_id = 'daily_affinity_gain'
-        claimed = self.db.is_quest_claimed(user_id, quest_id)
+        claimed = self.db.is_quest_claimed(user_id, quest_id)  # quest_claims 테이블 기준으로만 판단
         reward_name = None
         if claimed:
             user_gifts = self.db.get_user_gifts(user_id)
