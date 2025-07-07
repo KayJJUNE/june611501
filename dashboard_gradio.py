@@ -8,9 +8,9 @@ DB_PATH = "chatbot.db"
 def get_user_cards():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("""
-        SELECT user_id, character_name, card_id, obtained_at
+        SELECT user_id, character_name, card_id, acquired_at
         FROM user_cards
-        ORDER BY obtained_at DESC
+        ORDER BY acquired_at DESC
     """, conn)
     conn.close()
     return df
@@ -18,13 +18,8 @@ def get_user_cards():
 def get_user_info():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("""
-        SELECT a.user_id, a.character_name, a.affinity_score, c.message_count
+        SELECT a.user_id, a.character_name, a.emotion_score, a.daily_message_count
         FROM affinity a
-        LEFT JOIN (
-            SELECT user_id, character_name, SUM(message_count) as message_count
-            FROM conversation_count
-            GROUP BY user_id, character_name
-        ) c ON a.user_id = c.user_id AND a.character_name = c.character_name
     """, conn)
     conn.close()
     return df
@@ -32,11 +27,6 @@ def get_user_info():
 def get_user_summary(user_id):
     conn = sqlite3.connect(DB_PATH)
     # 유저 기본 정보
-    total_msgs = pd.read_sql_query("""
-        SELECT COUNT(*) as total_messages
-        FROM conversations
-        WHERE user_id = ? AND message_role = 'user'
-    """, conn, params=(user_id,))
     user_info = pd.read_sql_query(f"""
         SELECT
             '{user_id}' as user_id,
@@ -47,16 +37,16 @@ def get_user_summary(user_id):
     """, conn, params=(user_id,))
     # 친밀도 등급
     affinity = pd.read_sql_query("""
-        SELECT character_name, affinity_score
+        SELECT character_name, emotion_score, daily_message_count
         FROM affinity
         WHERE user_id = ?
     """, conn, params=(user_id,))
     # 카드 정보
     cards = pd.read_sql_query("""
-        SELECT card_id, character_name, obtained_at
+        SELECT card_id, character_name, acquired_at
         FROM user_cards
         WHERE user_id = ?
-        ORDER BY obtained_at DESC
+        ORDER BY acquired_at DESC
     """, conn, params=(user_id,))
     # 카드 등급 비율
     card_tiers = pd.read_sql_query("""
@@ -86,10 +76,41 @@ def get_user_summary(user_id):
     week_cards = pd.read_sql_query("""
         SELECT COUNT(*) as week_cards
         FROM user_cards
-        WHERE user_id = ? AND obtained_at >= ?
+        WHERE user_id = ? AND acquired_at >= ?
     """, conn, params=(user_id, week_ago))
     # 스토리 진행 현황
     story_progress = get_user_story_progress(user_id)
+    # 로그인 정보
+    login_info = pd.read_sql_query("""
+        SELECT current_streak, last_login_date
+        FROM user_login_streaks
+        WHERE user_id = ?
+    """, conn, params=(user_id,))
+    # 선물 정보
+    gifts = pd.read_sql_query("""
+        SELECT gift_id, quantity
+        FROM user_gifts
+        WHERE user_id = ?
+    """, conn, params=(user_id,))
+    # 키워드 정보
+    keywords = pd.read_sql_query("""
+        SELECT keyword, context
+        FROM user_keywords
+        WHERE user_id = ?
+    """, conn, params=(user_id,))
+    # 닉네임 정보
+    nicknames = pd.read_sql_query("""
+        SELECT character_name, nickname
+        FROM user_nicknames
+        WHERE user_id = ?
+    """, conn, params=(user_id,))
+    # 에피소드 정보
+    episodes = pd.read_sql_query("""
+        SELECT character, summary, timestamp
+        FROM episodes
+        WHERE user_id = ?
+        ORDER BY timestamp DESC LIMIT 10
+    """, conn, params=(user_id,))
     conn.close()
     # 결과 딕셔너리로 반환
     return {
@@ -101,7 +122,12 @@ def get_user_summary(user_id):
         "최근 획득 카드": recent_card,
         "주간 대화 수": week_msgs,
         "주간 카드 획득": week_cards,
-        "스토리 진행 현황": story_progress
+        "스토리 진행 현황": story_progress,
+        "로그인 정보": login_info,
+        "선물 정보": gifts,
+        "키워드 정보": keywords,
+        "닉네임 정보": nicknames,
+        "에피소드 정보": episodes
     }
 
 def user_dashboard(user_id):
@@ -115,8 +141,110 @@ def user_dashboard(user_id):
         info["최근 획득 카드"],
         info["주간 대화 수"],
         info["주간 카드 획득"],
-        info["스토리 진행 현황"]
+        info["스토리 진행 현황"],
+        info["로그인 정보"],
+        info["선물 정보"],
+        info["키워드 정보"],
+        info["닉네임 정보"],
+        info["에피소드 정보"]
     )
+
+def get_daily_affinity_gain(character_name=None):
+    conn = sqlite3.connect(DB_PATH)
+    today = datetime.now().strftime('%Y-%m-%d')
+    if character_name:
+        df = pd.read_sql_query("""
+            SELECT user_id, SUM(score) as today_gain
+            FROM affinity_log
+            WHERE character_name = ? AND DATE(timestamp) = ?
+            GROUP BY user_id
+            ORDER BY today_gain DESC
+        """, conn, params=(character_name, today))
+    else:
+        df = pd.read_sql_query("""
+            SELECT user_id, character_name, SUM(score) as today_gain
+            FROM affinity_log
+            WHERE DATE(timestamp) = ?
+            GROUP BY user_id, character_name
+            ORDER BY today_gain DESC
+        """, conn, params=(today,))
+    conn.close()
+    return df
+
+def get_quest_completion_rate(quest_type):
+    conn = sqlite3.connect(DB_PATH)
+    total_users = pd.read_sql_query("SELECT COUNT(DISTINCT user_id) as total FROM affinity", conn)["total"][0]
+    completed = pd.read_sql_query("""
+        SELECT COUNT(DISTINCT user_id) as completed
+        FROM quest_claims
+        WHERE quest_id = ? AND DATE(claimed_at) = DATE('now')
+    """, conn, params=(quest_type,))["completed"][0]
+    conn.close()
+    percent = (completed / total_users * 100) if total_users else 0
+    return pd.DataFrame({"달성 유저 수": [completed], "전체 유저 수": [total_users], "달성률(%)": [round(percent,2)]})
+
+def get_user_gifts(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("""
+        SELECT gift_id, quantity
+        FROM user_gifts
+        WHERE user_id = ?
+    """, conn, params=(user_id,))
+    conn.close()
+    return df
+
+def get_login_streak_ranking():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("""
+        SELECT user_id, current_streak
+        FROM user_login_streaks
+        ORDER BY current_streak DESC
+    """, conn)
+    conn.close()
+    return df
+
+def get_message_trend():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("""
+        SELECT DATE(timestamp) as date, COUNT(*) as messages
+        FROM conversations
+        WHERE message_role = 'user'
+        GROUP BY DATE(timestamp)
+        ORDER BY date
+    """, conn)
+    conn.close()
+    return df
+
+def get_user_keywords(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("""
+        SELECT character_name, keyword, context
+        FROM user_keywords
+        WHERE user_id = ?
+    """, conn, params=(user_id,))
+    conn.close()
+    return df
+
+def get_user_nicknames(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("""
+        SELECT character_name, nickname
+        FROM user_nicknames
+        WHERE user_id = ?
+    """, conn, params=(user_id,))
+    conn.close()
+    return df
+
+def get_user_episodes(user_id):
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("""
+        SELECT character, summary, timestamp
+        FROM episodes
+        WHERE user_id = ?
+        ORDER BY timestamp DESC LIMIT 10
+    """, conn, params=(user_id,))
+    conn.close()
+    return df
 
 def get_dashboard_stats():
     conn = sqlite3.connect(DB_PATH)
@@ -126,7 +254,7 @@ def get_dashboard_stats():
     )["total_user_messages"][0]
     # 2. 챗봇 총 친밀도 점수
     total_affinity = pd.read_sql_query(
-        "SELECT SUM(affinity_score) as total_affinity FROM affinity;", conn
+        "SELECT SUM(emotion_score) as total_affinity FROM affinity;", conn
     )["total_affinity"][0]
     # 3. OpenAI 토큰 소비량
     try:
@@ -168,11 +296,11 @@ def show_dashboard_stats():
 def get_full_character_ranking(character_name):
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query(f'''
-        SELECT a.user_id, a.affinity_score, COALESCE(cc.message_count, 0) as message_count
+        SELECT a.user_id, a.emotion_score, COALESCE(cc.daily_message_count, 0) as daily_message_count
         FROM affinity a
         LEFT JOIN conversation_count cc ON a.user_id = cc.user_id AND a.character_name = cc.character_name
         WHERE a.character_name = ?
-        ORDER BY a.affinity_score DESC, message_count DESC
+        ORDER BY a.emotion_score DESC, daily_message_count DESC
     ''', conn, params=(character_name,))
     conn.close()
     return df
@@ -182,7 +310,7 @@ def get_full_total_ranking():
     df = pd.read_sql_query('''
         SELECT a.user_id, COALESCE(a.total_affinity, 0) as total_affinity, COALESCE(m.total_messages, 0) as total_messages
         FROM (
-            SELECT user_id, SUM(affinity_score) as total_affinity
+            SELECT user_id, SUM(emotion_score) as total_affinity
             FROM affinity
             GROUP BY user_id
         ) a
@@ -201,7 +329,7 @@ def get_full_total_ranking():
             GROUP BY user_id
         ) m
         LEFT JOIN (
-            SELECT user_id, SUM(affinity_score) as total_affinity
+            SELECT user_id, SUM(emotion_score) as total_affinity
             FROM affinity
             GROUP BY user_id
         ) a ON m.user_id = a.user_id
@@ -231,9 +359,10 @@ def get_level_statistics():
             SELECT 
                 user_id,
                 CASE 
-                    WHEN SUM(affinity_score) < 100 THEN 'Rookie'
-                    WHEN SUM(affinity_score) < 300 THEN 'Iron'
-                    WHEN SUM(affinity_score) < 600 THEN 'Silver'
+                    WHEN SUM(emotion_score) < 10 THEN 'Rookie'
+                    WHEN SUM(emotion_score) < 30 THEN 'Iron'
+                    WHEN SUM(emotion_score) < 50 THEN 'Bronze'
+                    WHEN SUM(emotion_score) < 100 THEN 'Silver'
                     ELSE 'Gold'
                 END as level
             FROM affinity
@@ -249,8 +378,9 @@ def get_level_statistics():
             CASE level
                 WHEN 'Rookie' THEN 1
                 WHEN 'Iron' THEN 2
-                WHEN 'Silver' THEN 3
-                WHEN 'Gold' THEN 4
+                WHEN 'Bronze' THEN 3
+                WHEN 'Silver' THEN 4
+                WHEN 'Gold' THEN 5
             END
     """, conn, params=(total_users,))
     conn.close()
@@ -299,40 +429,28 @@ if __name__ == "__main__":
             gr.Markdown("## 유저 정보 검색")
             user_id = gr.Textbox(label="디스코드 유저 ID 입력", value="")
             btn = gr.Button("유저 정보 조회")
-            out1 = gr.Dataframe(label="기본 정보")
-            out2 = gr.Dataframe(label="캐릭터별 친밀도")
-            out3 = gr.Dataframe(label="카드 목록")
-            out4 = gr.Dataframe(label="카드 등급 비율")
-            out5 = gr.Dataframe(label="캐릭터별 카드 분류")
-            out6 = gr.Dataframe(label="최근 획득 카드")
-            out7 = gr.Dataframe(label="주간 대화 수")
-            out8 = gr.Dataframe(label="주간 카드 획득")
-            out9 = gr.Dataframe(label="스토리 진행 현황")
-            btn.click(user_dashboard, inputs=user_id, outputs=[out1, out2, out3, out4, out5, out6, out7, out8, out9])
+            outs = [gr.Dataframe(label=label) for label in [
+                "기본 정보", "캐릭터별 친밀도", "카드 목록", "카드 등급 비율", "캐릭터별 카드 분류", "최근 획득 카드", "주간 대화 수", "주간 카드 획득", "스토리 진행 현황", "로그인 정보", "선물 정보", "키워드 정보", "닉네임 정보", "에피소드 정보"
+            ]]
+            btn.click(user_dashboard, inputs=user_id, outputs=outs)
 
         with gr.Tab("전체 통계"):
             gr.Markdown("## 전체 통계 요약")
-            stats_btn = gr.Button("전체 통계 새로고침")
-            stats_out1 = gr.Textbox(label="총 유저 메시지 수")
-            stats_out2 = gr.Textbox(label="총 친밀도 점수")
-            stats_out3 = gr.Textbox(label="OpenAI 토큰 소비량")
-            stats_out4 = gr.Dataframe(label="카드 등급별 출하량 및 백분율")
-            stats_out5 = gr.Dataframe(label="레벨별 현황")
-            stats_btn.click(show_dashboard_stats, inputs=None, outputs=[stats_out1, stats_out2, stats_out3, stats_out4, stats_out5])
+            gr.Dataframe(get_user_info(), label="캐릭터별 친밀도/메시지수")
+            gr.Dataframe(get_daily_affinity_gain(), label="일일 호감도 증가량")
+            gr.Dataframe(get_login_streak_ranking(), label="연속 로그인 랭킹")
+            gr.Dataframe(get_message_trend(), label="전체 메시지/대화량 추이")
 
-        with gr.Tab("전체 랭킹"):
-            gr.Markdown("## 전체 유저 랭킹")
-            ranking_btn = gr.Button("전체 랭킹 새로고침")
-            ranking_out1 = gr.Dataframe(label="Kagari 랭킹 (전체 유저)")
-            ranking_out2 = gr.Dataframe(label="Eros 랭킹 (전체 유저)")
-            ranking_out3 = gr.Dataframe(label="Elysia 랭킹 (전체 유저)")
-            ranking_out4 = gr.Dataframe(label="Total 랭킹 (전체 유저)")
-            ranking_btn.click(show_all_rankings, inputs=None, outputs=[ranking_out1, ranking_out2, ranking_out3, ranking_out4])
+        with gr.Tab("퀘스트/랭킹/진행률"):
+            gr.Markdown("## 퀘스트/랭킹/진행률")
+            gr.Dataframe(get_quest_completion_rate('daily_conversation'), label="일일 대화 퀘스트 달성률")
+            gr.Dataframe(get_quest_completion_rate('daily_affinity_gain'), label="일일 호감도 퀘스트 달성률")
+            gr.Dataframe(get_quest_completion_rate('weekly_login'), label="주간 로그인 퀘스트 달성률")
+            gr.Dataframe(get_quest_completion_rate('weekly_share'), label="주간 카드 공유 퀘스트 달성률")
 
-        with gr.Tab("스토리 진행 현황"):
-            gr.Markdown("## 전체 스토리 진행 현황")
-            story_btn = gr.Button("스토리 진행 현황 새로고침")
-            story_out = gr.Dataframe(label="캐릭터별 챕터 진행 현황")
-            story_btn.click(get_all_story_progress, inputs=None, outputs=[story_out])
+        with gr.Tab("카드/스토리/에피소드"):
+            gr.Markdown("## 카드/스토리/에피소드 현황")
+            gr.Dataframe(get_user_cards(), label="전체 카드 보유 현황")
+            gr.Dataframe(get_all_story_progress(), label="전체 스토리 진행 현황")
 
     demo.launch(share=True)
