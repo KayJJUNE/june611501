@@ -314,7 +314,12 @@ def get_full_character_ranking(character_name):
     df = pd.read_sql_query(f'''
         SELECT a.user_id, a.emotion_score, COALESCE(cc.message_count, 0) as message_count
         FROM affinity a
-        LEFT JOIN conversation_count cc ON a.user_id = cc.user_id AND a.character_name = cc.character_name
+        LEFT JOIN (
+            SELECT user_id, character_name, COUNT(*) as message_count
+            FROM conversations
+            WHERE message_role = 'user'
+            GROUP BY user_id, character_name
+        ) cc ON a.user_id = cc.user_id AND a.character_name = cc.character_name
         WHERE a.character_name = %s
         ORDER BY a.emotion_score DESC, message_count DESC
     ''', conn, params=(character_name,))
@@ -458,8 +463,16 @@ def get_basic_stats():
     conn.close()
     return total_turns, total_cards, card_tiers, total_users, rank_dist, total_gifts
 
-def plot_card_tiers(card_tiers):
-    fig = px.pie(card_tiers, names='tier', values='count', title='카드 티어별 분포')
+def plot_card_distribution_by_character():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT character_name, COUNT(*) as count
+        FROM user_cards
+        GROUP BY character_name
+        ORDER BY character_name
+    ''', conn)
+    conn.close()
+    fig = px.pie(df, names='character_name', values='count', title='캐릭터별 카드 획득 분포')
     return fig
 
 def plot_rank_dist(rank_dist):
@@ -603,6 +616,20 @@ def get_active_user_trend(days=30):
     conn.close()
     return df
 
+def get_active_user_trend_days(days=30):
+    conn = get_conn()
+    df = pd.read_sql_query(f'''
+        SELECT DATE(timestamp) as date, COUNT(DISTINCT user_id) as active_users
+        FROM conversations
+        WHERE message_role = 'user' AND timestamp >= NOW() - INTERVAL '{days} days'
+        GROUP BY date
+        ORDER BY date
+    ''', conn)
+    conn.close()
+    df = df.reset_index(drop=True)
+    df['day'] = range(1, len(df)+1)
+    return df
+
 def get_keyword_distribution():
     conn = get_conn()
     df = pd.read_sql_query('''
@@ -697,6 +724,51 @@ def get_retention_trend():
     conn.close()
     return pd.DataFrame(retention)
 
+def get_story_chapter_completion():
+    conn = get_conn()
+    # 전체 스토리 플레이 유저 수
+    total_users = pd.read_sql_query('''
+        SELECT COUNT(DISTINCT user_id) as total_users
+        FROM story_progress
+        WHERE completed_at IS NOT NULL
+    ''', conn)["total_users"][0]
+    # 캐릭터별 챕터별 완료 유저수
+    df = pd.read_sql_query('''
+        SELECT character_name, chapter_number, COUNT(DISTINCT user_id) as completed_users
+        FROM story_progress
+        WHERE completed_at IS NOT NULL
+        GROUP BY character_name, chapter_number
+        ORDER BY character_name, chapter_number
+    ''', conn)
+    conn.close()
+    # 퍼센트 컬럼 추가
+    df["percent"] = (df["completed_users"] / total_users * 100).round(2).astype(str) + "%"
+    return total_users, df
+
+def get_roleplay_user_count():
+    conn = get_conn()
+    # 롤플레이 모드 플레이한 유저 총수 (story_mode_users 테이블이 있다고 가정)
+    try:
+        df = pd.read_sql_query('''
+            SELECT COUNT(DISTINCT user_id) as roleplay_users
+            FROM roleplay_sessions
+        ''', conn)
+        count = int(df["roleplay_users"][0])
+    except Exception:
+        count = 0
+    conn.close()
+    return count
+
+def get_spam_messages():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT user_id, character_name, message, reason, timestamp
+        FROM spam_messages
+        ORDER BY timestamp DESC
+    ''', conn)
+    conn.close()
+    return df
+
 if __name__ == "__main__":
     with gr.Blocks(title="디스코드 챗봇 통합 대시보드") as demo:
         gr.Markdown("# 디스코드 챗봇 통합 대시보드")
@@ -708,7 +780,7 @@ if __name__ == "__main__":
             gr.Markdown(f"총 카드 수: {total_cards}")
             gr.Markdown(f"총 유저 수: {total_users}")
             gr.Markdown(f"총 선물 지급 수: {total_gifts}")
-            gr.Plot(plot_card_tiers(card_tiers))
+            gr.Plot(plot_card_distribution_by_character())
             gr.Plot(plot_rank_dist(rank_dist))
             gr.Plot(plot_gift_distribution())
             # --- 추가된 표/그래프 ---
@@ -742,13 +814,18 @@ if __name__ == "__main__":
             gr.Dataframe(weekly_share, label="주간 카드 공유 퀘스트 달성률")
             gr.Plot(plot_story_completion())
             gr.Plot(plot_gift_distribution())
+            # --- 추가: 스토리 챕터별 완성 유저수 및 롤플레잉 유저수 ---
+            total_story_users, story_df = get_story_chapter_completion()
+            gr.Markdown(f"스토리 플레이 유저(토탈): {total_story_users}")
+            gr.Dataframe(story_df, label="캐릭터별 챕터별 완료 유저수 및 퍼센트")
+            gr.Markdown(f"롤플레잉 모드 플레이 유저(토탈): {get_roleplay_user_count()}")
 
         with gr.Tab("운영 데이터"):
             gr.Markdown("## 운영 데이터 (운영/지표)")
             gr.Markdown(f"메시지를 1번이라도 보낸 유저수 총합: {get_total_message_user_count()}")
             gr.Markdown(f"1일 리텐션: {get_retention(1)}%  |  7일 리텐션: {get_retention(7)}%  |  30일 리텐션: {get_retention(30)}%")
             gr.Markdown(f"최근 1일 엑티브 유저: {get_active_user_count(1)}  |  7일: {get_active_user_count(7)}  |  30일: {get_active_user_count(30)}")
-            gr.Plot(lambda: px.line(get_active_user_trend(30), x='date', y='active_users', title='최근 30일 엑티브 유저 추이'))
+            gr.Plot(lambda: px.line(get_active_user_trend_days(30), x='day', y='active_users', title='최근 30일(일수 기준) 엑티브 유저 추이'))
             # --- 추가: 월별 활성 유저, 신규 유저, 리텐션 ---
             gr.Dataframe(get_monthly_active_users(), label="월별 활성 유저")
             gr.Plot(lambda: px.bar(get_monthly_active_users(), x='month', y='active_users', title='월별 활성 유저'))
@@ -770,5 +847,9 @@ if __name__ == "__main__":
             btn.click(user_dashboard, inputs=user_id, outputs=outs)
             btn.click(get_user_card_total_by_character, inputs=user_id, outputs=card_total_out)
             btn.click(get_user_card_tier_by_character, inputs=user_id, outputs=card_tier_out)
+
+        with gr.Tab("스팸 메시지 관리"):
+            gr.Markdown("## Spam Message Management")
+            gr.Dataframe(get_spam_messages(), label="Spam Messages (user_id, character_name, message, reason, timestamp)")
 
     demo.launch(share=True)

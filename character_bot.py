@@ -38,6 +38,8 @@ import logging
 from story_mode import process_story_message, start_story_stage
 import openai
 from openai_manager import analyze_emotion_with_gpt_and_pattern
+import time
+from difflib import SequenceMatcher
 
 # 절대 경로 설정
 current_dir = Path(__file__).resolve().parent
@@ -1366,3 +1368,25 @@ class NicknameInputModal(discord.ui.Modal, title="Enter Nickname"):
             print(traceback.format_exc())
             if not interaction.response.is_done():
                 await interaction.response.send_message("서버 오류가 발생했습니다.", ephemeral=True)
+
+def is_similar(a, b):
+    return SequenceMatcher(None, a, b).ratio() > 0.85
+
+def is_spam(user_id, message, now, user_message_buffers):
+    # 1. Short interval repeated/similar message
+    recent = [msg for msg, ts in user_message_buffers.get(user_id, []) if now - ts < 5]
+    if any(is_similar(message, msg) for msg in recent):
+        return True, "Spam detected: Repeated or similar message in a short time interval."
+    # 2. Same sentence/word repeated 5+ times
+    same_count = sum(1 for msg, _ in user_message_buffers.get(user_id, [])[-10:] if message == msg)
+    if same_count >= 5:
+        return True, "Spam detected: Same message repeated 5 or more times."
+    # 3. Short message (1~5 chars)
+    if 1 <= len(message.strip()) <= 5:
+        return True, "Spam detected: Message too short (1-5 characters)."
+    # 4. Emoji/special char repeated 5+ times
+    emoji_pattern = re.compile("[\U00010000-\U0010ffff]", flags=re.UNICODE)
+    emoji_msgs = [msg for msg, _ in user_message_buffers.get(user_id, [])[-10:] if emoji_pattern.fullmatch(msg.strip())]
+    if len(emoji_msgs) >= 5:
+        return True, "Spam detected: Emoji or special character repeated 5 or more times."
+    return False, ""
