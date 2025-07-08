@@ -121,6 +121,7 @@ class DatabaseManager:
 
     # 메시지 관련 함수
     def add_message(self, channel_id: int, user_id: int, character_name: str, role: str, content: str, language: str = None):
+        print(f"[DEBUG] add_message called: channel_id={channel_id}, user_id={user_id}, character_name={character_name}, role={role}, content={content}, language={language}")
         conn = None
         try:
             conn = self.get_connection()
@@ -130,6 +131,7 @@ class DatabaseManager:
                     (channel_id, user_id, character_name, role, content, language)
                 )
             conn.commit()
+            print(f"[DEBUG] add_message DB INSERT SUCCESS for user_id={user_id}, character_name={character_name}")
         except Exception as e:
             print(f"Error adding message to DB: {e}")
             if conn: conn.rollback()
