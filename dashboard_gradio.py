@@ -493,6 +493,159 @@ def plot_story_completion():
     fig = px.bar(df, x='character_name', y='completed_users', color='chapter_number', barmode='group', title='스토리 챕터별 완성 유저수')
     return fig
 
+def get_card_total_by_character():
+    conn = get_conn()
+    df = pd.read_sql_query("""
+        SELECT character_name, COUNT(*) as total_cards
+        FROM user_cards
+        GROUP BY character_name
+        ORDER BY character_name
+    """, conn)
+    conn.close()
+    return df
+
+def get_card_tier_by_character():
+    conn = get_conn()
+    df = pd.read_sql_query("""
+        SELECT character_name, UPPER(SUBSTRING(card_id, 1, 1)) as tier, COUNT(*) as count
+        FROM user_cards
+        GROUP BY character_name, tier
+        ORDER BY character_name, tier
+    """, conn)
+    conn.close()
+    return df
+
+def get_message_trend_all():
+    conn = get_conn()
+    df = pd.read_sql_query("""
+        SELECT DATE(timestamp) as date, COUNT(*) as total_messages
+        FROM conversations
+        WHERE message_role = 'user'
+        GROUP BY date
+        ORDER BY date
+    """, conn)
+    conn.close()
+    return df
+
+def get_user_card_total_by_character(user_id):
+    conn = get_conn()
+    df = pd.read_sql_query("""
+        SELECT character_name, COUNT(*) as total_cards
+        FROM user_cards
+        WHERE user_id = %s
+        GROUP BY character_name
+        ORDER BY character_name
+    """, conn, params=(user_id,))
+    conn.close()
+    return df
+
+def get_user_card_tier_by_character(user_id):
+    conn = get_conn()
+    df = pd.read_sql_query("""
+        SELECT character_name, UPPER(SUBSTRING(card_id, 1, 1)) as tier, COUNT(*) as count
+        FROM user_cards
+        WHERE user_id = %s
+        GROUP BY character_name, tier
+        ORDER BY character_name, tier
+    """, conn, params=(user_id,))
+    conn.close()
+    return df
+
+def get_active_user_count(days=1):
+    conn = get_conn()
+    df = pd.read_sql_query(f'''
+        SELECT COUNT(DISTINCT user_id) as active_users
+        FROM conversations
+        WHERE message_role = 'user' AND timestamp >= NOW() - INTERVAL '{days} days'
+    ''', conn)
+    conn.close()
+    return int(df['active_users'][0])
+
+def get_total_message_user_count():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT COUNT(DISTINCT user_id) as total_users
+        FROM conversations
+        WHERE message_role = 'user'
+    ''', conn)
+    conn.close()
+    return int(df['total_users'][0])
+
+def get_retention(days=1):
+    # 1일/7일/30일 리텐션: N일 전 메시지 보낸 유저 중 오늘도 메시지 보낸 유저 비율
+    conn = get_conn()
+    df = pd.read_sql_query(f'''
+        WITH prev AS (
+            SELECT DISTINCT user_id
+            FROM conversations
+            WHERE message_role = 'user' AND DATE(timestamp) = CURRENT_DATE - INTERVAL '{days} days'
+        ), today AS (
+            SELECT DISTINCT user_id
+            FROM conversations
+            WHERE message_role = 'user' AND DATE(timestamp) = CURRENT_DATE
+        )
+        SELECT COUNT(*) as retained, (SELECT COUNT(*) FROM prev) as base
+        FROM today WHERE user_id IN (SELECT user_id FROM prev)
+    ''', conn)
+    conn.close()
+    base = df['base'][0] if df['base'][0] else 1
+    return round(df['retained'][0] / base * 100, 2) if base else 0.0
+
+def get_active_user_trend(days=30):
+    conn = get_conn()
+    df = pd.read_sql_query(f'''
+        SELECT DATE(timestamp) as date, COUNT(DISTINCT user_id) as active_users
+        FROM conversations
+        WHERE message_role = 'user' AND timestamp >= NOW() - INTERVAL '{days} days'
+        GROUP BY date
+        ORDER BY date
+    ''', conn)
+    conn.close()
+    return df
+
+def get_keyword_distribution():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT keyword_type, keyword_value, COUNT(*) as total_count
+        FROM user_keywords
+        GROUP BY keyword_type, keyword_value
+        ORDER BY total_count DESC
+    ''', conn)
+    conn.close()
+    return df
+
+def get_keyword_user_count():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT keyword_type, keyword_value, COUNT(DISTINCT user_id) as user_count
+        FROM user_keywords
+        GROUP BY keyword_type, keyword_value
+        ORDER BY user_count DESC
+    ''', conn)
+    conn.close()
+    return df
+
+def get_user_summaries_table():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT user_id, character_name, summary
+        FROM memory_summaries
+        ORDER BY user_id, character_name
+    ''', conn)
+    conn.close()
+    return df
+
+def get_user_summary_stats():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT user_id, COUNT(*) as summary_count
+        FROM memory_summaries
+        GROUP BY user_id
+        ORDER BY summary_count DESC
+    ''', conn)
+    conn.close()
+    return df
+
 if __name__ == "__main__":
     with gr.Blocks(title="디스코드 챗봇 통합 대시보드") as demo:
         gr.Markdown("# 디스코드 챗봇 통합 대시보드")
@@ -500,13 +653,17 @@ if __name__ == "__main__":
         with gr.Tab("기본 데이터/현황"):
             gr.Markdown("## 기본 데이터 및 현황")
             total_turns, total_cards, card_tiers, total_users, rank_dist, total_gifts = get_basic_stats()
-            gr.Markdown(f"총 턴 수: {total_turns}")
+            gr.Markdown(f"총 턴 수(전체 대화 수): {total_turns}")
             gr.Markdown(f"총 카드 수: {total_cards}")
             gr.Markdown(f"총 유저 수: {total_users}")
             gr.Markdown(f"총 선물 지급 수: {total_gifts}")
             gr.Plot(plot_card_tiers(card_tiers))
             gr.Plot(plot_rank_dist(rank_dist))
             gr.Plot(plot_gift_distribution())
+            # --- 추가된 표/그래프 ---
+            gr.Dataframe(get_card_total_by_character(), label="캐릭터별 총 카드 획득 현황")
+            gr.Dataframe(get_card_tier_by_character(), label="캐릭터별 등급별 카드 획득 현황 (C/B/A/S)")
+            gr.Plot(lambda: px.line(get_message_trend_all(), x='date', y='total_messages', title='전체 메시지/대화량 추이'))
 
         with gr.Tab("랭킹"):
             gr.Markdown("## 캐릭터별 호감도/대화수/로그인 랭킹")
@@ -519,11 +676,11 @@ if __name__ == "__main__":
             gr.Dataframe(get_login_streak_ranking(), label="연속 로그인 랭킹")
 
         with gr.Tab("AI/키워드/서머리"):
-            gr.Markdown("## 키워드 분포 및 대화 서머리")
-            gr.Plot(plot_keyword_distribution())
-            # 예시: user_id 1번 유저의 서머리만 표시
-            # 실제로 여러 유저의 서머리를 보고 싶으면 반복문 등으로 DataFrame을 합쳐야 함
-            gr.Dataframe(get_user_summary(1), label="유저 대화 서머리 (user_id=1)")
+            gr.Markdown("## 키워드/AI/서머리 데이터")
+            gr.Dataframe(get_user_summary_stats(), label="유저 대화 서머리 수치")
+            gr.Dataframe(get_keyword_distribution(), label="키워드 분포도 (keyword_type, keyword_value)")
+            gr.Dataframe(get_keyword_user_count(), label="키워드별 대화 유저수")
+            gr.Dataframe(get_user_summaries_table(), label="유저별 대화 서머리 (user_id, character_name, summary)")
 
         with gr.Tab("퀘스트/스토리/선물"):
             gr.Markdown("## 퀘스트/스토리/선물 현황")
@@ -535,6 +692,13 @@ if __name__ == "__main__":
             gr.Plot(plot_story_completion())
             gr.Plot(plot_gift_distribution())
 
+        with gr.Tab("운영 데이터"):
+            gr.Markdown("## 운영 데이터 (운영/지표)")
+            gr.Markdown(f"메시지를 1번이라도 보낸 유저수 총합: {get_total_message_user_count()}")
+            gr.Markdown(f"1일 리텐션: {get_retention(1)}%  |  7일 리텐션: {get_retention(7)}%  |  30일 리텐션: {get_retention(30)}%")
+            gr.Markdown(f"최근 1일 엑티브 유저: {get_active_user_count(1)}  |  7일: {get_active_user_count(7)}  |  30일: {get_active_user_count(30)}")
+            gr.Plot(lambda: px.line(get_active_user_trend(30), x='date', y='active_users', title='최근 30일 엑티브 유저 추이'))
+
         with gr.Tab("유저 검색"):
             gr.Markdown("## 유저 정보 검색")
             user_id = gr.Textbox(label="디스코드 유저 ID 입력", value="")
@@ -542,6 +706,11 @@ if __name__ == "__main__":
             outs = [gr.Dataframe(label=label) for label in [
                 "기본 정보", "캐릭터별 친밀도", "카드 목록", "카드 등급 비율", "캐릭터별 카드 분류", "최근 획득 카드", "주간 대화 수", "주간 카드 획득", "스토리 진행 현황", "로그인 정보", "선물 정보", "키워드 정보", "닉네임 정보", "에피소드 정보"
             ]]
+            # 추가: 캐릭터별 카드 현황 표
+            card_total_out = gr.Dataframe(label="[유저] 캐릭터별 총 카드 획득 현황")
+            card_tier_out = gr.Dataframe(label="[유저] 캐릭터별 등급별 카드 획득 현황 (C/B/A/S)")
             btn.click(user_dashboard, inputs=user_id, outputs=outs)
+            btn.click(get_user_card_total_by_character, inputs=user_id, outputs=card_total_out)
+            btn.click(get_user_card_tier_by_character, inputs=user_id, outputs=card_tier_out)
 
     demo.launch(share=True)
