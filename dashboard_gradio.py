@@ -304,11 +304,11 @@ def show_dashboard_stats():
 def get_full_character_ranking(character_name):
     conn = get_conn()
     df = pd.read_sql_query(f'''
-        SELECT a.user_id, a.emotion_score, COALESCE(cc.daily_message_count, 0) as daily_message_count
+        SELECT a.user_id, a.emotion_score, COALESCE(cc.message_count, 0) as message_count
         FROM affinity a
         LEFT JOIN conversation_count cc ON a.user_id = cc.user_id AND a.character_name = cc.character_name
         WHERE a.character_name = %s
-        ORDER BY a.emotion_score DESC, daily_message_count DESC
+        ORDER BY a.emotion_score DESC, message_count DESC
     ''', conn, params=(character_name,))
     conn.close()
     return df

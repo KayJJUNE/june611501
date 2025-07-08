@@ -884,6 +884,13 @@ class BotSelector(commands.Bot):
                 banner_url = "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4c2404ce-0626-436d-2f4e-fdafc3ba5400/public"
                 embed.set_image(url=banner_url)
 
+                # 하단에 Terms of Service, Privacy Policy 하이퍼링크 추가
+                embed.add_field(
+                    name="\u200b",
+                    value="[Terms of Service](https://spotzero.tartagames.com/privacy/terms)  |  [Privacy Policy](https://spotzero.tartagames.com/privacy)",
+                    inline=False
+                )
+
                 view = discord.ui.View()
                 view.add_item(CharacterSelect(self))
 
