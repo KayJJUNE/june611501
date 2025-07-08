@@ -460,9 +460,9 @@ def plot_rank_dist(rank_dist):
 
 def plot_keyword_distribution():
     conn = get_conn()
-    df = pd.read_sql_query("SELECT keyword, COUNT(*) as count FROM user_keywords GROUP BY keyword ORDER BY count DESC", conn)
+    df = pd.read_sql_query("SELECT keyword_value, COUNT(*) as count FROM user_keywords GROUP BY keyword_value ORDER BY count DESC", conn)
     conn.close()
-    fig = px.bar(df, x='keyword', y='count', title='키워드 분포')
+    fig = px.bar(df, x='keyword_value', y='count', title='키워드 분포')
     return fig
 
 def plot_gift_distribution():
