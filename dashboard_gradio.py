@@ -191,6 +191,14 @@ def get_quest_completion_rate(quest_type):
     percent = (completed / total_users * 100) if total_users else 0
     return pd.DataFrame({"달성 유저 수": [completed], "전체 유저 수": [total_users], "달성률(%)": [round(percent,2)]})
 
+# --- 퀘스트 달성률 일괄 조회 함수 추가 ---
+def get_quest_completion_all():
+    daily_conv = get_quest_completion_rate("daily_conversation")
+    daily_aff = get_quest_completion_rate("daily_affinity_gain")
+    weekly_login = get_quest_completion_rate("weekly_login")
+    weekly_share = get_quest_completion_rate("weekly_share")
+    return daily_conv, daily_aff, weekly_login, weekly_share
+
 def get_user_gifts(user_id):
     conn = get_conn()
     df = pd.read_sql_query("""
