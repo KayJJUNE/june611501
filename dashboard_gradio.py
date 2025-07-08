@@ -646,6 +646,57 @@ def get_user_summary_stats():
     conn.close()
     return df
 
+def get_monthly_active_users():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT DATE_TRUNC('month', timestamp) AS month, COUNT(DISTINCT user_id) AS active_users
+        FROM conversations
+        WHERE message_role = 'user'
+        GROUP BY month
+        ORDER BY month
+    ''', conn)
+    conn.close()
+    return df
+
+def get_monthly_new_users():
+    conn = get_conn()
+    df = pd.read_sql_query('''
+        SELECT DATE_TRUNC('month', first_message) AS month, COUNT(*) AS new_users
+        FROM (
+            SELECT user_id, MIN(timestamp) AS first_message
+            FROM conversations
+            WHERE message_role = 'user'
+            GROUP BY user_id
+        ) t
+        GROUP BY month
+        ORDER BY month
+    ''', conn)
+    conn.close()
+    return df
+
+def get_retention_trend():
+    conn = get_conn()
+    # 1일, 7일, 30일 리텐션 계산
+    retention = []
+    for days in [1, 7, 30]:
+        df = pd.read_sql_query(f'''
+            WITH prev AS (
+                SELECT DISTINCT user_id
+                FROM conversations
+                WHERE message_role = 'user' AND DATE(timestamp) = CURRENT_DATE - INTERVAL '{days} day'
+            ), today AS (
+                SELECT DISTINCT user_id
+                FROM conversations
+                WHERE message_role = 'user' AND DATE(timestamp) = CURRENT_DATE
+            )
+            SELECT
+                (SELECT COUNT(*) FROM today WHERE user_id IN (SELECT user_id FROM prev))::float /
+                GREATEST((SELECT COUNT(*) FROM prev), 1) * 100 AS retention
+        ''', conn)
+        retention.append({'days': days, 'retention': float(df['retention'][0])})
+    conn.close()
+    return pd.DataFrame(retention)
+
 if __name__ == "__main__":
     with gr.Blocks(title="디스코드 챗봇 통합 대시보드") as demo:
         gr.Markdown("# 디스코드 챗봇 통합 대시보드")
@@ -698,6 +749,13 @@ if __name__ == "__main__":
             gr.Markdown(f"1일 리텐션: {get_retention(1)}%  |  7일 리텐션: {get_retention(7)}%  |  30일 리텐션: {get_retention(30)}%")
             gr.Markdown(f"최근 1일 엑티브 유저: {get_active_user_count(1)}  |  7일: {get_active_user_count(7)}  |  30일: {get_active_user_count(30)}")
             gr.Plot(lambda: px.line(get_active_user_trend(30), x='date', y='active_users', title='최근 30일 엑티브 유저 추이'))
+            # --- 추가: 월별 활성 유저, 신규 유저, 리텐션 ---
+            gr.Dataframe(get_monthly_active_users(), label="월별 활성 유저")
+            gr.Plot(lambda: px.bar(get_monthly_active_users(), x='month', y='active_users', title='월별 활성 유저'))
+            gr.Dataframe(get_monthly_new_users(), label="월별 신규 유저")
+            gr.Plot(lambda: px.bar(get_monthly_new_users(), x='month', y='new_users', title='월별 신규 유저'))
+            gr.Dataframe(get_retention_trend(), label="1/7/30일 리텐션(%)")
+            gr.Plot(lambda: px.bar(get_retention_trend(), x='days', y='retention', title='1/7/30일 리텐션(%)'))
 
         with gr.Tab("유저 검색"):
             gr.Markdown("## 유저 정보 검색")
