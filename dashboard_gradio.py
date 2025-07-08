@@ -102,7 +102,7 @@ def get_user_summary(user_id):
     """, conn, params=(user_id,))
     # 키워드 정보
     keywords = pd.read_sql_query("""
-        SELECT keyword, context
+        SELECT keyword_value, context
         FROM user_keywords
         WHERE user_id = %s
     """, conn, params=(user_id,))
@@ -226,7 +226,7 @@ def get_message_trend():
 def get_user_keywords(user_id):
     conn = get_conn()
     df = pd.read_sql_query("""
-        SELECT character_name, keyword, context
+        SELECT character_name, keyword_value, context
         FROM user_keywords
         WHERE user_id = %s
     """, conn, params=(user_id,))
@@ -513,7 +513,9 @@ if __name__ == "__main__":
         with gr.Tab("AI/키워드/서머리"):
             gr.Markdown("## 키워드 분포 및 대화 서머리")
             gr.Plot(plot_keyword_distribution())
-            gr.Dataframe(get_user_summaries(), label="유저 대화 서머리")
+            # 예시: user_id 1번 유저의 서머리만 표시
+            # 실제로 여러 유저의 서머리를 보고 싶으면 반복문 등으로 DataFrame을 합쳐야 함
+            gr.Dataframe(get_user_summary(1), label="유저 대화 서머리 (user_id=1)")
 
         with gr.Tab("퀘스트/스토리/선물"):
             gr.Markdown("## 퀘스트/스토리/선물 현황")
