@@ -469,6 +469,16 @@ class CharacterBot(commands.Bot):
         character = self.character_name
         now = datetime.utcnow()
 
+        # 유저 메시지 DB 저장 (conversations 테이블)
+        self.db.add_message(
+            message.channel.id,   # channel_id
+            user_id,              # user_id
+            character,            # character_name
+            "user",              # role
+            message.content,      # content
+            "en"                 # language (또는 감지된 언어)
+        )
+
         affinity_before = self.db.get_affinity(user_id, character)
         if not affinity_before:
             # 이전에 기록이 없는 신규 사용자일 경우 초기값 설정
