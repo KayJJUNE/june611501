@@ -507,7 +507,7 @@ def get_card_total_by_character():
 def get_card_tier_by_character():
     conn = get_conn()
     df = pd.read_sql_query("""
-        SELECT character_name, UPPER(SUBSTRING(card_id, 1, 1)) as tier, COUNT(*) as count
+        SELECT character_name, UPPER(SUBSTRING(card_id, LENGTH(character_name)+1, 1)) as tier, COUNT(*) as count
         FROM user_cards
         GROUP BY character_name, tier
         ORDER BY character_name, tier

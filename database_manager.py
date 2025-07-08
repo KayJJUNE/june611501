@@ -601,17 +601,19 @@ class DatabaseManager:
             self.return_connection(conn)
 
     def add_user_keyword(self, user_id: int, character_name: str, keyword: str, context: str):
+        print(f"[DEBUG] add_user_keyword called: user_id={user_id}, character_name={character_name}, keyword={keyword}, context={context}")
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO user_keywords (user_id, character_name, keyword, context) VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (user_id, character_name, keyword) DO UPDATE SET context = EXCLUDED.context
-                """, (user_id, character_name, keyword, context))
+                cursor.execute(
+                    "INSERT INTO user_keywords (user_id, character_name, keyword_type, keyword_value, context) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, character_name, 'default', keyword, context)
+                )
             conn.commit()
+            print(f"[DEBUG] add_user_keyword DB INSERT SUCCESS for user_id={user_id}, character_name={character_name}, keyword={keyword}")
         except Exception as e:
-            print(f"Error adding user keyword: {e}")
+            print(f"Error adding user keyword to DB: {e}")
             if conn: conn.rollback()
         finally:
             self.return_connection(conn)
