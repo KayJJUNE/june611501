@@ -2299,6 +2299,8 @@ class BotSelector(commands.Bot):
         # 1. 7일 연속 로그인 퀘스트
         login_streak = self.db.get_login_streak(user_id)
         quest_id = 'weekly_login'
+        # --- weekly claimed는 이번주 내 수령 여부로 판단 ---
+        claimed = self.db.is_weekly_quest_claimed(user_id, quest_id)
         quests.append({
             'id': quest_id,
             'name': '📅 7-Day Login Streak',
@@ -2307,11 +2309,13 @@ class BotSelector(commands.Bot):
             'max_progress': 7,
             'completed': login_streak >= 7,
             'reward': 'Random Epic Items x2',
-            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+            'claimed': claimed
         })
         # 2. 카드 공유 퀘스트
         card_shared = self.db.get_card_shared_this_week(user_id)
         quest_id = 'weekly_share'
+        # --- weekly claimed는 이번주 내 수령 여부로 판단 ---
+        claimed = self.db.is_weekly_quest_claimed(user_id, quest_id)
         quests.append({
             'id': quest_id,
             'name': '🔗 Share Your Cards',
@@ -2320,7 +2324,7 @@ class BotSelector(commands.Bot):
             'max_progress': 1,
             'completed': card_shared >= 1,
             'reward': 'Random Common Item x1',
-            'claimed': self.db.is_quest_claimed(user_id, quest_id)
+            'claimed': claimed
         })
         return quests
 

@@ -1312,3 +1312,19 @@ class DatabaseManager:
             return 0
         finally:
             self.return_connection(conn)
+
+    def is_weekly_quest_claimed(self, user_id: int, quest_id: str) -> bool:
+        """이번 주(월~일) 내에 해당 퀘스트 보상을 이미 수령했는지 확인합니다."""
+        today = get_today_cst()
+        start_of_week = today - timedelta(days=today.weekday())  # 월요일
+        end_of_week = start_of_week + timedelta(days=7)
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT 1 FROM quest_claims WHERE user_id = %s AND quest_id = %s AND claimed_at >= %s AND claimed_at < %s",
+                    (user_id, quest_id, start_of_week, end_of_week)
+                )
+                return cursor.fetchone() is not None
+        finally:
+            self.return_connection(conn)
