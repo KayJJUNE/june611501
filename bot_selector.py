@@ -3385,8 +3385,11 @@ class QuestView(discord.ui.View):
         # --- claimed 값은 반드시 quest_claims 기준으로만 판단 ---
         claimable_quests = []
         for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', [])):
+            # 이미 claimed==True면 claimable_quests에 포함하지 않음 (선택지에서 숨김)
             if q.get('completed') and not q.get('claimed'):
                 claimable_quests.append(q)
+            # 혹시 completed==True, claimed==True가 동시에 True가 되는 버그 방지
+            # (즉, claimed==True면 무조건 claimable_quests에 포함하지 않음)
         if claimable_quests:
             self.add_item(QuestClaimSelect(claimable_quests, bot_instance))
 
