@@ -342,19 +342,20 @@ except NameError:
 # 마일스톤 숫자를 카드 ID로 변환하는 함수
 # 10~100: C1~C10, 110~170: B1~B7, 180~220: A1~A5, 230~240: S1~S2
 
-def milestone_to_card_id(milestone: int) -> str:
-    if 10 <= milestone <= 100:
-        idx = (milestone // 10)
-        return f"C{idx}"
-    elif 110 <= milestone <= 170:
-        idx = ((milestone - 100) // 10)
-        return f"B{idx}"
-    elif 180 <= milestone <= 220:
-        idx = ((milestone - 170) // 10)
-        return f"A{idx}"
-    elif 230 <= milestone <= 240:
-        idx = ((milestone - 220) // 10)
-        return f"S{idx}"
+def milestone_to_card_id(milestone: int, character_name: str = "Kagari") -> str:
+    character_lower = character_name.lower()
+    if milestone == 10:
+        return f"{character_lower}c1"
+    elif milestone == 30:
+        return f"{character_lower}c3"
+    elif milestone == 50:
+        return f"{character_lower}c5"
+    elif milestone == 100:
+        return f"{character_lower}c10"
+    elif milestone == 230:
+        return f"{character_lower}s1"
+    elif milestone == 240:
+        return f"{character_lower}s2"
     else:
         return None
 
@@ -2571,6 +2572,8 @@ class BotSelector(commands.Bot):
             reward_id = random.choice(available_rewards)
             self.db.add_user_gift(user_id, reward_id, 1)
             self.db.claim_quest(user_id, quest_id)
+            # --- 일일 퀘스트 진행/보상 기록 추가 ---
+            self.db.record_daily_quest_progress(user_id, quest_id, completed=True, reward_claimed=True)
             reward_name = get_gift_details(reward_id)['name']
             return True, f"{reward_name} x1"
         except Exception as e:
@@ -3243,7 +3246,7 @@ class GiftConfirmButton(discord.ui.Button['GiftView']):
             # A more robust solution would be to pass the old score as an argument.
             # For now, let's check against all thresholds lower than current score.
 
-            for grade, threshold in AFFINITY_THRESHOLDS.items():
+            for threshold in AFFINITY_THRESHOLDS:
                 if current_score >= threshold and (current_score - affinity_info.get('last_change', 1)) < threshold:
 
                     # --- Level up detected ---
@@ -3257,7 +3260,7 @@ class GiftConfirmButton(discord.ui.Button['GiftView']):
                     await interaction.channel.send(embed=level_up_embed)
 
                     # 2. Check for and give card reward
-                    card_id_to_give = milestone_to_card_id(threshold)
+                    card_id_to_give = milestone_to_card_id(threshold, character_name)
                     if not card_id_to_give:
                         continue
 

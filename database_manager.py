@@ -1272,6 +1272,29 @@ class DatabaseManager:
         finally:
             self.return_connection(conn)
 
+    def record_daily_quest_progress(self, user_id: int, quest_id: str, completed: bool, reward_claimed: bool):
+        """
+        일일 퀘스트 진행/보상 현황을 daily_quest_progress 테이블에 기록합니다.
+        quest_id는 구분용으로 context에 저장하거나, 필요시 컬럼 추가 가능.
+        """
+        conn = None
+        try:
+            today = get_today_cst()
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO daily_quest_progress (user_id, quest_date, completed, reward_claimed, completed_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id, quest_date)
+                    DO UPDATE SET completed = %s, reward_claimed = %s, completed_at = %s
+                """, (user_id, today, completed, reward_claimed, datetime.now(), completed, reward_claimed, datetime.now()))
+            conn.commit()
+        except Exception as e:
+            print(f"Error recording daily quest progress: {e}")
+            if conn: conn.rollback()
+        finally:
+            self.return_connection(conn)
+
     def reset_quest_claims(self, user_id: int) -> bool:
         """
         해당 유저의 모든 일일/주간/레벨업/스토리 퀘스트 보상 수령 기록을 삭제합니다.
@@ -1330,5 +1353,23 @@ class DatabaseManager:
                     (user_id, quest_id, start_of_week, end_of_week)
                 )
                 return cursor.fetchone() is not None
+        finally:
+            self.return_connection(conn)
+
+    def add_spam_message(self, user_id: int, character_name: str, message: str, reason: str, timestamp):
+        print(f"[DEBUG] add_spam_message called: user_id={user_id}, character_name={character_name}, message={message}, reason={reason}, timestamp={timestamp}")
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO spam_messages (user_id, character_name, message, reason, timestamp) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, character_name, message, reason, timestamp)
+                )
+            conn.commit()
+            print(f"[DEBUG] add_spam_message DB INSERT SUCCESS for user_id={user_id}, message={message}")
+        except Exception as e:
+            print(f"Error adding spam message to DB: {e}")
+            if conn: conn.rollback()
         finally:
             self.return_connection(conn)
