@@ -1204,9 +1204,14 @@ class BotSelector(commands.Bot):
 
                 if last_message_time and last_message_time != "N/A":
                     try:
-                        last_time_str = last_message_time.split('.')[0]
-                        last_time = datetime.strptime(last_time_str, '%Y-%m-%d %H:%M:%S')
-                        formatted_time = last_time.strftime('%Y-%m-%d %H:%M')
+                        # last_message_time이 이미 datetime 객체인지 확인
+                        if isinstance(last_message_time, datetime):
+                            formatted_time = last_message_time.strftime('%Y-%m-%d %H:%M')
+                        else:
+                            # 문자열인 경우 기존 로직 사용
+                            last_time_str = last_message_time.split('.')[0]
+                            last_time = datetime.strptime(last_time_str, '%Y-%m-%d %H:%M:%S')
+                            formatted_time = last_time.strftime('%Y-%m-%d %H:%M')
 
                         embed.add_field(
                             name="Last Conversation",
@@ -2532,6 +2537,12 @@ class BotSelector(commands.Bot):
 
     async def claim_daily_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         print(f"[DEBUG] claim_daily_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
+        
+        # 이미 오늘 수령했는지 확인
+        if self.db.is_quest_claimed(user_id, quest_id):
+            print(f"[DEBUG] Quest already claimed today for user_id: {user_id}, quest_id: '{quest_id}'")
+            return False, "You have already claimed this reward today!"
+        
         # 기존: quest_type 파싱 및 reward lookup
         # 패치: quest_id를 그대로 reward lookup에 사용
         daily_rewards = {
