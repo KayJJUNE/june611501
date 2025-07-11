@@ -1136,7 +1136,7 @@ class DatabaseManager:
                 cursor.execute("""
                     INSERT INTO quest_claims (user_id, quest_id, claimed_at)
                     VALUES (%s, %s, %s)
-                    ON CONFLICT (user_id, quest_id)
+                    ON CONFLICT (user_id, quest_id, claimed_at)
                     DO NOTHING; 
                 """, (user_id, quest_id, now_cst))
             conn.commit()
