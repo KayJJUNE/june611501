@@ -2260,13 +2260,9 @@ class BotSelector(commands.Bot):
         quests = []
 
         # 1. 대화 20회 퀘스트
-        total_daily_messages = 0
-        for char in ['Kagari', 'Eros', 'Elysia']:
-            affinity_info = self.db.get_affinity(user_id, char)
-            if affinity_info:
-                total_daily_messages += affinity_info.get('daily_message_count', 0)
+        # --- 오늘의 실제 대화 수를 get_total_daily_messages로 계산 ---
+        total_daily_messages = self.db.get_total_daily_messages(user_id)
         quest_id = 'daily_conversation'
-        # --- claimed 값은 반드시 quest_claims 테이블 기준으로만 판단 ---
         claimed = self.db.is_quest_claimed(user_id, quest_id)
         reward_name = None
         if claimed:
@@ -2286,7 +2282,6 @@ class BotSelector(commands.Bot):
         # 2. 호감도 +5 퀘스트
         affinity_gain = self.db.get_today_affinity_gain(user_id)
         quest_id = 'daily_affinity_gain'
-        # --- claimed 값은 반드시 quest_claims 테이블 기준으로만 판단 ---
         claimed = self.db.is_quest_claimed(user_id, quest_id)
         reward_name = None
         if claimed:
