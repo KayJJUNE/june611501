@@ -3382,14 +3382,18 @@ class QuestClaimSelect(discord.ui.Select):
 class QuestView(discord.ui.View):
     def __init__(self, user_id: int, quest_status: dict, bot_instance: 'BotSelector'):
         super().__init__(timeout=None)
-        # --- claimed 값은 반드시 quest_claims 기준으로만 판단 ---
+        db = bot_instance.db
         claimable_quests = []
         for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', [])):
-            # 이미 claimed==True면 claimable_quests에 포함하지 않음 (선택지에서 숨김)
+            # 데일리/위클리 퀘스트는 DB에서 실제로 오늘(이번주) 보상받았는지 재확인
             if q.get('completed') and not q.get('claimed'):
+                if q.get('type') == 'daily':
+                    if db.is_quest_claimed(user_id, q.get('id')):
+                        continue  # 오늘 이미 보상받음 → 선택지에서 숨김
+                if q.get('type') == 'weekly':
+                    if hasattr(db, 'is_weekly_quest_claimed') and db.is_weekly_quest_claimed(user_id, q.get('id')):
+                        continue  # 이번주 이미 보상받음 → 선택지에서 숨김
                 claimable_quests.append(q)
-            # 혹시 completed==True, claimed==True가 동시에 True가 되는 버그 방지
-            # (즉, claimed==True면 무조건 claimable_quests에 포함하지 않음)
         if claimable_quests:
             self.add_item(QuestClaimSelect(claimable_quests, bot_instance))
 
