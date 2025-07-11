@@ -2539,8 +2539,6 @@ class BotSelector(commands.Bot):
             print(f"[DEBUG] Quest already claimed today for user_id: {user_id}, quest_id: '{quest_id}'")
             return False, "You have already claimed this reward today!"
         
-        # 기존: quest_type 파싱 및 reward lookup
-        # 패치: quest_id를 그대로 reward lookup에 사용
         daily_rewards = {
             'daily_conversation': {'name': 'Random Common Item', 'rarity': 'COMMON', 'quantity': 1},
             'daily_affinity_gain': {'name': 'Random Common Item', 'rarity': 'COMMON', 'quantity': 1},
@@ -2553,18 +2551,12 @@ class BotSelector(commands.Bot):
             return False, "This is an unknown quest."
 
         try:
-            # 유저가 이미 받은 아이템 목록 조회
-            user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
-            # 보상 후보 아이템 리스트
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
             reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY[reward_info['rarity'].upper()], reward_info['quantity'])
-            # 아직 받지 않은 아이템만 후보로 남김
-            available_rewards = [item for item in reward_candidates if item not in user_gifts]
-            if not available_rewards:
-                return False, "You have already received all possible rewards for this quest!"
-            # 랜덤 지급
+            if not reward_candidates:
+                return False, "No rewards available for this quest!"
             import random
-            reward_id = random.choice(available_rewards)
+            reward_id = random.choice(reward_candidates)
             self.db.add_user_gift(user_id, reward_id, 1)
             self.db.claim_quest(user_id, quest_id)
             # --- 일일 퀘스트 진행/보상 기록 추가 ---
