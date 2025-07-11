@@ -2539,7 +2539,7 @@ class BotSelector(commands.Bot):
     async def claim_daily_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         print(f"[DEBUG] claim_daily_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
         
-        # 이미 오늘 수령했는지 확인
+        # 이미 오늘 수령했는지 확인 (날짜 기준)
         if self.db.is_quest_claimed(user_id, quest_id):
             print(f"[DEBUG] Quest already claimed today for user_id: {user_id}, quest_id: '{quest_id}'")
             return False, "You have already claimed this reward today!"
@@ -2603,15 +2603,15 @@ class BotSelector(commands.Bot):
             return False, "This is an unknown quest."
 
         try:
-            # 유저가 이미 받은 아이템 목록 조회
-            user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
+            # 주간 퀘스트: 이번 주 내에 이미 수령했는지 체크
+            if self.db.is_weekly_quest_claimed(user_id, quest_id):
+                return False, "You have already claimed this weekly reward!"
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
             reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY[reward_rarity.upper()], reward_quantity)
-            available_rewards = [item for item in reward_candidates if item not in user_gifts]
-            if not available_rewards:
-                return False, "You have already received all possible rewards for this quest!"
+            if not reward_candidates:
+                return False, "No rewards available for this quest!"
             import random
-            reward_id = random.choice(available_rewards)
+            reward_id = random.choice(reward_candidates)
             self.db.add_user_gift(user_id, reward_id, 1)
             self.db.claim_quest(user_id, quest_id)
             reward_name = get_gift_details(reward_id)['name']
