@@ -461,11 +461,12 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
 
             # Claim 버튼이 있는 카드 임베드
             class ClaimCardView(discord.ui.View):
-                def __init__(self, user_id, card_id):
+                def __init__(self, user_id, card_id, bot_instance):
                     super().__init__(timeout=60)
                     self.user_id = user_id
                     self.card_id = card_id
                     self.claimed = False
+                    self.bot = bot_instance
 
                 @discord.ui.button(label="Claim Card", style=discord.ButtonStyle.success)
                 async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -473,8 +474,19 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
                         return await interaction.response.send_message("Only you can claim this card!", ephemeral=True)
                     if self.claimed:
                         return await interaction.response.send_message("You have already claimed your card!", ephemeral=True)
-                    self.claimed = True
-                    await interaction.response.send_message(f"You have claimed your card: **{self.card_id}**! Check your cards with `/cards`.", ephemeral=True)
+                    
+                    # 실제로 DB에 카드 저장
+                    try:
+                        success = self.bot.db.add_user_card(self.user_id, "Eros", self.card_id)
+                        if success:
+                            self.claimed = True
+                            await interaction.response.send_message(f"You have claimed your card: **{self.card_id}**! Check your cards with `/mycard`.", ephemeral=True)
+                        else:
+                            await interaction.response.send_message("Failed to claim the card. Please try again.", ephemeral=True)
+                    except Exception as e:
+                        print(f"Error claiming card {self.card_id} for user {self.user_id}: {e}")
+                        await interaction.response.send_message("An error occurred while claiming the card. Please try again.", ephemeral=True)
+                    
                     self.stop()
 
             card_embed = discord.Embed(
@@ -490,7 +502,7 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
             card_embed.set_footer(text="Press the button below to claim your card!")
             await interaction.message.edit(view=self)
             await interaction.followup.send(embed=success_embed)
-            await interaction.followup.send(embed=card_embed, view=ClaimCardView(self.session['user_id'], rewards['card']))
+            await interaction.followup.send(embed=card_embed, view=ClaimCardView(self.session['user_id'], rewards['card'], self.bot))
 
             # 스토리 완료 처리
             self.bot.db.complete_story_stage(self.session['user_id'], self.session['character_name'], self.session['stage_num'])
@@ -1017,6 +1029,7 @@ async def handle_elysia_story(bot, message, session):
                 description=hint2,
                 color=discord.Color.blue()
             )
+            hint_embed.set_image(url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/beb49c57-980c-49ff-827d-f70c5a9d3100/public")
             await message.channel.send(embed=hint_embed)
             session['hints_shown'].append(1)
             story_sessions[message.channel.id] = session
@@ -1028,6 +1041,7 @@ async def handle_elysia_story(bot, message, session):
                 description=hint3,
                 color=discord.Color.blue()
             )
+            hint_embed.set_image(url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/beb49c57-980c-49ff-827d-f70c5a9d3100/public")
             await message.channel.send(embed=hint_embed)
             session['hints_shown'].append(2)
             story_sessions[message.channel.id] = session
@@ -1039,6 +1053,7 @@ async def handle_elysia_story(bot, message, session):
                 description=hint4,
                 color=discord.Color.blue()
             )
+            hint_embed.set_image(url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/beb49c57-980c-49ff-827d-f70c5a9d3100/public")
             await message.channel.send(embed=hint_embed)
             session['hints_shown'].append(3)
             story_sessions[message.channel.id] = session
