@@ -2174,6 +2174,44 @@ class BotSelector(commands.Bot):
             story_sessions[interaction.channel.id] = session
 
         @self.tree.command(
+            name="store",
+            description="Visit the ZeroLink store to purchase various packages"
+        )
+        async def store_command(interaction: discord.Interaction):
+            try:
+                embed = discord.Embed(
+                    title="🛒 ZeroLink Store",
+                    description="Visit our store to purchase various packages and enhance your experience!",
+                    color=discord.Color.blue(),
+                    url="https://zerolink714209.tartagames.com/"
+                )
+                
+                embed.add_field(
+                    name="🌟 Available Packages",
+                    value="• Premium Character Access\n• Special Gift Packages\n• Exclusive Content\n• And much more!",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name="🔗 Store Link",
+                    value="[Click here to visit the store](https://zerolink714209.tartagames.com/)",
+                    inline=False
+                )
+                
+                embed.set_footer(text="Thank you for supporting ZeroLink!")
+                
+                await interaction.response.send_message(
+                    embed=embed,
+                    ephemeral=True
+                )
+            except Exception as e:
+                print(f"Error in store_command: {e}")
+                await interaction.response.send_message(
+                    "An error occurred while loading the store. Please try again.",
+                    ephemeral=True
+                )
+
+        @self.tree.command(
             name="reset_quest",
             description="[Admin] Reset all quest claim records for a user."
         )
