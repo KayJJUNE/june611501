@@ -2675,13 +2675,25 @@ class BotSelector(commands.Bot):
     async def claim_story_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         try:
             print(f"[DEBUG] claim_story_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
-            parts = quest_id.split('_')
-            print(f"[DEBUG] claim_story_reward - parts: {parts}")
-            if len(parts) != 3:
-                print(f"[DEBUG] claim_story_reward - Invalid parts length: {len(parts)}")
+            
+            # 퀘스트 ID 파싱 수정: 'all_chapters'가 분리되지 않도록 처리
+            if not quest_id.startswith('story_'):
+                print(f"[DEBUG] claim_story_reward - Not a story quest: {quest_id}")
                 return False, "Invalid story quest ID"
-            character = parts[1].capitalize()  # 소문자를 대문자로 변환 (kagari → Kagari)
-            quest_type = parts[2]
+            
+            # 'story_' 제거 후 나머지 부분에서 캐릭터명과 퀘스트 타입 분리
+            remaining = quest_id[6:]  # 'story_' 제거
+            print(f"[DEBUG] claim_story_reward - remaining: '{remaining}'")
+            
+            # 'all_chapters'로 끝나는지 확인
+            if not remaining.endswith('_all_chapters'):
+                print(f"[DEBUG] claim_story_reward - Not ending with '_all_chapters': {remaining}")
+                return False, "Invalid story quest ID"
+            
+            # 캐릭터명 추출 (마지막 '_all_chapters' 제거)
+            character = remaining[:-13].capitalize()  # '_all_chapters' (13글자) 제거
+            quest_type = 'all_chapters'
+            
             print(f"[DEBUG] claim_story_reward - character: '{character}', quest_type: '{quest_type}'")
             
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
