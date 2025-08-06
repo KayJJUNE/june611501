@@ -1112,11 +1112,16 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 today_cst = get_today_cst()
+                print(f"[DEBUG] is_quest_claimed - checking for user_id={user_id}, quest_id={quest_id}, today_cst={today_cst}")
+                
+                # 더 간단한 방식으로 오늘 날짜 체크
                 cursor.execute(
-                    "SELECT 1 FROM quest_claims WHERE user_id = %s AND quest_id = %s AND DATE(claimed_at AT TIME ZONE 'Asia/Shanghai') = %s",
+                    "SELECT 1 FROM quest_claims WHERE user_id = %s AND quest_id = %s AND DATE(claimed_at) = %s",
                     (user_id, quest_id, today_cst)
                 )
-                return cursor.fetchone() is not None
+                result = cursor.fetchone() is not None
+                print(f"[DEBUG] is_quest_claimed - result: {result}")
+                return result
         except Exception as e:
             print(f"Error in is_quest_claimed: {e}")
             return False

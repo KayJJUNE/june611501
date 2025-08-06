@@ -2674,11 +2674,16 @@ class BotSelector(commands.Bot):
 
     async def claim_story_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         try:
+            print(f"[DEBUG] claim_story_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
             parts = quest_id.split('_')
+            print(f"[DEBUG] claim_story_reward - parts: {parts}")
             if len(parts) != 3:
+                print(f"[DEBUG] claim_story_reward - Invalid parts length: {len(parts)}")
                 return False, "Invalid story quest ID"
             character = parts[1].capitalize()  # 소문자를 대문자로 변환 (kagari → Kagari)
             quest_type = parts[2]
+            print(f"[DEBUG] claim_story_reward - character: '{character}', quest_type: '{quest_type}'")
+            
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
             user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
             reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
@@ -2687,9 +2692,12 @@ class BotSelector(commands.Bot):
                 return False, "You have already received all possible rewards for this quest!"
             import random
             selected_rewards = random.sample(available_rewards, min(3, len(available_rewards)))
+            
             # Kagari 스토리 퀘스트 (3챕터 완료)
             if character == 'Kagari' and quest_type == 'all_chapters':
+                print(f"[DEBUG] claim_story_reward - Processing Kagari story quest")
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Kagari')
+                print(f"[DEBUG] claim_story_reward - Kagari completed chapters: {completed_chapters}")
                 if len(completed_chapters) < 3:
                     return False, "You need to complete all 3 chapters of Kagari's story first"
                 if self.db.is_story_quest_claimed(user_id, 'Kagari', 'all_chapters'):
@@ -2699,9 +2707,12 @@ class BotSelector(commands.Bot):
                 self.db.claim_story_quest(user_id, 'Kagari', 'all_chapters')
                 reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
                 return True, f"Congratulations! You completed all Kagari story chapters! You received: **{', '.join(reward_names)}**"
+            
             # Eros 스토리 퀘스트 (3챕터 완료)
             if character == 'Eros' and quest_type == 'all_chapters':
+                print(f"[DEBUG] claim_story_reward - Processing Eros story quest")
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Eros')
+                print(f"[DEBUG] claim_story_reward - Eros completed chapters: {completed_chapters}")
                 if len(completed_chapters) < 3:
                     return False, "You need to complete all 3 chapters of Eros's story first"
                 if self.db.is_story_quest_claimed(user_id, 'Eros', 'all_chapters'):
@@ -2711,9 +2722,12 @@ class BotSelector(commands.Bot):
                 self.db.claim_story_quest(user_id, 'Eros', 'all_chapters')
                 reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
                 return True, f"Congratulations! You completed all Eros story chapters! You received: **{', '.join(reward_names)}**"
+            
             # Elysia 스토리 퀘스트 (1챕터 완료)
             if character == 'Elysia' and quest_type == 'all_chapters':
+                print(f"[DEBUG] claim_story_reward - Processing Elysia story quest")
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Elysia')
+                print(f"[DEBUG] claim_story_reward - Elysia completed chapters: {completed_chapters}")
                 if len(completed_chapters) < 1:
                     return False, "You need to complete chapter 1 of Elysia's story first"
                 if self.db.is_story_quest_claimed(user_id, 'Elysia', 'all_chapters'):
@@ -2723,6 +2737,8 @@ class BotSelector(commands.Bot):
                 self.db.claim_story_quest(user_id, 'Elysia', 'all_chapters')
                 reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
                 return True, f"Congratulations! You completed Elysia's story! You received: **{', '.join(reward_names)}**"
+            
+            print(f"[DEBUG] claim_story_reward - Unknown story quest: character='{character}', quest_type='{quest_type}'")
             return False, "Unknown story quest"
         except Exception as e:
             print(f"Error claiming story reward: {e}")
