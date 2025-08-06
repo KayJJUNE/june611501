@@ -1193,17 +1193,32 @@ class CardClaimView(discord.ui.View):
             await interaction.response.send_message("This button can only be used by the user who achieved the milestone.", ephemeral=True)
             return
 
-        # 실제로 카드를 데이터베이스에 추가
-        success = self.db.add_user_card(self.user_id, self.character_name, self.card_id)
-        
-        if success:
-            button.disabled = True
-            button.label = "Claimed"
-            await interaction.message.edit(view=self)
-            await interaction.response.send_message("Card successfully claimed! Check your/mycard.", ephemeral=True)
-        else:
-            # 이미 카드를 가지고 있는 경우
-            await interaction.response.send_message("You have already claimed this card.", ephemeral=True)
+        try:
+            # 먼저 즉시 응답하여 Discord 타임아웃 방지
+            await interaction.response.defer(ephemeral=True)
+            
+            # 실제로 카드를 데이터베이스에 추가
+            success = self.db.add_user_card(self.user_id, self.character_name, self.card_id)
+            
+            if success:
+                button.disabled = True
+                button.label = "Claimed"
+                await interaction.message.edit(view=self)
+                await interaction.followup.send("Card successfully claimed! Check your/mycard.", ephemeral=True)
+            else:
+                # 이미 카드를 가지고 있는 경우
+                await interaction.followup.send("You have already claimed this card.", ephemeral=True)
+                
+        except Exception as e:
+            print(f"Error in claim_card: {e}")
+            # 에러가 발생해도 카드가 저장되었을 수 있으므로 확인
+            if self.db.has_user_card(self.user_id, self.character_name, self.card_id):
+                button.disabled = True
+                button.label = "Claimed"
+                await interaction.message.edit(view=self)
+                await interaction.followup.send("Card successfully claimed! Check your/mycard.", ephemeral=True)
+            else:
+                await interaction.followup.send("An error occurred while claiming the card. Please try again.", ephemeral=True)
 
 def get_card_claim_embed_and_view(user_id, character_name, card_id, db):
     from config import CHARACTER_CARD_INFO
