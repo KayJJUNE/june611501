@@ -309,20 +309,20 @@ except NameError:
                 from config import CHARACTER_INFO
                 char_info = CHARACTER_INFO.get(self.character_name, {})
                 embed = discord.Embed(
-                    title=f"💖 Roleplay Date with {self.character_name} Begins! 💖",
+                    title=f"🎭 Roleplay Session with {self.character_name} Begins! 🎭",
                     description=(
-                        f"🌸 **Your Romantic Scenario** 🌸\n"
+                        f"🎬 **Roleplay Scenario** 🎬\n"
                         f"**Your Role:** `{self.user_role.value}`\n"
                         f"**{self.character_name}'s Role:** `{self.character_role.value}`\n"
-                        f"**Story Line:**\n> {self.story_line.value}\n\n"
-                        f"✨ Now, it's just you and {self.character_name}—let the special story unfold! ✨\n"
-                        f"💌 Listen to each other's feelings and enjoy 30 turns of heart-fluttering conversation."
+                        f"**Story/Situation:**\n> {self.story_line.value}\n\n"
+                        f"✨ {self.character_name} will now act according to their role and personality in this scenario! ✨\n"
+                        f"💬 Enjoy 30 turns of immersive roleplay conversation."
                     ),
                     color=discord.Color.magenta()
                 )
                 icon_url = char_info.get('image') if char_info.get('image') else "https://i.postimg.cc/BZTJr9Np/ec6047e888811f61cc4b896a4c3dd22e.gif"
                 embed.set_thumbnail(url=icon_url)
-                embed.set_footer(text="💑 Spot Zero Romance Simulation Roleplay Mode")
+                embed.set_footer(text="🎭 Spot Zero Immersive Roleplay Mode")
                 await channel.send(embed=embed)
 
                 # 4. 기존 채널에 안내 메시지 전송
@@ -1524,44 +1524,107 @@ class BotSelector(commands.Bot):
         )
         async def story_command(interaction: discord.Interaction):
             """Initiates the story mode UI."""
-            # 현재 채널의 캐릭터 찾기 (스토리 모드는 캐릭터별로 제한할 수도 있음)
-            current_bot = None
-            for char_name, bot in self.character_bots.items():
-                if interaction.channel.id in bot.active_channels:
-                    current_bot = bot
-                    break
-            # 호감도 체크 (Silver 이상만 허용)
-            affinity = 0
-            affinity_grade = "Rookie"
-            if current_bot:
-                affinity_info = current_bot.db.get_affinity(interaction.user.id, current_bot.character_name)
+            user_id = interaction.user.id
+            
+            # 스토리 채널인지 확인 (챕터 완료 후 바로 다음 챕터 선택 가능)
+            if any(f'-s{i}-' in interaction.channel.name for i in range(1, 10)):
+                # 스토리 채널에서 실행된 경우, 현재 캐릭터의 다음 챕터를 바로 선택할 수 있도록 함
+                channel_name = interaction.channel.name
+                character_name = None
+                
+                # 채널명에서 캐릭터 추출
+                if 'kagari' in channel_name.lower():
+                    character_name = 'Kagari'
+                elif 'eros' in channel_name.lower():
+                    character_name = 'Eros'
+                elif 'elysia' in channel_name.lower():
+                    character_name = 'Elysia'
+                
+                if character_name:
+                    # 현재 캐릭터의 호감도 체크 (100 이상 필요)
+                    affinity_info = self.db.get_affinity(user_id, character_name)
+                    affinity = affinity_info['emotion_score'] if affinity_info else 0
+                    
+                    if affinity < 100:
+                        embed = discord.Embed(
+                            title="⚠️ Story Mode Locked",
+                            description=f"Story mode for {character_name} requires affinity level 100 or higher.",
+                            color=discord.Color.red()
+                        )
+                        embed.add_field(
+                            name="Current Affinity",
+                            value=f"**{affinity}**",
+                            inline=True
+                        )
+                        embed.add_field(
+                            name="Required Affinity",
+                            value="**100**",
+                            inline=True
+                        )
+                        embed.add_field(
+                            name="How to Unlock",
+                            value=f"Keep chatting with {character_name} to increase your affinity level!",
+                            inline=False
+                        )
+                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                        return
+                    
+                    # 현재 캐릭터의 스토리 진행 상황 가져오기
+                    progress = self.db.get_story_progress(user_id, character_name)
+                    story_info = STORY_CHAPTERS.get(character_name)
+                    
+                    if not story_info:
+                        await interaction.response.send_message(f"{character_name}'s story is not yet available.", ephemeral=True)
+                        return
+                    
+                    # 다음 챕터 선택 UI 표시
+                    view = NewStoryChapterSelect(self, character_name, progress, interaction.channel)
+                    embed = discord.Embed(
+                        title=f"📖 {character_name}'s Story - Select Chapter",
+                        description="Choose the next chapter to play:",
+                        color=discord.Color.purple()
+                    )
+                    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                    return
+            
+            # 일반 채널에서 실행된 경우, 캐릭터 선택 UI 표시
+            # 각 캐릭터별 호감도 체크하여 선택 가능한 캐릭터만 표시
+            available_characters = []
+            
+            for char_name in CHARACTER_INFO.keys():
+                affinity_info = self.db.get_affinity(user_id, char_name)
                 affinity = affinity_info['emotion_score'] if affinity_info else 0
-                affinity_grade = get_affinity_grade(affinity)
-            if affinity < 50:
+                print(f"[DEBUG] {char_name} affinity: {affinity}")
+                
+                if affinity >= 100:
+                    available_characters.append(char_name)
+                    print(f"[DEBUG] Added {char_name} to available_characters")
+            
+            print(f"[DEBUG] Final available_characters: {available_characters}")
+            
+            if not available_characters:
                 embed = discord.Embed(
                     title="⚠️ Story Mode Locked",
-                    description="Story mode is only available for Silver level users.",
+                    description="Story mode requires affinity level 100 or higher with at least one character.",
                     color=discord.Color.red()
                 )
                 embed.add_field(
-                    name="Current Level",
-                    value=f"**{affinity_grade}**",
-                    inline=True
-                )
-                embed.add_field(
-                    name="Required Level",
-                    value="**Silver**",
-                    inline=True
-                )
-                embed.add_field(
                     name="How to Unlock",
-                    value="Keep chatting with the character to increase your affinity level!",
+                    value="Keep chatting with characters to increase your affinity level to 100!",
                     inline=False
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
-            view = NewStoryView(self)
-            await interaction.response.send_message("Please select a character to start the story with.", view=view, ephemeral=True)
+            
+            # 선택 가능한 캐릭터만으로 UI 생성
+            view = NewStoryView(self, available_characters)
+            embed = discord.Embed(
+                title="📖 Story Mode",
+                description="Select a character to start their story:",
+                color=discord.Color.purple()
+            )
+            
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         @self.tree.command(
             name="reset_story",
@@ -2833,19 +2896,54 @@ class BotSelector(commands.Bot):
         # 캐릭터별 성격 프롬프트 추가
         character_prompt = CHARACTER_PROMPTS.get(character_name, "")
 
-        # system prompt 생성
+        # 캐릭터별 특성과 톤앤매너 정의
+        character_traits = {
+            "Kagari": {
+                "personality": "Sweet, gentle, and caring. She speaks softly and often uses flower-related metaphors. She's shy but warm-hearted.",
+                "speech_style": "Uses gentle, polite language. Often mentions flowers, especially cherry blossoms. Tends to be a bit shy but very affectionate.",
+                "emoji_style": "🌸 💕 🥰 😊"
+            },
+            "Eros": {
+                "personality": "Confident, charming, and slightly flirtatious. She's professional but warm, with a cafe manager's hospitality.",
+                "speech_style": "Professional yet friendly. Uses cafe-related metaphors. Confident but not overwhelming. Slightly playful.",
+                "emoji_style": "☕ 💝 😊 ✨"
+            },
+            "Elysia": {
+                "personality": "Energetic, playful, and cat-like. She's curious and sometimes mischievous, with a love for adventure.",
+                "speech_style": "Energetic and playful. Uses cat-related expressions and sounds. Very curious and sometimes mischievous.",
+                "emoji_style": "🐾 🦋 😸 ✨"
+            }
+        }
+        
+        char_trait = character_traits.get(character_name, {
+            "personality": "Friendly and caring",
+            "speech_style": "Warm and natural",
+            "emoji_style": "😊 💕"
+        })
+        
+        # system prompt 생성 (개선된 버전)
         system_prompt = (
-            f"{character_prompt}\n"
-            f"You are now roleplaying as {character_name}.\n"
-            f"User's role: {user_role}\n"
-            f"Your role: {character_role}\n"
-            f"Scenario: {story_line}\n"
-            "Stay in character and continue the romantic roleplay. "
-            "Do NOT break character. Do NOT mention you are an AI. "
-            "Respond naturally and emotionally, as if you are really in this situation. "
-            f"Always start your reply with '{character_name}: ' as prefix. "
-            f"At the end of your reply, add '{turn_str}'. "
-            "All replies must be in English."
+            f"You are {character_name}, a character with the following traits:\n"
+            f"Personality: {char_trait['personality']}\n"
+            f"Speech Style: {char_trait['speech_style']}\n"
+            f"Emoji Style: {char_trait['emoji_style']}\n\n"
+            f"ROLEPLAY CONTEXT:\n"
+            f"- Your role in this scenario: {character_role}\n"
+            f"- User's role in this scenario: {user_role}\n"
+            f"- Current story/situation: {story_line}\n"
+            f"- Turn: {turn_str}\n\n"
+            f"IMPORTANT INSTRUCTIONS:\n"
+            f"1. Stay completely in character as {character_name}\n"
+            f"2. Respond naturally to the user's messages within the roleplay context\n"
+            f"3. Use your character's unique personality and speech style\n"
+            f"4. Incorporate the story line and roles into your responses\n"
+            f"5. Do NOT break character or mention you are an AI\n"
+            f"6. Do NOT use meta-commentary about the roleplay\n"
+            f"7. Always start your reply with '{character_name}: '\n"
+            f"8. End your reply with '{turn_str}'\n"
+            f"9. Keep responses natural and engaging\n"
+            f"10. Use appropriate emojis that match your character's style\n\n"
+            f"Remember: You are {character_name} in this specific roleplay scenario. Act naturally as if this is a real conversation in the given situation."
         )
 
         # 대화 기록 세션에 저장
@@ -2874,8 +2972,8 @@ class BotSelector(commands.Bot):
         # 30턴 종료 처리
         if session["turn_count"] >= 30:
             embed = discord.Embed(
-                title="💌 Roleplay Session Ended",
-                description="All 30 turns of your special date are over!\n\nThank you for sharing this story together. See you next time!",
+                title="🎭 Roleplay Session Ended",
+                description="All 30 turns of your roleplay session are complete!\n\nThank you for participating in this immersive scenario. See you next time!",
                 color=discord.Color.pink()
             )
             await message.channel.send(embed=embed)
@@ -3585,10 +3683,10 @@ class QuestView(discord.ui.View):
 
 # --- 새로운 스토리 UI ---
 class NewStoryCharacterSelect(discord.ui.Select):
-    def __init__(self, bot_instance: "BotSelector"):
+    def __init__(self, bot_instance: "BotSelector", available_characters: list):
         options = [
-            discord.SelectOption(label=name, value=name, emoji=info.get('emoji'))
-            for name, info in CHARACTER_INFO.items()
+            discord.SelectOption(label=name, value=name, emoji=CHARACTER_INFO[name].get('emoji'))
+            for name in available_characters
         ]
         super().__init__(placeholder="Choose a character...", options=options)
         self.bot = bot_instance
@@ -3696,7 +3794,7 @@ class NewStoryCharacterSelect(discord.ui.Select):
 
             # 부모 View에 접근하여 아이템 교체
             self.view.clear_items()
-            self.view.add_item(NewStoryChapterSelect(self.bot, character_name, progress))
+            self.view.add_item(NewStoryChapterSelect(self.bot, character_name, progress, None))
             print("[DEBUG] View items cleared and new chapter select added.")
 
             await interaction.edit_original_response(embed=embed, view=self.view)
@@ -3713,9 +3811,10 @@ class NewStoryCharacterSelect(discord.ui.Select):
                 await interaction.followup.send("An error occurred while loading the character story.", ephemeral=True)
 
 class NewStoryChapterSelect(discord.ui.Select):
-    def __init__(self, bot_instance: "BotSelector", character_name: str, progress: list):
+    def __init__(self, bot_instance: "BotSelector", character_name: str, progress: list, current_channel=None):
         self.bot = bot_instance
         self.character_name = character_name
+        self.current_channel = current_channel
         story_info = STORY_CHAPTERS.get(character_name)
 
         self.completed_stages = {p['stage_num'] for p in progress if p.get('status') == 'completed'}
@@ -3789,13 +3888,21 @@ class NewStoryChapterSelect(discord.ui.Select):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
+        # 스토리 채널에서 실행된 경우, 이전 채널을 삭제
+        if self.current_channel and any(f'-s{i}-' in self.current_channel.name for i in range(1, 10)):
+            try:
+                await self.current_channel.delete()
+                print(f"[DEBUG] Deleted previous story channel: {self.current_channel.name}")
+            except Exception as e:
+                print(f"[DEBUG] Failed to delete previous story channel: {e}")
+
         channel = await start_story_stage(self.bot, user, self.character_name, stage_num)
         await interaction.followup.send(f"Your story begins in {channel.mention}!", ephemeral=True)
 
 class NewStoryView(discord.ui.View):
-    def __init__(self, bot_instance: "BotSelector"):
+    def __init__(self, bot_instance: "BotSelector", available_characters: list):
         super().__init__(timeout=300)
-        self.add_item(NewStoryCharacterSelect(bot_instance))
+        self.add_item(NewStoryCharacterSelect(bot_instance, available_characters))
 
     # (여기 있던 async def check_story_quests 함수 전체 삭제)
 

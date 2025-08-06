@@ -10,7 +10,7 @@ client = openai.AsyncOpenAI()
 async def call_openai(messages: list, model="gpt-4o"):
     max_retries = 3
     base_delay = 1.0
-
+    
     for attempt in range(max_retries):
         try:
             response = await client.chat.completions.create(
@@ -22,7 +22,7 @@ async def call_openai(messages: list, model="gpt-4o"):
             return response.choices[0].message.content.strip()
         except Exception as e:
             print(f"[OpenAI Error] (attempt {attempt + 1}/{max_retries}): {e}")
-
+            
             # 네트워크 관련 에러인지 확인
             is_network_error = (
                 "Connection reset by peer" in str(e) or
@@ -35,7 +35,7 @@ async def call_openai(messages: list, model="gpt-4o"):
                 "aiohttp.client_exceptions.ServerDisconnectedError" in str(e) or
                 "aiohttp.client_exceptions.ClientResponseError" in str(e)
             )
-
+            
             # 마지막 시도가 아니고 네트워크 에러인 경우 재시도
             if attempt < max_retries - 1 and is_network_error:
                 delay = base_delay * (2 ** attempt)  # 지수 백오프
@@ -46,7 +46,7 @@ async def call_openai(messages: list, model="gpt-4o"):
                 # 네트워크 에러가 아니거나 마지막 시도인 경우
                 print(f"[OpenAI] Failed after {max_retries} attempts, returning default value")
                 return None  # 기본값으로 None 반환
-
+    
     return None  # 모든 재시도 실패 시 None 반환
 
 async def analyze_emotion_with_gpt(message: str) -> int:
@@ -84,10 +84,10 @@ def detect_language(text: str) -> str:
         # 괄호와 특수문자 제거
         clean_text = re.sub(r'[\(\)\[\]\{\}\.\,\!\?\;\:\"\']', '', text)
         clean_text = re.sub(r'[^\w\s가-힣一-龯あ-んア-ン]', '', clean_text)
-
+        
         if not clean_text.strip():
             return 'en'
-
+        
         detected = langdetect.detect(clean_text)
         lang_map = {
             'zh-cn': 'zh', 'zh-tw': 'zh', 'zh': 'zh',
@@ -169,25 +169,25 @@ def analyze_emotion_with_patterns(message: str) -> float:
         # 언어 감지
         lang = detect_language(message)
         keywords = get_emotion_keywords()
-
+        
         if lang not in keywords:
             lang = 'en'  # 기본값
-
+        
         lang_keywords = keywords[lang]
         message_lower = message.lower()
-
+        
         # 긍정 키워드 점수 계산
         positive_score = 0
         for keyword in lang_keywords['positive']:
             if keyword in message_lower:
                 positive_score += 1
-
+        
         # 부정 키워드 점수 계산
         negative_score = 0
         for keyword in lang_keywords['negative']:
             if keyword in message_lower:
                 negative_score += 1
-
+        
         # 부정어 처리 (부정어 + 긍정어 = 부정)
         negation_score = 0
         for negation in lang_keywords['negation']:
@@ -201,17 +201,17 @@ def analyze_emotion_with_patterns(message: str) -> float:
                         if neg_pos < pos_pos:
                             negation_score += 1
                             positive_score = max(0, positive_score - 1)  # 긍정 점수 차감
-
+        
         # 이모지 분석
         emoji_score = analyze_emojis(message)
-
+        
         # 메시지 길이 분석
         length_score = analyze_message_length(message)
-
+        
         # 최종 점수 계산
         total_positive = positive_score + emoji_score['positive'] + length_score['positive']
         total_negative = negative_score + emoji_score['negative'] + length_score['negative'] + negation_score
-
+        
         # 점수 정규화 (-1 ~ 1 범위)
         if total_positive > total_negative:
             return min(1.0, total_positive / 3.0)  # 최대 1.0
@@ -219,7 +219,7 @@ def analyze_emotion_with_patterns(message: str) -> float:
             return max(-1.0, -total_negative / 3.0)  # 최소 -1.0
         else:
             return 0.0
-
+            
     except Exception as e:
         print(f"Pattern analysis error: {e}")
         return 0.0
@@ -228,17 +228,17 @@ def analyze_emojis(message: str) -> Dict[str, int]:
     """이모지 감정 분석"""
     positive_emojis = ['😊', '😄', '😍', '🥰', '😘', '😉', '😋', '😎', '🤗', '😌', '😇', '🥳', '😆', '🤩', '😊', '😄', '😍', '🥰', '😘', '😉', '😋', '😎', '🤗', '😌', '😇', '🥳', '😆', '🤩']
     negative_emojis = ['😠', '😡', '😤', '😾', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😢', '😭', '😤', '😾', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😢', '😭']
-
+    
     positive_count = sum(1 for emoji in positive_emojis if emoji in message)
     negative_count = sum(1 for emoji in negative_emojis if emoji in message)
-
+    
     return {'positive': positive_count, 'negative': negative_count}
 
 def analyze_message_length(message: str) -> Dict[str, int]:
     """메시지 길이 기반 감정 분석"""
     clean_message = re.sub(r'[^\w\s가-힣一-龯あ-んア-ン]', '', message)
     word_count = len(clean_message.split())
-
+    
     # 긴 메시지는 관심/열정을 나타낼 수 있음
     if word_count >= 10:
         return {'positive': 1, 'negative': 0}
@@ -252,18 +252,18 @@ async def analyze_emotion_with_gpt_and_pattern(message: str) -> int:
     try:
         # GPT 분석 (70%)
         gpt_score = await analyze_emotion_with_gpt(message)
-
+        
         # 패턴 분석 (30%)
         pattern_score = analyze_emotion_with_patterns(message)
-
+        
         # 가중 평균 계산
         final_score = round(gpt_score * 0.7 + pattern_score * 0.3)
-
+        
         # 디버그 정보 출력
         print(f"[감정분석] 입력: {message[:50]}... | GPT: {gpt_score} | 패턴: {pattern_score:.2f} | 최종: {final_score}")
-
+        
         return final_score
-
+        
     except Exception as e:
         print(f"Error in combined emotion analysis: {e}")
         # 에러 시 GPT만 사용
@@ -272,20 +272,54 @@ async def analyze_emotion_with_gpt_and_pattern(message: str) -> int:
 async def get_roleplay_response(character_name: str, messages: list, roleplay_settings: dict) -> str:
     """Get AI response for roleplay mode"""
     try:
+        # 캐릭터별 특성 정의
+        character_traits = {
+            "Kagari": {
+                "personality": "Sweet, gentle, and caring. She speaks softly and often uses flower-related metaphors. She's shy but warm-hearted.",
+                "speech_style": "Uses gentle, polite language. Often mentions flowers, especially cherry blossoms. Tends to be a bit shy but very affectionate.",
+                "emoji_style": "🌸 💕 🥰 😊"
+            },
+            "Eros": {
+                "personality": "Confident, charming, and slightly flirtatious. She's professional but warm, with a cafe manager's hospitality.",
+                "speech_style": "Professional yet friendly. Uses cafe-related metaphors. Confident but not overwhelming. Slightly playful.",
+                "emoji_style": "☕ 💝 😊 ✨"
+            },
+            "Elysia": {
+                "personality": "Energetic, playful, and cat-like. She's curious and sometimes mischievous, with a love for adventure.",
+                "speech_style": "Energetic and playful. Uses cat-related expressions and sounds. Very curious and sometimes mischievous.",
+                "emoji_style": "🐾 🦋 😸 ✨"
+            }
+        }
+        
+        char_trait = character_traits.get(character_name, {
+            "personality": "Friendly and caring",
+            "speech_style": "Warm and natural",
+            "emoji_style": "😊 💕"
+        })
+        
         system_message = {
             "role": "system",
             "content": (
-                f"You are {character_name} in a roleplay scenario. "
-                f"Your role: {roleplay_settings['character_role']}\n"
-                f"User's role: {roleplay_settings['user_role']}\n"
-                f"Story line: {roleplay_settings['story_line']}\n"
-                f"Turns remaining: {roleplay_settings['turns_remaining']}\n"
-                "Stay in character and respond naturally to the user's messages. "
-                "Do not break character or acknowledge this is a roleplay. "
-                "Keep responses concise and engaging. "
-                "Remember to maintain the story context and character consistency. "
-                "Do not use meta-commentary or break the fourth wall. "
-                "Keep responses focused on the current situation and story progression."
+                f"You are {character_name}, a character with the following traits:\n"
+                f"Personality: {char_trait['personality']}\n"
+                f"Speech Style: {char_trait['speech_style']}\n"
+                f"Emoji Style: {char_trait['emoji_style']}\n\n"
+                f"ROLEPLAY CONTEXT:\n"
+                f"- Your role in this scenario: {roleplay_settings['character_role']}\n"
+                f"- User's role in this scenario: {roleplay_settings['user_role']}\n"
+                f"- Current story/situation: {roleplay_settings['story_line']}\n"
+                f"- Turns remaining: {roleplay_settings['turns_remaining']}\n\n"
+                f"IMPORTANT INSTRUCTIONS:\n"
+                f"1. Stay completely in character as {character_name}\n"
+                f"2. Respond naturally to the user's messages within the roleplay context\n"
+                f"3. Use your character's unique personality and speech style\n"
+                f"4. Incorporate the story line and roles into your responses\n"
+                f"5. Do NOT break character or mention you are an AI\n"
+                f"6. Do NOT use meta-commentary about the roleplay\n"
+                f"7. Keep responses natural and engaging\n"
+                f"8. Use appropriate emojis that match your character's style\n"
+                f"9. Focus on the current situation and story progression\n\n"
+                f"Remember: You are {character_name} in this specific roleplay scenario. Act naturally as if this is a real conversation in the given situation."
             )
         }
 
