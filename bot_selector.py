@@ -2677,7 +2677,7 @@ class BotSelector(commands.Bot):
             parts = quest_id.split('_')
             if len(parts) != 3:
                 return False, "Invalid story quest ID"
-            character = parts[1]
+            character = parts[1].capitalize()  # 소문자를 대문자로 변환 (kagari → Kagari)
             quest_type = parts[2]
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
             user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
@@ -2688,7 +2688,7 @@ class BotSelector(commands.Bot):
             import random
             selected_rewards = random.sample(available_rewards, min(3, len(available_rewards)))
             # Kagari 스토리 퀘스트 (3챕터 완료)
-            if character == 'kagari' and quest_type == 'all_chapters':
+            if character == 'Kagari' and quest_type == 'all_chapters':
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Kagari')
                 if len(completed_chapters) < 3:
                     return False, "You need to complete all 3 chapters of Kagari's story first"
@@ -2700,7 +2700,7 @@ class BotSelector(commands.Bot):
                 reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
                 return True, f"Congratulations! You completed all Kagari story chapters! You received: **{', '.join(reward_names)}**"
             # Eros 스토리 퀘스트 (3챕터 완료)
-            if character == 'eros' and quest_type == 'all_chapters':
+            if character == 'Eros' and quest_type == 'all_chapters':
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Eros')
                 if len(completed_chapters) < 3:
                     return False, "You need to complete all 3 chapters of Eros's story first"
@@ -2712,7 +2712,7 @@ class BotSelector(commands.Bot):
                 reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
                 return True, f"Congratulations! You completed all Eros story chapters! You received: **{', '.join(reward_names)}**"
             # Elysia 스토리 퀘스트 (1챕터 완료)
-            if character == 'elysia' and quest_type == 'all_chapters':
+            if character == 'Elysia' and quest_type == 'all_chapters':
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Elysia')
                 if len(completed_chapters) < 1:
                     return False, "You need to complete chapter 1 of Elysia's story first"
@@ -3434,18 +3434,34 @@ class QuestView(discord.ui.View):
         super().__init__(timeout=None)
         db = bot_instance.db
         claimable_quests = []
+        
+        print(f"[DEBUG] QuestView - Processing quests for user_id: {user_id}")
+        
         for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', [])):
             # 데일리/위클리 퀘스트는 DB에서 실제로 오늘(이번주) 보상받았는지 재확인
             if q.get('completed') and not q.get('claimed'):
                 quest_id = q.get('id', '')
+                print(f"[DEBUG] QuestView - Checking quest: {quest_id}, completed: {q.get('completed')}, claimed: {q.get('claimed')}")
+                
                 # 퀘스트 ID로 데일리/위클리 구분
                 if quest_id.startswith('daily_'):
-                    if db.is_quest_claimed(user_id, quest_id):
+                    is_claimed = db.is_quest_claimed(user_id, quest_id)
+                    print(f"[DEBUG] QuestView - Daily quest {quest_id} is_claimed: {is_claimed}")
+                    if is_claimed:
+                        print(f"[DEBUG] QuestView - Skipping daily quest {quest_id} (already claimed)")
                         continue  # 오늘 이미 보상받음 → 선택지에서 숨김
                 elif quest_id.startswith('weekly_'):
-                    if hasattr(db, 'is_weekly_quest_claimed') and db.is_weekly_quest_claimed(user_id, quest_id):
-                        continue  # 이번주 이미 보상받음 → 선택지에서 숨김
+                    if hasattr(db, 'is_weekly_quest_claimed'):
+                        is_claimed = db.is_weekly_quest_claimed(user_id, quest_id)
+                        print(f"[DEBUG] QuestView - Weekly quest {quest_id} is_claimed: {is_claimed}")
+                        if is_claimed:
+                            print(f"[DEBUG] QuestView - Skipping weekly quest {quest_id} (already claimed)")
+                            continue  # 이번주 이미 보상받음 → 선택지에서 숨김
+                
+                print(f"[DEBUG] QuestView - Adding quest {quest_id} to claimable list")
                 claimable_quests.append(q)
+        
+        print(f"[DEBUG] QuestView - Final claimable_quests count: {len(claimable_quests)}")
         if claimable_quests:
             self.add_item(QuestClaimSelect(claimable_quests, bot_instance))
 
