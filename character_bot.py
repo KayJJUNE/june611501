@@ -471,6 +471,9 @@ class CharacterBot(commands.Bot):
         character = self.character_name
         now = datetime.utcnow()
 
+        # 언어 감지
+        detected_language = self.detect_language(message.content)
+        
         # 유저 메시지 DB 저장 (conversations 테이블)
         self.db.add_message(
             message.channel.id,   # channel_id
@@ -478,7 +481,7 @@ class CharacterBot(commands.Bot):
             character,            # character_name
             "user",              # role
             message.content,      # content
-            "en"                 # language (또는 감지된 언어)
+            detected_language     # 감지된 언어
         )
 
         affinity_before = self.db.get_affinity(user_id, character)
@@ -586,18 +589,7 @@ class CharacterBot(commands.Bot):
                 return  # 지급할 카드 없음
             card_id = random.choice(available_cards)
 
-            # 이미 카드를 가지고 있으면 중복 지급 없이 1회만 임베드 출력
-            if self.db.has_user_card(user_id, character, card_id):
-                embed = discord.Embed(
-                    title="🎴 Card Already Claimed!",
-                    description=f"You have already claimed a card for {character} at {new_milestone} affinity.",
-                    color=discord.Color.blue()
-                )
-                await message.channel.send(embed=embed)
-                return
-
-            # 카드 지급 (CardClaimView 사용)
-            self.db.add_user_card(user_id, character, card_id)
+            # 카드 지급 (CardClaimView 사용) - 미리 저장하지 않고 버튼 클릭 시 저장
             from config import CHARACTER_CARD_INFO
             card_info = CHARACTER_CARD_INFO[character][card_id]
             embed = discord.Embed(
@@ -1201,16 +1193,17 @@ class CardClaimView(discord.ui.View):
             await interaction.response.send_message("This button can only be used by the user who achieved the milestone.", ephemeral=True)
             return
 
-        # 중복 체크 (중복 허용이므로 이 부분은 안내만)
-        if self.db.has_user_card(self.user_id, self.character_name, self.card_id):
+        # 실제로 카드를 데이터베이스에 추가
+        success = self.db.add_user_card(self.user_id, self.character_name, self.card_id)
+        
+        if success:
+            button.disabled = True
+            button.label = "Claimed"
+            await interaction.message.edit(view=self)
+            await interaction.response.send_message("Card successfully claimed! Check your/mycard.", ephemeral=True)
+        else:
+            # 이미 카드를 가지고 있는 경우
             await interaction.response.send_message("You have already claimed this card.", ephemeral=True)
-            return
-
-        self.db.add_user_card(self.user_id, self.character_name, self.card_id)
-        button.disabled = True
-        button.label = "Claimed"
-        await interaction.message.edit(view=self)
-        await interaction.response.send_message("Card successfully claimed! Check your/mycard.", ephemeral=True)
 
 def get_card_claim_embed_and_view(user_id, character_name, card_id, db):
     from config import CHARACTER_CARD_INFO
@@ -1306,15 +1299,13 @@ class NicknameInputButton(discord.ui.Button):
                 return
             print(f"[DEBUG] NicknameInputModal 생성 직전 (user_id={self.user_id}, character={self.character})")
             modal = NicknameInputModal(self.bot, self.user_id, self.character)
-            print("[DEBUG] NicknameInputModal 생성 완료, send_modal 직전")
             await interaction.response.send_modal(modal)
-            print("[DEBUG] send_modal 호출 완료")
         except Exception as e:
             print(f"[ERROR] NicknameInputButton.callback error: {e}")
             import traceback
             print(traceback.format_exc())
             if not interaction.response.is_done():
-                await interaction.response.send_message("서버 오류가 발생했습니다.", ephemeral=True)
+                await interaction.response.send_message("Server error occurred.", ephemeral=True)
 
 class NicknameInputView(discord.ui.View):
     def __init__(self, bot, user_id, character):
