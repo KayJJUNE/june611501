@@ -1524,112 +1524,44 @@ class BotSelector(commands.Bot):
         )
         async def story_command(interaction: discord.Interaction):
             """Initiates the story mode UI."""
-            user_id = interaction.user.id
-            
-            # 스토리 채널인지 확인 (챕터 완료 후 바로 다음 챕터 선택 가능)
-            if any(f'-s{i}-' in interaction.channel.name for i in range(1, 10)):
-                # 스토리 채널에서 실행된 경우, 현재 캐릭터의 다음 챕터를 바로 선택할 수 있도록 함
-                channel_name = interaction.channel.name
-                character_name = None
-                
-                # 채널명에서 캐릭터 추출
-                if 'kagari' in channel_name.lower():
-                    character_name = 'Kagari'
-                elif 'eros' in channel_name.lower():
-                    character_name = 'Eros'
-                elif 'elysia' in channel_name.lower():
-                    character_name = 'Elysia'
-                
-                if character_name:
-                    # 현재 캐릭터의 호감도 체크 (100 이상 필요)
-                    affinity_info = self.db.get_affinity(user_id, character_name)
-                    affinity = affinity_info['emotion_score'] if affinity_info else 0
-                    
-                    if affinity < 100:
-                        embed = discord.Embed(
-                            title="⚠️ Story Mode Locked",
-                            description=f"Story mode for {character_name} requires affinity level 100 or higher.",
-                            color=discord.Color.red()
-                        )
-                        embed.add_field(
-                            name="Current Affinity",
-                            value=f"**{affinity}**",
-                            inline=True
-                        )
-                        embed.add_field(
-                            name="Required Affinity",
-                            value="**100**",
-                            inline=True
-                        )
-                        embed.add_field(
-                            name="How to Unlock",
-                            value=f"Keep chatting with {character_name} to increase your affinity level!",
-                            inline=False
-                        )
-                        await interaction.response.send_message(embed=embed, ephemeral=True)
-                        return
-                    
-                    # 현재 캐릭터의 스토리 진행 상황 가져오기
-                    progress = self.db.get_story_progress(user_id, character_name)
-                    story_info = STORY_CHAPTERS.get(character_name)
-                    
-                    if not story_info:
-                        await interaction.response.send_message(f"{character_name}'s story is not yet available.", ephemeral=True)
-                        return
-                    
-                    # 다음 챕터 선택 UI 표시
-                    view = NewStoryChapterSelect(self, character_name, progress)
-                    embed = discord.Embed(
-                        title=f"📖 {character_name}'s Story - Select Chapter",
-                        description="Choose the next chapter to play:",
-                        color=discord.Color.purple()
-                    )
-                    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-                    return
-            
-            # 일반 채널에서 실행된 경우, 캐릭터 선택 UI 표시
-            # 각 캐릭터별 호감도 체크하여 선택 가능한 캐릭터만 표시
-            available_characters = []
-            
-            for char_name in CHARACTER_INFO.keys():
-                affinity_info = self.db.get_affinity(user_id, char_name)
+            # 현재 채널의 캐릭터 찾기 (스토리 모드는 캐릭터별로 제한할 수도 있음)
+            current_bot = None
+            for char_name, bot in self.character_bots.items():
+                if interaction.channel.id in bot.active_channels:
+                    current_bot = bot
+                    break
+            # 호감도 체크 (Silver 이상만 허용)
+            affinity = 0
+            affinity_grade = "Rookie"
+            if current_bot:
+                affinity_info = current_bot.db.get_affinity(interaction.user.id, current_bot.character_name)
                 affinity = affinity_info['emotion_score'] if affinity_info else 0
-                
-                if affinity >= 100:
-                    available_characters.append(char_name)
-            
-            if not available_characters:
+                affinity_grade = get_affinity_grade(affinity)
+            if affinity < 50:
                 embed = discord.Embed(
                     title="⚠️ Story Mode Locked",
-                    description="Story mode requires affinity level 100 or higher with at least one character.",
+                    description="Story mode is only available for Silver level users.",
                     color=discord.Color.red()
                 )
                 embed.add_field(
+                    name="Current Level",
+                    value=f"**{affinity_grade}**",
+                    inline=True
+                )
+                embed.add_field(
+                    name="Required Level",
+                    value="**Silver**",
+                    inline=True
+                )
+                embed.add_field(
                     name="How to Unlock",
-                    value="Keep chatting with characters to increase your affinity level to 100!",
+                    value="Keep chatting with the character to increase your affinity level!",
                     inline=False
                 )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
-            
-            # 선택 가능한 캐릭터만으로 UI 생성
-            view = NewStoryView(self, available_characters)
-            embed = discord.Embed(
-                title="📖 Story Mode",
-                description="Select a character to start their story:",
-                color=discord.Color.purple()
-            )
-            
-            for char_name in available_characters:
-                affinity_info = self.db.get_affinity(user_id, char_name)
-                affinity = affinity_info['emotion_score'] if affinity_info else 0
-                embed.add_field(
-                    name=f"{CHARACTER_INFO[char_name].get('emoji', '📖')} {char_name}",
-                    value=f"Affinity: {affinity}",
-                    inline=True
-                )
-            
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            view = NewStoryView(self)
+            await interaction.response.send_message("Please select a character to start the story with.", view=view, ephemeral=True)
 
         @self.tree.command(
             name="reset_story",
@@ -2058,34 +1990,10 @@ class BotSelector(commands.Bot):
                     from story_mode import handle_chapter3_gift_usage, handle_chapter3_gift_failure
                     if character == "Kagari" and session.get('stage_num') == 3:
                         # Kagari 챕터3 선물 사용 처리
-                        success, result = await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
-                        if success:
-                            success_embed, completion_embed = result
-                            # 성공 임베드와 완료 임베드를 채널에 전송
-                            channel = interaction.channel
-                            await channel.send(embed=success_embed)
-                            await channel.send(embed=completion_embed)
-                            # 10초 후 채널 삭제
-                            import asyncio
-                            await asyncio.sleep(10)
-                            await channel.delete()
-                        else:
-                            print(f"[DEBUG] handle_chapter3_gift_usage failed: {result}")
+                        await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
                     elif character == "Eros" and session.get('stage_num') == 3:
                         # Eros 챕터3 선물 사용 처리
-                        success, result = await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
-                        if success:
-                            success_embed, completion_embed = result
-                            # 성공 임베드와 완료 임베드를 채널에 전송
-                            channel = interaction.channel
-                            await channel.send(embed=success_embed)
-                            await channel.send(embed=completion_embed)
-                            # 10초 후 채널 삭제
-                            import asyncio
-                            await asyncio.sleep(10)
-                            await channel.delete()
-                        else:
-                            print(f"[DEBUG] handle_chapter3_gift_usage failed: {result}")
+                        await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
                     else:
                         # 기타 스토리 모드 선물 처리
                         print(f"[DEBUG] Story mode gift given to {character} in stage {session.get('stage_num')}")
@@ -3677,10 +3585,10 @@ class QuestView(discord.ui.View):
 
 # --- 새로운 스토리 UI ---
 class NewStoryCharacterSelect(discord.ui.Select):
-    def __init__(self, bot_instance: "BotSelector", available_characters: list):
+    def __init__(self, bot_instance: "BotSelector"):
         options = [
-            discord.SelectOption(label=name, value=name, emoji=CHARACTER_INFO[name].get('emoji'))
-            for name in available_characters
+            discord.SelectOption(label=name, value=name, emoji=info.get('emoji'))
+            for name, info in CHARACTER_INFO.items()
         ]
         super().__init__(placeholder="Choose a character...", options=options)
         self.bot = bot_instance
@@ -3777,119 +3685,119 @@ class NewStoryCharacterSelect(discord.ui.Select):
                 # 다른 캐릭터들은 모든 보상 표시
                 rewards_str = (
                     "🎁 Rare Gift\n"
-                    "🎁 Epic Gift\n"
-                    "🎁 Legendary Gift"
+                    "💝 Common Gift\n"
+                    "🎴 Special Tier Card"
                 )
 
-            embed.add_field(name="📚 Chapters", value=chapter_list_str, inline=False)
-            embed.add_field(name="🎁 Rewards", value=rewards_str, inline=False)
+            embed.set_image(url=story_info['banner_image'])
+            embed.add_field(name="Scenarios", value=chapter_list_str, inline=True)
+            embed.add_field(name="Rewards", value=rewards_str, inline=True)
+            print("[DEBUG] Embed created.")
 
-            # 챕터 선택 UI 생성
-            view = NewStoryChapterSelect(self.bot, character_name, progress)
-            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            # 부모 View에 접근하여 아이템 교체
+            self.view.clear_items()
+            self.view.add_item(NewStoryChapterSelect(self.bot, character_name, progress))
+            print("[DEBUG] View items cleared and new chapter select added.")
+
+            await interaction.edit_original_response(embed=embed, view=self.view)
+            print("[DEBUG] Original response edited successfully.")
 
         except Exception as e:
-            print(f"[ERROR] NewStoryCharacterSelect callback error: {e}")
+            print(f"An error occurred in NewStoryCharacterSelect callback: {e}")
             import traceback
             traceback.print_exc()
-            await interaction.followup.send("An error occurred while processing your selection.", ephemeral=True)
-
+            # 오류 발생 시 사용자에게 알림
+            if not interaction.response.is_done():
+                await interaction.response.send_message("An error occurred while loading the character story.", ephemeral=True)
+            else:
+                await interaction.followup.send("An error occurred while loading the character story.", ephemeral=True)
 
 class NewStoryChapterSelect(discord.ui.Select):
     def __init__(self, bot_instance: "BotSelector", character_name: str, progress: list):
         self.bot = bot_instance
         self.character_name = character_name
-        self.progress = progress
-
-        # 사용 가능한 챕터 옵션 생성
-        options = []
         story_info = STORY_CHAPTERS.get(character_name)
-        if not story_info:
-            super().__init__(placeholder="No chapters available", options=[])
-            return
 
-        chapters = story_info.get('chapters', [])
-        chapter_emojis = {1: "☕", 2: "🍵", 3: "💌"} if character_name == "Eros" else {1: "🌸", 2: "🍵", 3: "💌"}
+        self.completed_stages = {p['stage_num'] for p in progress if p.get('status') == 'completed'}
 
         # 마지막으로 완료한 챕터 번호 계산
-        last_completed_chapter = max([p['stage_num'] for p in progress if p.get('status') == 'completed']) if progress else 0
+        last_completed_chapter = max(self.completed_stages) if self.completed_stages else 0
 
-        if character_name == "Elysia":
-            # Elysia는 챕터1만 표시
-            is_completed = any(p['stage_num'] == 1 and p.get('status') == 'completed' for p in progress)
-            if not is_completed:
-                emoji = chapter_emojis.get(1, '📖')
+        options = []
+        for chapter in story_info.get('chapters', []):
+            chapter_id = chapter['id']
+            is_completed = chapter_id in self.completed_stages
+
+            # 순서 규칙: 이전 챕터를 클리어하지 않으면 다음 챕터는 선택 불가
+            is_locked = not is_completed and chapter_id > last_completed_chapter + 1
+
+            # 선택 가능한 챕터만 옵션에 추가 (클리어했거나 잠긴 챕터는 제외)
+            if not is_completed and not is_locked:
                 options.append(discord.SelectOption(
-                    label="Chapter 1",
-                    value="1",
-                    emoji=emoji,
-                    description="Start Elysia's story"
+                    label=f"Chapter {chapter_id}: {chapter['title']}",
+                    value=str(chapter_id)
                 ))
-        else:
-            for i in range(1, 4):
-                is_completed = any(p['stage_num'] == i and p.get('status') == 'completed' for p in progress)
-                is_locked = not is_completed and i > last_completed_chapter + 1
-                
-                if not is_completed and not is_locked:
-                    emoji = chapter_emojis.get(i, '📖')
-                    if character_name == "Eros" and i == 1:
-                        options.append(discord.SelectOption(
-                            label="Scenario 1: A Happy Day at Spot Zero Cafe",
-                            value=str(i),
-                            emoji=emoji,
-                            description="Start Eros's story"
-                        ))
-                    else:
-                        chapter_info_config = next((c for c in chapters if c['id'] == i), None)
-                        if chapter_info_config:
-                            title = chapter_info_config['title']
-                            options.append(discord.SelectOption(
-                                label=f"Chapter {i}: {title}",
-                                value=str(i),
-                                emoji=emoji,
-                                description=f"Start Chapter {i}"
-                            ))
-                        elif i == 3:
-                            options.append(discord.SelectOption(
-                                label="Chapter 3: 이 기억을 영원히",
-                                value=str(i),
-                                emoji=emoji,
-                                description="Start Chapter 3"
-                            ))
 
+        # 선택 가능한 옵션이 없으면 기본 메시지 추가
         if not options:
-            super().__init__(placeholder="All chapters completed", options=[])
-        else:
-            super().__init__(placeholder="Choose a chapter to play...", options=options)
+            options.append(discord.SelectOption(
+                label="No chapters available",
+                value="none"
+            ))
+
+        super().__init__(placeholder="Select a chapter to begin...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        try:
-            print(f"[DEBUG] NewStoryChapterSelect callback initiated for {self.character_name}.")
-            await interaction.response.defer()
+        await interaction.response.defer()
 
-            chapter_num = int(self.values[0])
-            print(f"[DEBUG] Selected chapter: {chapter_num}")
+        # "none" 값 처리
+        if self.values[0] == "none":
+            await interaction.followup.send("No chapters are currently available.", ephemeral=True)
+            return
 
-            # 스토리 시작
-            from story_mode import start_story_mode
-            success = await start_story_mode(self.bot, interaction.user.id, self.character_name, chapter_num, interaction.channel.guild)
+        stage_num = int(self.values[0])
 
-            if success:
-                await interaction.followup.send(f"Starting {self.character_name}'s Chapter {chapter_num}...", ephemeral=True)
-            else:
-                await interaction.followup.send("Failed to start the story. Please try again.", ephemeral=True)
+        # 이미 완료된 챕터인지 확인 (이미 필터링되었지만 안전을 위해)
+        if stage_num in self.completed_stages:
+            await interaction.followup.send("You have already completed this chapter.", ephemeral=True)
+            return
 
-        except Exception as e:
-            print(f"[ERROR] NewStoryChapterSelect callback error: {e}")
-            import traceback
-            traceback.print_exc()
-            await interaction.followup.send("An error occurred while starting the story.", ephemeral=True)
+        # 순서 규칙 확인: 이전 챕터를 클리어하지 않았는지 확인
+        last_completed_chapter = max(self.completed_stages) if self.completed_stages else 0
+        if stage_num > last_completed_chapter + 1:
+            await interaction.followup.send(
+                f"You must complete Chapter {last_completed_chapter + 1} first before starting Chapter {stage_num}.", 
+                ephemeral=True
+            )
+            return
 
+        user = interaction.user
+
+        # 호감도 체크
+        affinity_info = self.bot.db.get_affinity(user.id, self.character_name)
+        current_affinity = affinity_info.get('emotion_score', 0) if affinity_info else 0
+
+        chapter_info = next((c for c in STORY_CHAPTERS[self.character_name]['chapters'] if c['id'] == stage_num), None)
+        affinity_gate = chapter_info.get('affinity_gate', 0)
+
+        if current_affinity < affinity_gate:
+            embed = discord.Embed(
+                title="🔒 Story Locked",
+                description=f"You need at least **{affinity_gate}** affinity with {self.character_name} to start this chapter.\nYour current affinity: **{current_affinity}**",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        channel = await start_story_stage(self.bot, user, self.character_name, stage_num)
+        await interaction.followup.send(f"Your story begins in {channel.mention}!", ephemeral=True)
 
 class NewStoryView(discord.ui.View):
-    def __init__(self, bot_instance: "BotSelector", available_characters: list):
-        super().__init__(timeout=None)
-        self.add_item(NewStoryCharacterSelect(bot_instance, available_characters))
+    def __init__(self, bot_instance: "BotSelector"):
+        super().__init__(timeout=300)
+        self.add_item(NewStoryCharacterSelect(bot_instance))
+
+    # (여기 있던 async def check_story_quests 함수 전체 삭제)
 
 async def main():
     intents = discord.Intents.all()
