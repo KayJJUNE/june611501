@@ -3261,24 +3261,22 @@ connection_pool = psycopg2.pool.SimpleConnectionPool(
 )
 
 def get_user_cards(user_id: str) -> list:
-    """PostgreSQL에서 사용자의 모든 카드 정보를 가져오며, 중복된 카드는 제거합니다."""
+    """PostgreSQL에서 사용자의 모든 카드 정보를 가져오며, 중복된 카드는 제거합니다. (대소문자 구분 없음)"""
     try:
         conn = connection_pool.getconn()
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT DISTINCT character_name, card_id, MIN(obtained_at) as obtained_at, 
-                   MIN(emotion_score_at_obtain) as emotion_score_at_obtain,
-                   (
-                       SELECT COUNT(*)
-                       FROM user_cards AS uc2
-                       WHERE uc2.character_name = uc1.character_name
-                         AND uc2.card_id = uc1.card_id
-                         AND uc2.obtained_at <= uc1.obtained_at
-                   ) AS issued_number
-            FROM user_cards AS uc1
-            WHERE user_id = %s
-            GROUP BY character_name, card_id
+            SELECT character_name, card_id, obtained_at, emotion_score_at_obtain,
+                   ROW_NUMBER() OVER (PARTITION BY character_name, UPPER(card_id) ORDER BY obtained_at) as issued_number
+            FROM (
+                SELECT DISTINCT character_name, UPPER(card_id) as card_id, 
+                       MIN(obtained_at) as obtained_at,
+                       MIN(emotion_score_at_obtain) as emotion_score_at_obtain
+                FROM user_cards 
+                WHERE user_id = %s
+                GROUP BY character_name, UPPER(card_id)
+            ) AS unique_cards
             ORDER BY character_name, obtained_at
             """, (user_id,)
         )

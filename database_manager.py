@@ -382,21 +382,21 @@ class DatabaseManager:
 
     # 카드 관련 함수
     def get_user_cards(self, user_id: int, character_name: str = None) -> list:
-        """사용자가 보유한 카드 목록을 반환합니다. 중복된 카드는 제거합니다."""
+        """사용자가 보유한 카드 목록을 반환합니다. 중복된 카드는 제거합니다. (대소문자 구분 없음)"""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 if character_name:
-                    # 특정 캐릭터의 카드만 조회 (중복 제거)
+                    # 특정 캐릭터의 카드만 조회 (중복 제거, 대소문자 구분 없음)
                     cursor.execute(
-                        "SELECT DISTINCT card_id, MIN(acquired_at) as acquired_at FROM user_cards WHERE user_id = %s AND character_name = %s GROUP BY card_id ORDER BY acquired_at DESC",
+                        "SELECT DISTINCT UPPER(card_id) as card_id, MIN(acquired_at) as acquired_at FROM user_cards WHERE user_id = %s AND character_name = %s GROUP BY UPPER(card_id) ORDER BY acquired_at DESC",
                         (user_id, character_name)
                     )
                 else:
-                    # 모든 캐릭터의 카드 조회 (중복 제거)
+                    # 모든 캐릭터의 카드 조회 (중복 제거, 대소문자 구분 없음)
                     cursor.execute(
-                        "SELECT character_name, card_id, MIN(acquired_at) as acquired_at FROM user_cards WHERE user_id = %s GROUP BY character_name, card_id ORDER BY acquired_at DESC",
+                        "SELECT character_name, UPPER(card_id) as card_id, MIN(acquired_at) as acquired_at FROM user_cards WHERE user_id = %s GROUP BY character_name, UPPER(card_id) ORDER BY acquired_at DESC",
                         (user_id,)
                     )
                 return cursor.fetchall()
@@ -407,14 +407,14 @@ class DatabaseManager:
             self.return_connection(conn)
 
     def has_user_card(self, user_id: int, character_name: str, card_id: str) -> bool:
-        """사용자가 특정 카드를 보유하고 있는지 확인합니다."""
+        """사용자가 특정 카드를 보유하고 있는지 확인합니다. (대소문자 구분 없음)"""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 cursor.execute(
-                    "SELECT 1 FROM user_cards WHERE user_id = %s AND character_name = %s AND card_id = %s",
-                    (user_id, character_name, card_id)
+                    "SELECT 1 FROM user_cards WHERE user_id = %s AND character_name = %s AND UPPER(card_id) = %s",
+                    (user_id, character_name, card_id.upper())
                 )
                 return cursor.fetchone() is not None
         except Exception as e:
@@ -424,19 +424,19 @@ class DatabaseManager:
             self.return_connection(conn)
 
     def get_unique_user_cards_count(self, user_id: int, character_name: str = None) -> int:
-        """사용자가 보유한 고유 카드 개수를 반환합니다."""
+        """사용자가 보유한 고유 카드 개수를 반환합니다. (대소문자 구분 없음)"""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 if character_name:
                     cursor.execute(
-                        "SELECT COUNT(DISTINCT card_id) FROM user_cards WHERE user_id = %s AND character_name = %s",
+                        "SELECT COUNT(DISTINCT UPPER(card_id)) FROM user_cards WHERE user_id = %s AND character_name = %s",
                         (user_id, character_name)
                     )
                 else:
                     cursor.execute(
-                        "SELECT COUNT(DISTINCT CONCAT(character_name, '_', card_id)) FROM user_cards WHERE user_id = %s",
+                        "SELECT COUNT(DISTINCT CONCAT(character_name, '_', UPPER(card_id))) FROM user_cards WHERE user_id = %s",
                         (user_id,)
                     )
                 result = cursor.fetchone()
@@ -448,30 +448,30 @@ class DatabaseManager:
             self.return_connection(conn)
 
     def cleanup_duplicate_cards(self, user_id: int = None) -> int:
-        """중복된 카드 데이터를 정리합니다. 특정 사용자만 정리하거나 전체 정리 가능합니다."""
+        """중복된 카드 데이터를 정리합니다. 특정 사용자만 정리하거나 전체 정리 가능합니다. (대소문자 구분 없음)"""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 if user_id:
-                    # 특정 사용자의 중복 카드만 정리
+                    # 특정 사용자의 중복 카드만 정리 (대소문자 구분 없음)
                     cursor.execute("""
                         DELETE FROM user_cards 
                         WHERE id NOT IN (
                             SELECT MIN(id) 
                             FROM user_cards 
                             WHERE user_id = %s 
-                            GROUP BY user_id, character_name, card_id
+                            GROUP BY user_id, character_name, UPPER(card_id)
                         ) AND user_id = %s
                     """, (user_id, user_id))
                 else:
-                    # 전체 중복 카드 정리
+                    # 전체 중복 카드 정리 (대소문자 구분 없음)
                     cursor.execute("""
                         DELETE FROM user_cards 
                         WHERE id NOT IN (
                             SELECT MIN(id) 
                             FROM user_cards 
-                            GROUP BY user_id, character_name, card_id
+                            GROUP BY user_id, character_name, UPPER(card_id)
                         )
                     """)
                 
@@ -492,13 +492,16 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
-                # 이미 해당 카드를 보유하고 있는지 확인
+                # 카드 ID를 대문자로 정규화
+                normalized_card_id = card_id.upper()
+                
+                # 이미 해당 카드를 보유하고 있는지 확인 (대소문자 구분 없이)
                 cursor.execute(
-                    "SELECT 1 FROM user_cards WHERE user_id = %s AND character_name = %s AND card_id = %s",
-                    (user_id, character_name, card_id)
+                    "SELECT 1 FROM user_cards WHERE user_id = %s AND character_name = %s AND UPPER(card_id) = %s",
+                    (user_id, character_name, normalized_card_id)
                 )
                 if cursor.fetchone():
-                    print(f"[DEBUG] User {user_id} already has card {card_id} for {character_name}")
+                    print(f"[DEBUG] User {user_id} already has card {normalized_card_id} for {character_name}")
                     return False  # 이미 보유한 카드
                 
                 # 호감도 점수 가져오기
@@ -506,12 +509,12 @@ class DatabaseManager:
                 result = cursor.fetchone()
                 emotion_score_at_obtain = result[0] if result else 0
 
-                # 카드 추가
+                # 카드 추가 (정규화된 카드 ID 사용)
                 cursor.execute(
                     "INSERT INTO user_cards (user_id, character_name, card_id, emotion_score_at_obtain, acquired_at) VALUES (%s, %s, %s, %s, %s)",
-                    (user_id, character_name, card_id, emotion_score_at_obtain, acquired_at))
+                    (user_id, character_name, normalized_card_id, emotion_score_at_obtain, acquired_at))
             conn.commit()
-            print(f"[DEBUG] Successfully added card {card_id} for user {user_id} ({character_name})")
+            print(f"[DEBUG] Successfully added card {normalized_card_id} for user {user_id} ({character_name})")
             return True
         except Exception as e:
             print(f"Error adding user card: {e}")
