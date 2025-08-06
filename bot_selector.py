@@ -1355,7 +1355,7 @@ class BotSelector(commands.Bot):
                         character_name = char_name
                         break
 
-                # 전체 카드 목록 조회
+                # 전체 카드 목록 조회 (중복 제거된 버전)
                 all_user_cards = get_user_cards(user_id)
                 
                 if not all_user_cards:
@@ -2317,6 +2317,30 @@ class BotSelector(commands.Bot):
             except Exception as e:
                 await interaction.response.send_message(f"에러 발생: {e}", ephemeral=True)
 
+        @self.tree.command(
+            name="cleanup_cards",
+            description="[Admin] Clean up duplicate cards for a user or all users."
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def cleanup_cards_command(interaction: discord.Interaction, target: discord.Member = None):
+            # 관리자 권한 확인
+            if not self.settings_manager.is_admin(interaction.user):
+                await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+                return
+
+            try:
+                if target:
+                    # 특정 사용자의 중복 카드만 정리
+                    deleted_count = self.db.cleanup_duplicate_cards(target.id)
+                    await interaction.response.send_message(f"✅ Cleaned up {deleted_count} duplicate cards for {target.mention}", ephemeral=True)
+                else:
+                    # 전체 중복 카드 정리
+                    deleted_count = self.db.cleanup_duplicate_cards()
+                    await interaction.response.send_message(f"✅ Cleaned up {deleted_count} duplicate cards for all users", ephemeral=True)
+            except Exception as e:
+                print(f"Error in cleanup_cards_command: {e}")
+                await interaction.response.send_message("❌ An error occurred while cleaning up duplicate cards.", ephemeral=True)
+
     def create_quest_embed(self, user_id: int, quest_status: dict) -> discord.Embed:
         """
         퀘스트 현황을 보여주는 임베드를 생성합니다.
@@ -2991,21 +3015,29 @@ class BotSelector(commands.Bot):
             self.remove_channel(channel_id)
 
     def get_random_card(self, character_name: str, user_id: int) -> tuple[str, str]:
-        """랜덤 카드 획득"""
+        """랜덤 카드 획득 (중복 방지)"""
         try:
             card_info = CHARACTER_CARD_INFO.get(character_name, {})
             if not card_info:
                 return None, None
+            
+            # 사용자가 보유한 카드 목록 가져오기 (중복 제거된 버전)
             user_cards = self.db.get_user_cards(user_id, character_name)
-            user_card_ids = user_cards  # user_cards는 이미 카드ID 문자열 리스트임
+            user_card_ids = [card[0] for card in user_cards]  # card_id만 추출
+            
+            # 아직 보유하지 않은 카드들만 필터링
             available_cards = []
             for card_id in card_info:
                 if card_id not in user_card_ids:
                     available_cards.append(card_id)
+            
             if not available_cards:
+                print(f"[DEBUG] No available cards for user {user_id} ({character_name}) - all cards already owned")
                 return None, None
+            
             import random
             card_id = random.choice(available_cards)
+            print(f"[DEBUG] Selected random card {card_id} for user {user_id} ({character_name})")
             return None, card_id
         except Exception as e:
             print(f"Error in get_random_card: {e}")
@@ -3229,22 +3261,24 @@ connection_pool = psycopg2.pool.SimpleConnectionPool(
 )
 
 def get_user_cards(user_id: str) -> list:
-    """PostgreSQL에서 사용자의 모든 카드 정보를 가져오며, 각 카드의 발급 순번(issued_number)도 포함합니다."""
+    """PostgreSQL에서 사용자의 모든 카드 정보를 가져오며, 중복된 카드는 제거합니다."""
     try:
         conn = connection_pool.getconn()
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT character_name, card_id, obtained_at, emotion_score_at_obtain,
-                (
-                    SELECT COUNT(*)
-                    FROM user_cards AS uc2
-                    WHERE uc2.character_name = uc1.character_name
-                      AND uc2.card_id = uc1.card_id
-                      AND uc2.obtained_at <= uc1.obtained_at
-                ) AS issued_number
+            SELECT DISTINCT character_name, card_id, MIN(obtained_at) as obtained_at, 
+                   MIN(emotion_score_at_obtain) as emotion_score_at_obtain,
+                   (
+                       SELECT COUNT(*)
+                       FROM user_cards AS uc2
+                       WHERE uc2.character_name = uc1.character_name
+                         AND uc2.card_id = uc1.card_id
+                         AND uc2.obtained_at <= uc1.obtained_at
+                   ) AS issued_number
             FROM user_cards AS uc1
             WHERE user_id = %s
+            GROUP BY character_name, card_id
             ORDER BY character_name, obtained_at
             """, (user_id,)
         )

@@ -382,19 +382,21 @@ class DatabaseManager:
 
     # 카드 관련 함수
     def get_user_cards(self, user_id: int, character_name: str = None) -> list:
-        """사용자가 보유한 카드 목록을 반환합니다."""
+        """사용자가 보유한 카드 목록을 반환합니다. 중복된 카드는 제거합니다."""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 if character_name:
+                    # 특정 캐릭터의 카드만 조회 (중복 제거)
                     cursor.execute(
-                        "SELECT card_id, acquired_at FROM user_cards WHERE user_id = %s AND character_name = %s",
+                        "SELECT DISTINCT card_id, MIN(acquired_at) as acquired_at FROM user_cards WHERE user_id = %s AND character_name = %s GROUP BY card_id ORDER BY acquired_at DESC",
                         (user_id, character_name)
                     )
                 else:
+                    # 모든 캐릭터의 카드 조회 (중복 제거)
                     cursor.execute(
-                        "SELECT character_name, card_id, acquired_at FROM user_cards WHERE user_id = %s",
+                        "SELECT character_name, card_id, MIN(acquired_at) as acquired_at FROM user_cards WHERE user_id = %s GROUP BY character_name, card_id ORDER BY acquired_at DESC",
                         (user_id,)
                     )
                 return cursor.fetchall()
@@ -405,6 +407,7 @@ class DatabaseManager:
             self.return_connection(conn)
 
     def has_user_card(self, user_id: int, character_name: str, card_id: str) -> bool:
+        """사용자가 특정 카드를 보유하고 있는지 확인합니다."""
         conn = None
         try:
             conn = self.get_connection()
@@ -420,23 +423,100 @@ class DatabaseManager:
         finally:
             self.return_connection(conn)
 
-    def add_user_card(self, user_id: int, character_name: str, card_id: str, acquired_at: datetime = None) -> bool:
-        """사용자에게 카드를 추가합니다."""
+    def get_unique_user_cards_count(self, user_id: int, character_name: str = None) -> int:
+        """사용자가 보유한 고유 카드 개수를 반환합니다."""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
+                if character_name:
+                    cursor.execute(
+                        "SELECT COUNT(DISTINCT card_id) FROM user_cards WHERE user_id = %s AND character_name = %s",
+                        (user_id, character_name)
+                    )
+                else:
+                    cursor.execute(
+                        "SELECT COUNT(DISTINCT CONCAT(character_name, '_', card_id)) FROM user_cards WHERE user_id = %s",
+                        (user_id,)
+                    )
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting unique user cards count: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
+
+    def cleanup_duplicate_cards(self, user_id: int = None) -> int:
+        """중복된 카드 데이터를 정리합니다. 특정 사용자만 정리하거나 전체 정리 가능합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                if user_id:
+                    # 특정 사용자의 중복 카드만 정리
+                    cursor.execute("""
+                        DELETE FROM user_cards 
+                        WHERE id NOT IN (
+                            SELECT MIN(id) 
+                            FROM user_cards 
+                            WHERE user_id = %s 
+                            GROUP BY user_id, character_name, card_id
+                        ) AND user_id = %s
+                    """, (user_id, user_id))
+                else:
+                    # 전체 중복 카드 정리
+                    cursor.execute("""
+                        DELETE FROM user_cards 
+                        WHERE id NOT IN (
+                            SELECT MIN(id) 
+                            FROM user_cards 
+                            GROUP BY user_id, character_name, card_id
+                        )
+                    """)
+                
+                deleted_count = cursor.rowcount
+                conn.commit()
+                print(f"[DEBUG] Cleaned up {deleted_count} duplicate cards")
+                return deleted_count
+        except Exception as e:
+            print(f"Error cleaning up duplicate cards: {e}")
+            if conn: conn.rollback()
+            return 0
+        finally:
+            self.return_connection(conn)
+
+    def add_user_card(self, user_id: int, character_name: str, card_id: str, acquired_at: datetime = None) -> bool:
+        """사용자에게 카드를 추가합니다. 이미 보유한 카드는 추가하지 않습니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                # 이미 해당 카드를 보유하고 있는지 확인
+                cursor.execute(
+                    "SELECT 1 FROM user_cards WHERE user_id = %s AND character_name = %s AND card_id = %s",
+                    (user_id, character_name, card_id)
+                )
+                if cursor.fetchone():
+                    print(f"[DEBUG] User {user_id} already has card {card_id} for {character_name}")
+                    return False  # 이미 보유한 카드
+                
+                # 호감도 점수 가져오기
                 cursor.execute("SELECT emotion_score FROM affinity WHERE user_id = %s AND character_name = %s", (user_id, character_name))
                 result = cursor.fetchone()
                 emotion_score_at_obtain = result[0] if result else 0
 
+                # 카드 추가
                 cursor.execute(
-                    "INSERT INTO user_cards (user_id, character_name, card_id, emotion_score_at_obtain, acquired_at) VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                    "INSERT INTO user_cards (user_id, character_name, card_id, emotion_score_at_obtain, acquired_at) VALUES (%s, %s, %s, %s, %s)",
                     (user_id, character_name, card_id, emotion_score_at_obtain, acquired_at))
             conn.commit()
+            print(f"[DEBUG] Successfully added card {card_id} for user {user_id} ({character_name})")
+            return True
         except Exception as e:
             print(f"Error adding user card: {e}")
             if conn: conn.rollback()
+            return False
         finally:
             self.return_connection(conn)
 
