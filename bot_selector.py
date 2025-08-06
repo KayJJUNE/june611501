@@ -1344,28 +1344,40 @@ class BotSelector(commands.Bot):
         )
         async def mycard_command(interaction: discord.Interaction):
             try:
+                user_id = int(interaction.user.id)  # 항상 int로 변환
+                
                 # 현재 채널의 캐릭터 봇 찾기
                 current_bot = None
+                character_name = None
                 for char_name, bot in self.character_bots.items():
                     if interaction.channel.id in bot.active_channels:
                         current_bot = bot
+                        character_name = char_name
                         break
 
-                if not current_bot:
-                    await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
+                # 전체 카드 목록 조회
+                all_user_cards = get_user_cards(user_id)
+                
+                if not all_user_cards:
+                    await interaction.response.send_message("You don't have any cards yet.", ephemeral=True)
                     return
 
-                character_name = current_bot.character_name
-                user_id = int(interaction.user.id)  # 항상 int로 변환
-
-                # 해당 캐릭터의 카드만 조회
-                user_cards = [card for card in get_user_cards(user_id) if card['character_name'] == character_name]
+                # 특정 캐릭터 채널인 경우 해당 캐릭터 카드만, 아니면 전체 카드 표시
+                if character_name:
+                    user_cards = [card for card in all_user_cards if card['character_name'] == character_name]
+                    title = f"🎴 {character_name} Card Collection Progress"
+                    description = f"Your current collection status for {character_name} cards"
+                else:
+                    user_cards = all_user_cards
+                    title = "🎴 Your Card Collection"
+                    description = "Your current collection status for all characters"
 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
                 total_cards = {'C': 10, 'B': 7, 'A': 5, 'S': 4}
+                
                 for card in user_cards:
-                    card_info = get_card_info_by_id(character_name, card['card_id'])
+                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
                     if card_info and 'tier' in card_info:
                         tier = card_info['tier']
                         if tier in tier_counts:
@@ -1373,8 +1385,8 @@ class BotSelector(commands.Bot):
 
                 # --- 진행 바를 각 티어별 카드 수에 맞게 동적으로 생성 ---
                 collection_embed = discord.Embed(
-                    title=f"🎴 {character_name} Card Collection Progress",
-                    description=f"Your current collection status for {character_name} cards",
+                    title=title,
+                    description=description,
                     color=discord.Color.gold()
                 )
                 tier_emojis = {'C': '🥉', 'B': '🥈', 'A': '🥇', 'S': '🏆'}
@@ -1408,14 +1420,15 @@ class BotSelector(commands.Bot):
                 await interaction.response.send_message(embed=collection_embed, ephemeral=True)
 
                 if not user_cards:
-                    await interaction.followup.send(f"You don't have any {character_name} cards yet.", ephemeral=True)
+                    await interaction.followup.send(f"You don't have any {character_name if character_name else 'character'} cards yet.", ephemeral=True)
                     return
 
                 # 카드 슬라이더 뷰
-                card_info_dict = {
-                    card['card_id']: get_card_info_by_id(character_name, card['card_id'])
-                    for card in user_cards if get_card_info_by_id(character_name, card['card_id'])
-                }
+                card_info_dict = {}
+                for card in user_cards:
+                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
+                    if card_info:
+                        card_info_dict[card['card_id']] = card_info
 
                 def get_tier_order(card_id):
                     tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
@@ -1425,13 +1438,13 @@ class BotSelector(commands.Bot):
                 sorted_cards = sorted(list(card_info_dict.keys()), key=get_tier_order)
 
                 if not sorted_cards:
-                     await interaction.followup.send(f"You don't seem to have any valid cards for {character_name}.", ephemeral=True)
+                     await interaction.followup.send(f"You don't seem to have any valid cards for {character_name if character_name else 'any character'}.", ephemeral=True)
                      return
 
                 slider_view = CardSliderView(
                     user_id=user_id,
                     cards=sorted_cards,
-                    character_name=character_name,
+                    character_name=character_name or "All",
                     card_info_dict=card_info_dict,
                     db=self.db  # db 인스턴스 전달
                 )
@@ -1440,20 +1453,16 @@ class BotSelector(commands.Bot):
                 await slider_view.initial_message(interaction)
 
             except Exception as e:
-                print(f"Error in mycard command: {str(e)}")
+                print(f"Error in mycard_command: {e}")
                 import traceback
-                print(traceback.format_exc())
-                # Ensure the interaction is responded to, even if an error occurs
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(
-                        "An error occurred while loading your cards. Please try again.",
-                        ephemeral=True
-                    )
-                else:
-                    await interaction.followup.send(
-                        "An error occurred while loading your cards. Please try again.",
-                        ephemeral=True
-                    )
+                traceback.print_exc()
+                try:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message("An error occurred while loading your cards. Please try again.", ephemeral=True)
+                    else:
+                        await interaction.followup.send("An error occurred while loading your cards. Please try again.", ephemeral=True)
+                except Exception as followup_error:
+                    print(f"Error sending error message: {followup_error}")
 
         @self.tree.command(
             name="check_language",
@@ -1882,23 +1891,33 @@ class BotSelector(commands.Bot):
             await interaction.response.defer(ephemeral=True)
             try:
                 print(f"[DEBUG] /gift called: user_id={interaction.user.id}, item={item}, quantity={quantity}")
-                # 스토리 모드 세션 체크 등 기존 코드...
+                
+                # 스토리 모드 세션 체크
                 from story_mode import story_sessions
                 print(f"[DEBUG] story_sessions keys: {list(story_sessions.keys())}")
                 session = story_sessions.get(interaction.channel.id)
                 print(f"[DEBUG] session: {session}")
-                # ... (생략) ...
-                # 현재 채널의 캐릭터 봇 찾기
+                
+                character = None
                 current_bot = None
-                for char_name, bot in self.character_bots.items():
-                    if interaction.channel.id in bot.active_channels:
-                        current_bot = bot
-                        break
-                if not current_bot:
-                    print("[DEBUG] current_bot not found for channel")
-                    await interaction.followup.send("You can't give gifts in this channel. Please use this in a character's chat channel.", ephemeral=True)
+                
+                # 1. 스토리 모드 세션이 있는 경우
+                if session and session.get('character_name'):
+                    character = session['character_name']
+                    print(f"[DEBUG] Found story session for character: {character}")
+                else:
+                    # 2. 일반 캐릭터 채널인 경우
+                    for char_name, bot in self.character_bots.items():
+                        if interaction.channel.id in bot.active_channels:
+                            current_bot = bot
+                            character = char_name
+                            break
+                
+                if not character:
+                    print("[DEBUG] No character found for channel")
+                    await interaction.followup.send("You can't give gifts in this channel. Please use this in a character's chat channel or story mode.", ephemeral=True)
                     return
-                character = current_bot.character_name
+                
                 user_id = interaction.user.id
                 print(f"[DEBUG] character={character}, user_id={user_id}")
                 # 보유 수량 체크
@@ -1957,21 +1976,27 @@ class BotSelector(commands.Bot):
                 embed.set_footer(text="Your gift has been delivered!")
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 print(f"[DEBUG] Gift embed sent.")
-                # 캐릭터 봇 리액션
+                # 캐릭터 봇 리액션 (일반 채널인 경우만)
                 if current_bot:
                     await current_bot.send_reaction_message(
                         channel_id=interaction.channel_id,
                         text=f"*{reaction_message}*",
                         emoji=gift_emoji
                     )
-                print(f"[DEBUG] send_reaction_message sent.")
-                # 모든 단계가 성공하면 마지막에 선물 차감
-                print(f"[DEBUG] Attempting to use_user_gift: {item}, quantity={quantity}")
-                result = self.db.use_user_gift(user_id, item, quantity)
-                print(f"[DEBUG] use_user_gift result: {result}")
-                if not result:
-                    await interaction.followup.send("The gift could not be used. Please check the quantity or contact the administrator..", ephemeral=True)
-                    return
+                    print(f"[DEBUG] send_reaction_message sent.")
+                
+                # 스토리 모드에서 선물 사용 처리
+                if session and session.get('character_name'):
+                    from story_mode import handle_chapter3_gift_usage, handle_chapter3_gift_failure
+                    if character == "Kagari" and session.get('stage_num') == 3:
+                        # Kagari 챕터3 선물 사용 처리
+                        await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
+                    elif character == "Eros" and session.get('stage_num') == 3:
+                        # Eros 챕터3 선물 사용 처리
+                        await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
+                    else:
+                        # 기타 스토리 모드 선물 처리
+                        print(f"[DEBUG] Story mode gift given to {character} in stage {session.get('stage_num')}")
             except Exception as e:
                 print(f"[ERROR] /gift 명령어 처리 중 오류: {e}")
                 import traceback
@@ -3412,11 +3437,13 @@ class QuestView(discord.ui.View):
         for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', [])):
             # 데일리/위클리 퀘스트는 DB에서 실제로 오늘(이번주) 보상받았는지 재확인
             if q.get('completed') and not q.get('claimed'):
-                if q.get('type') == 'daily':
-                    if db.is_quest_claimed(user_id, q.get('id')):
+                quest_id = q.get('id', '')
+                # 퀘스트 ID로 데일리/위클리 구분
+                if quest_id.startswith('daily_'):
+                    if db.is_quest_claimed(user_id, quest_id):
                         continue  # 오늘 이미 보상받음 → 선택지에서 숨김
-                if q.get('type') == 'weekly':
-                    if hasattr(db, 'is_weekly_quest_claimed') and db.is_weekly_quest_claimed(user_id, q.get('id')):
+                elif quest_id.startswith('weekly_'):
+                    if hasattr(db, 'is_weekly_quest_claimed') and db.is_weekly_quest_claimed(user_id, quest_id):
                         continue  # 이번주 이미 보상받음 → 선택지에서 숨김
                 claimable_quests.append(q)
         if claimable_quests:
