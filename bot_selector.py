@@ -2432,34 +2432,50 @@ class BotSelector(commands.Bot):
 
     async def claim_levelup_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         try:
+            print(f"[DEBUG] claim_levelup_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
             parts = quest_id.split('_')
+            print(f"[DEBUG] claim_levelup_reward - parts: {parts}")
             if len(parts) != 3:
+                print(f"[DEBUG] claim_levelup_reward - Invalid parts length: {len(parts)}")
                 return False, "Invalid levelup quest ID"
             character = parts[1]
             grade = parts[2]
+            print(f"[DEBUG] claim_levelup_reward - character: '{character}', grade: '{grade}'")
             if grade != 'Gold':
+                print(f"[DEBUG] claim_levelup_reward - Unsupported grade: {grade}")
                 return False, "Only Gold level-up quests are supported."
+            
+            # 이미 수령했는지 확인
+            if self.db.is_quest_claimed(user_id, quest_id):
+                print(f"[DEBUG] claim_levelup_reward - Quest already claimed")
+                return False, "You have already claimed this reward!"
+            
             self.db.add_levelup_flag(user_id, character, grade)
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
             # 유저가 이미 받은 아이템 목록 조회
             user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
+            print(f"[DEBUG] claim_levelup_reward - user_gifts count: {len(user_gifts)}")
             reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+            print(f"[DEBUG] claim_levelup_reward - reward_candidates count: {len(reward_candidates)}")
             available_rewards = [item for item in reward_candidates if item not in user_gifts]
+            print(f"[DEBUG] claim_levelup_reward - available_rewards count: {len(available_rewards)}")
             if not available_rewards:
+                print(f"[DEBUG] claim_levelup_reward - No available rewards")
                 return False, "You have already received all possible rewards for this quest!"
             import random
             selected_rewards = random.sample(available_rewards, min(3, len(available_rewards)))
+            print(f"[DEBUG] claim_levelup_reward - selected_rewards: {selected_rewards}")
             for gift_id in selected_rewards:
                 self.db.add_user_gift(user_id, gift_id, 1)
             self.db.claim_quest(user_id, quest_id)
             reward_names = [get_gift_details(g)['name'] + ' x1' for g in selected_rewards]
+            print(f"[DEBUG] claim_levelup_reward - reward_names: {reward_names}")
             return True, ", ".join(reward_names)
         except Exception as e:
             print(f"Error claiming levelup reward: {e}")
             import traceback
             traceback.print_exc()
             return False, "Error claiming levelup reward"
-
 
     def format_daily_quests(self, quests: list) -> str:
         if quests is None or len(quests) == 0:
@@ -3466,30 +3482,36 @@ class QuestView(discord.ui.View):
         print(f"[DEBUG] QuestView - Processing quests for user_id: {user_id}")
         
         for q in (quest_status.get('daily', []) + quest_status.get('weekly', []) + quest_status.get('levelup', []) + quest_status.get('story', [])):
-            # 데일리/위클리 퀘스트는 DB에서 실제로 오늘(이번주) 보상받았는지 재확인
+            # 데일리/위클리/레벨업 퀘스트는 DB에서 실제로 오늘(이번주) 보상받았는지 재확인
             if q.get('completed') and not q.get('claimed'):
                 quest_id = q.get('id', '')
                 print(f"[DEBUG] QuestView - Checking quest: {quest_id}, completed: {q.get('completed')}, claimed: {q.get('claimed')}")
                 
-                # 퀘스트 ID로 데일리/위클리 구분
+                # 퀘스트 ID로 데일리/위클리/레벨업 구분
                 if quest_id.startswith('daily_'):
                     is_claimed = db.is_quest_claimed(user_id, quest_id)
                     print(f"[DEBUG] QuestView - Daily quest {quest_id} is_claimed: {is_claimed}")
                     if is_claimed:
-                        print(f"[DEBUG] QuestView - Skipping daily quest {quest_id} (already claimed)")
+                        print(f"[DEBUG] QuestView - Skipping quest {quest_id} (already claimed)")
                         continue  # 오늘 이미 보상받음 → 선택지에서 숨김
                 elif quest_id.startswith('weekly_'):
-                    if hasattr(db, 'is_weekly_quest_claimed'):
-                        is_claimed = db.is_weekly_quest_claimed(user_id, quest_id)
-                        print(f"[DEBUG] QuestView - Weekly quest {quest_id} is_claimed: {is_claimed}")
-                        if is_claimed:
-                            print(f"[DEBUG] QuestView - Skipping weekly quest {quest_id} (already claimed)")
-                            continue  # 이번주 이미 보상받음 → 선택지에서 숨김
+                    is_claimed = hasattr(db, 'is_weekly_quest_claimed') and db.is_weekly_quest_claimed(user_id, quest_id)
+                    print(f"[DEBUG] QuestView - Weekly quest {quest_id} is_claimed: {is_claimed}")
+                    if is_claimed:
+                        print(f"[DEBUG] QuestView - Skipping quest {quest_id} (already claimed)")
+                        continue  # 이번주 이미 보상받음 → 선택지에서 숨김
+                elif quest_id.startswith('levelup_'):
+                    is_claimed = db.is_quest_claimed(user_id, quest_id)
+                    print(f"[DEBUG] QuestView - Levelup quest {quest_id} is_claimed: {is_claimed}")
+                    if is_claimed:
+                        print(f"[DEBUG] QuestView - Skipping quest {quest_id} (already claimed)")
+                        continue  # 이미 보상받음 → 선택지에서 숨김
                 
                 print(f"[DEBUG] QuestView - Adding quest {quest_id} to claimable list")
                 claimable_quests.append(q)
         
         print(f"[DEBUG] QuestView - Final claimable_quests count: {len(claimable_quests)}")
+        
         if claimable_quests:
             self.add_item(QuestClaimSelect(claimable_quests, bot_instance))
 
