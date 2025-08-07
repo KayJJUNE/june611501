@@ -219,6 +219,96 @@ def get_login_streak_ranking():
     conn.close()
     return df
 
+def get_card_ranking():
+    """카드 획득 랭킹을 반환합니다."""
+    conn = get_conn()
+    
+    # 각 유저별 카드 통계
+    df = pd.read_sql_query("""
+        SELECT 
+            uc.user_id,
+            uc.character_name,
+            CASE 
+                WHEN UPPER(uc.card_id) LIKE 'KAGARI%' THEN 'Kagari'
+                WHEN UPPER(uc.card_id) LIKE 'EROS%' THEN 'Eros'
+                WHEN UPPER(uc.card_id) LIKE 'ELYSIA%' THEN 'Elysia'
+                ELSE 'Unknown'
+            END as character_name_clean,
+            CASE 
+                WHEN UPPER(uc.card_id) LIKE '%S%' THEN 'S'
+                WHEN UPPER(uc.card_id) LIKE '%A%' THEN 'A'
+                WHEN UPPER(uc.card_id) LIKE '%B%' THEN 'B'
+                WHEN UPPER(uc.card_id) LIKE '%C%' THEN 'C'
+                ELSE 'Unknown'
+            END as card_tier,
+            COUNT(*) as card_count
+        FROM user_cards uc
+        GROUP BY uc.user_id, uc.character_name, uc.card_id
+    """, conn)
+    
+    # 유저별 총 카드 수
+    total_cards = pd.read_sql_query("""
+        SELECT 
+            user_id,
+            COUNT(*) as total_cards
+        FROM user_cards
+        GROUP BY user_id
+        ORDER BY total_cards DESC
+    """, conn)
+    
+    # 캐릭터별 카드 수
+    character_cards = pd.read_sql_query("""
+        SELECT 
+            user_id,
+            CASE 
+                WHEN UPPER(card_id) LIKE 'KAGARI%' THEN 'Kagari'
+                WHEN UPPER(card_id) LIKE 'EROS%' THEN 'Eros'
+                WHEN UPPER(card_id) LIKE 'ELYSIA%' THEN 'Elysia'
+                ELSE 'Unknown'
+            END as character_name,
+            COUNT(*) as character_card_count
+        FROM user_cards
+        GROUP BY user_id, 
+            CASE 
+                WHEN UPPER(card_id) LIKE 'KAGARI%' THEN 'Kagari'
+                WHEN UPPER(card_id) LIKE 'EROS%' THEN 'Eros'
+                WHEN UPPER(card_id) LIKE 'ELYSIA%' THEN 'Elysia'
+                ELSE 'Unknown'
+            END
+    """, conn)
+    
+    # 티어별 카드 수
+    tier_cards = pd.read_sql_query("""
+        SELECT 
+            user_id,
+            CASE 
+                WHEN UPPER(card_id) LIKE '%S%' THEN 'S'
+                WHEN UPPER(card_id) LIKE '%A%' THEN 'A'
+                WHEN UPPER(card_id) LIKE '%B%' THEN 'B'
+                WHEN UPPER(card_id) LIKE '%C%' THEN 'C'
+                ELSE 'Unknown'
+            END as card_tier,
+            COUNT(*) as tier_card_count
+        FROM user_cards
+        GROUP BY user_id, 
+            CASE 
+                WHEN UPPER(card_id) LIKE '%S%' THEN 'S'
+                WHEN UPPER(card_id) LIKE '%A%' THEN 'A'
+                WHEN UPPER(card_id) LIKE '%B%' THEN 'B'
+                WHEN UPPER(card_id) LIKE '%C%' THEN 'C'
+                ELSE 'Unknown'
+            END
+    """, conn)
+    
+    conn.close()
+    
+    return {
+        'total_cards': total_cards,
+        'character_cards': character_cards,
+        'tier_cards': tier_cards,
+        'detailed_cards': df
+    }
+
 def get_message_trend():
     conn = get_conn()
     df = pd.read_sql_query("""
@@ -365,6 +455,59 @@ def show_all_rankings():
     elysia = get_full_character_ranking("Elysia")
     total = get_full_total_ranking()
     return kagari, eros, elysia, total
+
+def show_card_ranking():
+    """카드 획득 랭킹을 표시합니다."""
+    card_data = get_card_ranking()
+    
+    # 총 카드 수 랭킹 (상위 20명)
+    total_ranking = card_data['total_cards'].head(20).copy()
+    total_ranking['rank'] = range(1, len(total_ranking) + 1)
+    total_ranking = total_ranking[['rank', 'user_id', 'total_cards']]
+    
+    # 캐릭터별 카드 수 랭킹
+    character_ranking = card_data['character_cards'].copy()
+    character_ranking = character_ranking.pivot_table(
+        index='user_id', 
+        columns='character_name', 
+        values='character_card_count', 
+        fill_value=0
+    ).reset_index()
+    
+    # 티어별 카드 수 랭킹
+    tier_ranking = card_data['tier_cards'].copy()
+    tier_ranking = tier_ranking.pivot_table(
+        index='user_id', 
+        columns='card_tier', 
+        values='tier_card_count', 
+        fill_value=0
+    ).reset_index()
+    
+    # 상세 통계 (상위 10명)
+    detailed_stats = []
+    for user_id in total_ranking['user_id'].head(10):
+        user_char_cards = character_ranking[character_ranking['user_id'] == user_id]
+        user_tier_cards = tier_ranking[tier_ranking['user_id'] == user_id]
+        
+        if not user_char_cards.empty and not user_tier_cards.empty:
+            char_stats = user_char_cards.iloc[0]
+            tier_stats = user_tier_cards.iloc[0]
+            
+            detailed_stats.append({
+                'user_id': user_id,
+                'total_cards': total_ranking[total_ranking['user_id'] == user_id]['total_cards'].iloc[0],
+                'Kagari': char_stats.get('Kagari', 0),
+                'Eros': char_stats.get('Eros', 0),
+                'Elysia': char_stats.get('Elysia', 0),
+                'S_tier': tier_stats.get('S', 0),
+                'A_tier': tier_stats.get('A', 0),
+                'B_tier': tier_stats.get('B', 0),
+                'C_tier': tier_stats.get('C', 0)
+            })
+    
+    detailed_df = pd.DataFrame(detailed_stats)
+    
+    return total_ranking, character_ranking, tier_ranking, detailed_df
 
 def get_level_statistics():
     conn = get_conn()
@@ -797,6 +940,13 @@ if __name__ == "__main__":
             gr.Dataframe(eros, label="Eros 호감도 랭킹")
             gr.Dataframe(elysia, label="Elysia 호감도 랭킹")
             gr.Dataframe(get_login_streak_ranking(), label="연속 로그인 랭킹")
+            
+            gr.Markdown("## 🎴 카드 획득 랭킹")
+            total_ranking, character_ranking, tier_ranking, detailed_df = show_card_ranking()
+            gr.Dataframe(total_ranking, label="📊 총 카드 수 랭킹 (상위 20명)")
+            gr.Dataframe(detailed_df, label="🎯 상위 10명 상세 통계 (캐릭터별/티어별)")
+            gr.Dataframe(character_ranking, label="👥 캐릭터별 카드 수 분포")
+            gr.Dataframe(tier_ranking, label="⭐ 티어별 카드 수 분포")
 
         with gr.Tab("AI/키워드/서머리"):
             gr.Markdown("## 키워드/AI/서머리 데이터")
