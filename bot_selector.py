@@ -2285,11 +2285,18 @@ class BotSelector(commands.Bot):
             # (character_reactions는 이미 전역에 선언되어 있다고 가정)
             correct_drink = answer_map.get(character)
             is_correct = (drink.strip().lower() == correct_drink.strip().lower())
-            # --- 제출한 캐릭터 기록 (정답/오답 무관) ---
+            # --- 제출한 캐릭터 기록 및 정답 여부 추적 ---
             if 'served_characters' not in session:
                 session['served_characters'] = set()
+            if 'correct_answers' not in session:
+                session['correct_answers'] = set()
+            
             session['served_characters'].add(character)
+            if is_correct:
+                session['correct_answers'].add(character)
+            
             served_count = len(session['served_characters'])
+            correct_count = len(session['correct_answers'])
             # --- 리액션 임베드 (진행상황 포함) ---
             if is_correct:
                 reaction_text = character_reactions.get(character, {}).get("success", f"Great! {character} is delighted with the {drink}!")
@@ -2305,34 +2312,48 @@ class BotSelector(commands.Bot):
             await interaction.response.send_message(embed=embed)
             # --- 모든 캐릭터에게 음료를 지급한 경우 결과/리워드 임베드 출력 ---
             if served_count == total_characters:
-                # 리워드 지급 (커먼 2개)
-                from gift_manager import GIFT_RARITY, get_gifts_by_rarity_v2, get_gift_details
-                rarity_str = GIFT_RARITY['COMMON']
-                gift_ids = get_gifts_by_rarity_v2(rarity_str, 2)
-                user_id = interaction.user.id
-                if gift_ids:
-                    for gift_id in gift_ids:
-                        self.db.add_user_gift(user_id, gift_id, 1)
-                    gift_names = [get_gift_details(g)['name'] for g in gift_ids if get_gift_details(g)]
-                    reward_text = f"You received: **{', '.join(gift_names)}**\nCheck your inventory with `/inventory`."
+                # 모든 정답이 맞았는지 확인
+                if correct_count == total_characters:
+                    # 성공: 모든 정답이 맞음
+                    # 리워드 지급 (커먼 2개)
+                    from gift_manager import GIFT_RARITY, get_gifts_by_rarity_v2, get_gift_details
+                    rarity_str = GIFT_RARITY['COMMON']
+                    gift_ids = get_gifts_by_rarity_v2(rarity_str, 2)
+                    user_id = interaction.user.id
+                    if gift_ids:
+                        for gift_id in gift_ids:
+                            self.db.add_user_gift(user_id, gift_id, 1)
+                        gift_names = [get_gift_details(g)['name'] for g in gift_ids if get_gift_details(g)]
+                        reward_text = f"You received: **{', '.join(gift_names)}**\nCheck your inventory with `/inventory`."
+                    else:
+                        reward_text = "You received: **No gifts available for this rarity.**\nCheck your inventory with `/inventory`."
+                    complete_embed = discord.Embed(
+                        title="🍯 Mission Accomplished!",
+                        description=f"Perfect! You have served all {total_characters} team members with their correct drinks!\n{reward_text}",
+                        color=discord.Color.gold()
+                    )
+                    await interaction.followup.send(embed=complete_embed)
+                    # 챕터2 클리어 기록 및 챕터3 오픈 안내
+                    self.db.complete_story_stage(user_id, 'Eros', 2)
+                    transition_embed = discord.Embed(
+                        title="🔓 Chapter 3 is now unlocked!",
+                        description="Congratulations! You have unlocked Chapter 3: Find the Café Culprit!\nUse `/story` to start Chapter 3!",
+                        color=discord.Color.orange()
+                    )
+                    await interaction.followup.send(embed=transition_embed)
+                    # 세션 종료 처리
+                    session["is_active"] = False
                 else:
-                    reward_text = "You received: **No gifts available for this rarity.**\nCheck your inventory with `/inventory`."
-                complete_embed = discord.Embed(
-                    title="🍯 All Drinks Delivered!",
-                    description=f"You have served all {total_characters} team members!\n{reward_text}",
-                    color=discord.Color.gold()
-                )
-                await interaction.followup.send(embed=complete_embed)
-                # 챕터2 클리어 기록 및 챕터3 오픈 안내
-                self.db.complete_story_stage(user_id, 'Eros', 2)
-                transition_embed = discord.Embed(
-                    title="🔓 Chapter 3 is now unlocked!",
-                    description="Congratulations! You have unlocked Chapter 3: Find the Café Culprit!\nUse `/story` to start Chapter 3!",
-                    color=discord.Color.orange()
-                )
-                await interaction.followup.send(embed=transition_embed)
-                # 세션 종료 처리
-                session["is_active"] = False
+                    # 실패: 일부 정답이 틀림
+                    wrong_count = total_characters - correct_count
+                    failure_embed = discord.Embed(
+                        title="❌ Mission Failed",
+                        description=f"You have served all {total_characters} team members, but {wrong_count} of them received incorrect drinks.\n\n**Mission failed. Please try Chapter 2 again.**",
+                        color=discord.Color.red()
+                    )
+                    await interaction.followup.send(embed=failure_embed)
+                    # 세션 종료 처리 (챕터3 오픈 안함)
+                    session["is_active"] = False
             story_sessions[interaction.channel.id] = session
 
         @self.tree.command(
