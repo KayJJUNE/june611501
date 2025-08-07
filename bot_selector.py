@@ -3167,15 +3167,18 @@ class BotSelector(commands.Bot):
         if session["turn_count"] >= 30:
             embed = discord.Embed(
                 title="🎭 Roleplay Session Ended",
-                description="All 30 turns of your roleplay session are complete!\n\nThank you for participating in this immersive scenario. See you next time!",
+                description="All 30 turns of your roleplay session are complete!\n\nThank you for participating in this immersive scenario. See you next time!\n\n⏰ This channel will be automatically deleted in 5 seconds.",
                 color=discord.Color.pink()
             )
             await message.channel.send(embed=embed)
-            await asyncio.sleep(3)
+            
+            # 5초 후 채널 삭제
+            await asyncio.sleep(5)
             try:
                 await message.channel.delete()
+                print(f"[DEBUG][Roleplay] 30턴 완료 후 채널 삭제 완료")
             except Exception as e:
-                print(f"Channel deletion failed: {e}")
+                print(f"[DEBUG][Roleplay] 30턴 완료 후 채널 삭제 실패: {e}")
 
     def remove_channel(self, channel_id):
         # 활성화된 채널 목록에서 제거
@@ -4030,6 +4033,14 @@ class NewStoryCharacterSelect(discord.ui.Select):
                     description="A heartwarming story at Spot Zero Cafe!",
                     color=discord.Color.purple()
                 )
+            elif character_name == "Kagari":
+                embed = discord.Embed(
+                    title=f"🌸 {character_name}'s Story",
+                    description=f"Listen to {character_name}'s hidden story and claim incredible rewards.",
+                    color=discord.Color.purple()
+                )
+                # Kagari 이미지 추가
+                embed.set_thumbnail(url="https://imagedelivery.net/adba8f80-db9d-4b7a-151d-3defed61af00")
             else:
                 embed = discord.Embed(
                     title=f"🌙 {character_name}'s Story",
