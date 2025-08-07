@@ -1636,13 +1636,14 @@ class BotSelector(commands.Bot):
                         return
                     
                     # 다음 챕터 선택 UI 표시
+                    await interaction.response.defer(ephemeral=True)
                     view = NewStoryChapterSelect(self, character_name, progress, interaction.channel)
                     embed = discord.Embed(
                         title=f"📖 {character_name}'s Story - Select Chapter",
                         description="Choose the next chapter to play:",
                         color=discord.Color.purple()
                     )
-                    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
                     return
             
             # 일반 채널에서 실행된 경우, 캐릭터 선택 UI 표시

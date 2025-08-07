@@ -475,17 +475,27 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
                     if self.claimed:
                         return await interaction.response.send_message("You have already claimed your card!", ephemeral=True)
                     
+                    # Discord 타임아웃 방지
+                    await interaction.response.defer(ephemeral=True)
+                    
                     # 실제로 DB에 카드 저장
                     try:
                         success = self.bot.db.add_user_card(self.user_id, "Eros", self.card_id)
                         if success:
                             self.claimed = True
-                            await interaction.response.send_message(f"You have claimed your card: **{self.card_id}**! Check your cards with `/mycard`.", ephemeral=True)
+                            # 버튼 비활성화 및 텍스트 변경
+                            button.disabled = True
+                            button.label = "Claimed"
+                            button.style = discord.ButtonStyle.grey
+                            
+                            # 메시지 업데이트
+                            await interaction.message.edit(view=self)
+                            await interaction.followup.send(f"You have claimed your card: **{self.card_id}**! Check your cards with `/mycard`.", ephemeral=True)
                         else:
-                            await interaction.response.send_message("Failed to claim the card. Please try again.", ephemeral=True)
+                            await interaction.followup.send("Failed to claim the card. Please try again.", ephemeral=True)
                     except Exception as e:
                         print(f"Error claiming card {self.card_id} for user {self.user_id}: {e}")
-                        await interaction.response.send_message("An error occurred while claiming the card. Please try again.", ephemeral=True)
+                        await interaction.followup.send("An error occurred while claiming the card. Please try again.", ephemeral=True)
                     
                     self.stop()
 
@@ -1009,6 +1019,15 @@ async def handle_elysia_story(bot, message, session):
                 session['is_active'] = False
                 story_sessions[message.channel.id] = session
                 print(f"[DEBUG][Elysia] 챕터1 완료 - 세션 종료")
+                
+                # 5초 후 채널 삭제
+                import asyncio
+                await asyncio.sleep(5)
+                try:
+                    await message.channel.delete()
+                    print(f"[DEBUG][Elysia] 채널 삭제 완료")
+                except Exception as e:
+                    print(f"[DEBUG][Elysia] 채널 삭제 실패: {e}")
             else:
                 print(f"[DEBUG][Elysia] 오답 - 재시도 안내")
                 embed = discord.Embed(
@@ -1020,6 +1039,15 @@ async def handle_elysia_story(bot, message, session):
                 session['is_active'] = False
                 story_sessions[message.channel.id] = session
                 print(f"[DEBUG][Elysia] 챕터1 실패 - 세션 종료")
+                
+                # 5초 후 채널 삭제
+                import asyncio
+                await asyncio.sleep(5)
+                try:
+                    await message.channel.delete()
+                    print(f"[DEBUG][Elysia] 채널 삭제 완료")
+                except Exception as e:
+                    print(f"[DEBUG][Elysia] 채널 삭제 실패: {e}")
             return
 
         # 3. 질문 턴 진행
