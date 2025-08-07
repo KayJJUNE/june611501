@@ -2923,12 +2923,17 @@ class BotSelector(commands.Bot):
             
             from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
             user_gifts = set(g[0] for g in self.db.get_user_gifts(user_id))
+            print(f"[DEBUG] claim_story_reward - user_gifts: {user_gifts}")
             reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 3)
+            print(f"[DEBUG] claim_story_reward - reward_candidates: {reward_candidates}")
             available_rewards = [item for item in reward_candidates if item not in user_gifts]
+            print(f"[DEBUG] claim_story_reward - available_rewards: {available_rewards}")
             if not available_rewards:
+                print(f"[DEBUG] claim_story_reward - No available rewards")
                 return False, "You have already received all possible rewards for this quest!"
             import random
             selected_rewards = random.sample(available_rewards, min(3, len(available_rewards)))
+            print(f"[DEBUG] claim_story_reward - selected_rewards: {selected_rewards}")
             
             # Kagari 스토리 퀘스트 (3챕터 완료)
             if character == 'Kagari' and quest_type == 'all_chapters':
@@ -2965,14 +2970,29 @@ class BotSelector(commands.Bot):
                 print(f"[DEBUG] claim_story_reward - Processing Elysia story quest")
                 completed_chapters = self.db.get_completed_chapters(user_id, 'Elysia')
                 print(f"[DEBUG] claim_story_reward - Elysia completed chapters: {completed_chapters}")
+                print(f"[DEBUG] claim_story_reward - Elysia completed chapters count: {len(completed_chapters)}")
+                
                 if len(completed_chapters) < 1:
+                    print(f"[DEBUG] claim_story_reward - Elysia: Not enough chapters completed")
                     return False, "You need to complete chapter 1 of Elysia's story first"
-                if self.db.is_story_quest_claimed(user_id, 'Elysia', 'all_chapters'):
+                
+                is_claimed = self.db.is_story_quest_claimed(user_id, 'Elysia', 'all_chapters')
+                print(f"[DEBUG] claim_story_reward - Elysia quest already claimed: {is_claimed}")
+                
+                if is_claimed:
+                    print(f"[DEBUG] claim_story_reward - Elysia: Quest already claimed")
                     return False, "You have already claimed this reward"
+                
+                print(f"[DEBUG] claim_story_reward - Elysia: Adding rewards: {selected_rewards}")
                 for gift_id in selected_rewards:
-                    self.db.add_user_gift(user_id, gift_id, 1)
+                    success = self.db.add_user_gift(user_id, gift_id, 1)
+                    print(f"[DEBUG] claim_story_reward - Elysia: Added gift {gift_id}: {success}")
+                
                 self.db.claim_story_quest(user_id, 'Elysia', 'all_chapters')
+                print(f"[DEBUG] claim_story_reward - Elysia: Marked quest as claimed")
+                
                 reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
+                print(f"[DEBUG] claim_story_reward - Elysia: Reward names: {reward_names}")
                 return True, f"Congratulations! You completed Elysia's story! You received: **{', '.join(reward_names)}**"
             
             print(f"[DEBUG] claim_story_reward - Unknown story quest: character='{character}', quest_type='{quest_type}'")

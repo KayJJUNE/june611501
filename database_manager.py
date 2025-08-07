@@ -530,10 +530,13 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    INSERT INTO user_gifts (user_id, gift_id, quantity) VALUES (%s, %s, %s)
-                    ON CONFLICT (user_id, gift_id) DO UPDATE SET quantity = user_gifts.quantity + EXCLUDED.quantity;
-                """, (user_id, gift_id, quantity))
+                    INSERT INTO user_gifts (user_id, gift_id, quantity, obtained_at) VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (user_id, gift_id) DO UPDATE SET 
+                        quantity = user_gifts.quantity + EXCLUDED.quantity,
+                        obtained_at = EXCLUDED.obtained_at;
+                """, (user_id, gift_id, quantity, datetime.utcnow()))
             conn.commit()
+            print(f"[DEBUG] add_user_gift - Successfully added gift {gift_id} x{quantity} for user {user_id}")
             return True
         except Exception as e:
             print(f"Error adding user gift: {e}")
@@ -584,7 +587,7 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
-                cursor.execute("SELECT gift_id, quantity FROM user_gifts WHERE user_id = %s ORDER BY obtained_at DESC", (user_id,))
+                cursor.execute("SELECT gift_id, quantity FROM user_gifts WHERE user_id = %s ORDER BY obtained_at DESC NULLS LAST", (user_id,))
                 return cursor.fetchall()
         except Exception as e:
             print(f"Error getting user gifts: {e}")
@@ -1008,6 +1011,24 @@ class DatabaseManager:
                 return cursor.fetchone()[0]
         except Exception as e:
             print(f"Error getting total daily messages: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
+
+    def get_english_daily_messages(self, user_id: int) -> int:
+        """CST 기준으로 오늘 하루 동안 사용자가 보낸 영어 메시지 수를 반환합니다. (데일리 퀘스트용)"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                today_cst = get_today_cst()
+                cursor.execute(
+                    "SELECT COUNT(*) FROM conversations WHERE user_id = %s AND DATE(timestamp AT TIME ZONE 'Asia/Shanghai') = %s AND message_role = 'user' AND language = 'en'",
+                    (user_id, today_cst)
+                )
+                return cursor.fetchone()[0]
+        except Exception as e:
+            print(f"Error getting English daily messages: {e}")
             return 0
         finally:
             self.return_connection(conn)
