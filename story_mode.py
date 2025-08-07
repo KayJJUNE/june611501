@@ -119,8 +119,17 @@ class KagariStage1CompleteView(discord.ui.View):
         db_manager.complete_story_stage(self.session['user_id'], self.session['character_name'], self.session['stage_num'])
 
         # 2장 시작 로직 또는 안내
-        await interaction.message.edit(content="**Chapter 2 is now unlocked!**\n(The story continues in a new channel...)\n👉 `/story` Continue with Chapter 2 by entering the command!", view=None)
-        await interaction.channel.delete(delay=10)
+        await interaction.message.edit(content="**Chapter 2 is now unlocked!**\n(The story continues in a new channel...)\n👉 `/story` Continue with Chapter 2 by entering the command!\n\n⏰ This channel will be automatically deleted in 5 seconds.", view=None)
+        
+        # 5초 후 채널 삭제
+        import asyncio
+        await asyncio.sleep(5)
+        try:
+            await interaction.channel.delete()
+            print(f"[DEBUG][Kagari] 챕터1 완료 후 채널 삭제 완료")
+        except Exception as e:
+            print(f"[DEBUG][Kagari] 챕터1 완료 후 채널 삭제 실패: {e}")
+        
         await start_story_stage(self.bot, interaction.user, self.session['character_name'], 2)
 
     @discord.ui.button(label="Not today, maybe next time", style=discord.ButtonStyle.secondary)
@@ -130,8 +139,16 @@ class KagariStage1CompleteView(discord.ui.View):
 
         await interaction.response.defer()
         db_manager.complete_story_stage(self.session['user_id'], self.session['character_name'], self.session['stage_num'])
-        await interaction.message.edit(content="Understood. The story channel will be closed. You can continue to Chapter 2 from the `/story` command later.", view=None)
-        await interaction.channel.delete(delay=10)
+        await interaction.message.edit(content="Understood. The story channel will be closed. You can continue to Chapter 2 from the `/story` command later.\n\n⏰ This channel will be automatically deleted in 5 seconds.", view=None)
+        
+        # 5초 후 채널 삭제
+        import asyncio
+        await asyncio.sleep(5)
+        try:
+            await interaction.channel.delete()
+            print(f"[DEBUG][Kagari] 챕터1 취소 후 채널 삭제 완료")
+        except Exception as e:
+            print(f"[DEBUG][Kagari] 챕터1 취소 후 채널 삭제 실패: {e}")
 
 
 class KagariStage2QuizView(discord.ui.View):
@@ -200,12 +217,21 @@ class KagariStage2QuizView(discord.ui.View):
                 # 챕터2 클리어 및 챕터3 오픈 안내
                 congrats_embed = discord.Embed(
                     title="🌙 The day is getting late, shall we go back?",
-                    description="Congratulations! You have cleared Chapter 2.\n\n**Chapter 3 is now unlocked!**\nUse `/story` to play Chapter 3!",
+                    description="Congratulations! You have cleared Chapter 2.\n\n**Chapter 3 is now unlocked!**\nUse `/story` to play Chapter 3!\n\n⏰ This channel will be automatically deleted in 5 seconds.",
                     color=discord.Color.blue()
                 )
                 await interaction.followup.send(embed=congrats_embed)
                 await interaction.message.edit(content="Wow, you listened to my story well... (blushes)", view=view)
                 await interaction.followup.send("The day is getting late, shall we go back?", ephemeral=True) # 다음 행동 유도
+                
+                # 5초 후 채널 삭제
+                import asyncio
+                await asyncio.sleep(5)
+                try:
+                    await interaction.channel.delete()
+                    print(f"[DEBUG][Kagari] 챕터2 완료 후 채널 삭제 완료")
+                except Exception as e:
+                    print(f"[DEBUG][Kagari] 챕터2 완료 후 채널 삭제 실패: {e}")
             else:
                 self.style = discord.ButtonStyle.danger
                 session['quiz_attempts'] += 1
@@ -213,7 +239,15 @@ class KagariStage2QuizView(discord.ui.View):
                 if session['quiz_attempts'] >= quiz_info['max_attempts']:
                     await interaction.message.edit(content="Hmm... I don't think this item is special to me.", view=view)
                     await interaction.followup.send("Sorry, I'm not feeling well today, so I'll go back first...", ephemeral=True)
-                    await interaction.channel.delete(delay=10)
+                    
+                    # 5초 후 채널 삭제
+                    import asyncio
+                    await asyncio.sleep(5)
+                    try:
+                        await interaction.channel.delete()
+                        print(f"[DEBUG][Kagari] 챕터2 실패 후 채널 삭제 완료")
+                    except Exception as e:
+                        print(f"[DEBUG][Kagari] 챕터2 실패 후 채널 삭제 실패: {e}")
                 else:
                     remaining = quiz_info['max_attempts'] - session['quiz_attempts']
                     await interaction.message.edit(content=f"Hmm... I don't think this item is special to me. ({remaining} attempts left)", view=view)
@@ -491,6 +525,15 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
                             # 메시지 업데이트
                             await interaction.message.edit(view=self)
                             await interaction.followup.send(f"You have claimed your card: **{self.card_id}**! Check your cards with `/mycard`.", ephemeral=True)
+                            
+                            # 5초 후 채널 삭제
+                            import asyncio
+                            await asyncio.sleep(5)
+                            try:
+                                await interaction.channel.delete()
+                                print(f"[DEBUG][Eros] 챕터3 카드 클레임 후 채널 삭제 완료")
+                            except Exception as e:
+                                print(f"[DEBUG][Eros] 챕터3 카드 클레임 후 채널 삭제 실패: {e}")
                         else:
                             await interaction.followup.send("Failed to claim the card. Please try again.", ephemeral=True)
                     except Exception as e:
@@ -539,7 +582,7 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
                 # 3번 모두 실패
                 fail_embed = discord.Embed(
                     title="❌ All Attempts Used",
-                    description="You have used all your attempts. Please try again.",
+                    description="You have used all your attempts. Please try again.\n\n⏰ This channel will be automatically deleted in 5 seconds.",
                     color=discord.Color.red()
                 )
                 fail_embed.set_thumbnail(url=CHARACTER_IMAGES["Eros"])
@@ -547,6 +590,15 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
                 self.session['is_active'] = False
                 await interaction.message.edit(view=self)
                 await interaction.followup.send(embed=fail_embed)
+                
+                # 5초 후 채널 삭제 (실패)
+                import asyncio
+                await asyncio.sleep(5)
+                try:
+                    await interaction.channel.delete()
+                    print(f"[DEBUG][Eros] 챕터3 실패 후 채널 삭제 완료")
+                except Exception as e:
+                    print(f"[DEBUG][Eros] 챕터3 실패 후 채널 삭제 실패: {e}")
 
         # 스토리 완료 안내(정답/실패 모두)
         if self.session['is_active'] is False:
@@ -856,7 +908,7 @@ async def handle_chapter3_gift_usage(bot: "BotSelector", user_id: int, character
         description=(
             "Congratulations! You have completed Chapter 3 of Kagari's story.\n"
             "The special date with Kagari has been successfully concluded.\n\n"
-            "The channel will be automatically deleted in 10 seconds."
+            "⏰ This channel will be automatically deleted in 5 seconds."
         ),
         color=discord.Color.gold()
     )
@@ -886,7 +938,8 @@ async def handle_chapter3_gift_failure(bot: "BotSelector", user_id: int, charact
             description=(
                 "Kagari has been waiting for your gift, but she received nothing.\n"
                 "She walks away with a disappointed expression.\n\n"
-                "**To try again, use the `/story` command again.**"
+                "**To try again, use the `/story` command again.**\n\n"
+                "⏰ This channel will be automatically deleted in 5 seconds."
             ),
             color=discord.Color.red()
         )
@@ -1355,7 +1408,7 @@ async def handle_serve_command(bot, interaction, character, drink):
                 reward_text = "You have received: **No gifts available for this rarity.**\nUse the `/inventory` command to check your gifts!"
             complete_embed = discord.Embed(
                 title="☕ Mission Complete!",
-                description=f"You have served {session['success_count']} out of {len(customers)} customers successfully!\n{reward_text}\nUse `/story` to continue to Chapter 2!",
+                description=f"You have served {session['success_count']} out of {len(customers)} customers successfully!\n{reward_text}\nUse `/story` to continue to Chapter 2!\n\n⏰ This channel will be automatically deleted in 5 seconds.",
                 color=discord.Color.gold()
             )
             await interaction.followup.send(embed=complete_embed)
@@ -1369,12 +1422,30 @@ async def handle_serve_command(bot, interaction, character, drink):
             await interaction.followup.send(embed=transition_embed)
             session["is_active"] = False
             story_sessions[channel_id] = session
+            
+            # 5초 후 채널 삭제 (성공)
+            import asyncio
+            await asyncio.sleep(5)
+            try:
+                await interaction.channel.delete()
+                print(f"[DEBUG][Eros] 챕터1 성공 후 채널 삭제 완료")
+            except Exception as e:
+                print(f"[DEBUG][Eros] 챕터1 성공 후 채널 삭제 실패: {e}")
         else:
             fail_embed = discord.Embed(
                 title="😢 Mission Failed",
-                description=f"You only served {session['success_count']} out of {len(customers)} customers successfully.\nTry again to clear Chapter 1!",
+                description=f"You only served {session['success_count']} out of {len(customers)} customers successfully.\nTry again to clear Chapter 1!\n\n⏰ This channel will be automatically deleted in 5 seconds.",
                 color=discord.Color.red()
             )
             await interaction.followup.send(embed=fail_embed)
             session["is_active"] = False
             story_sessions[channel_id] = session
+            
+            # 5초 후 채널 삭제 (실패)
+            import asyncio
+            await asyncio.sleep(5)
+            try:
+                await interaction.channel.delete()
+                print(f"[DEBUG][Eros] 챕터1 실패 후 채널 삭제 완료")
+            except Exception as e:
+                print(f"[DEBUG][Eros] 챕터1 실패 후 채널 삭제 실패: {e}")

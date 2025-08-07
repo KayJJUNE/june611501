@@ -2117,10 +2117,14 @@ class BotSelector(commands.Bot):
                             success_embed, completion_embed = result
                             await interaction.channel.send(embed=success_embed)
                             await interaction.channel.send(embed=completion_embed)
-                            # 10초 후 채널 삭제
+                            # 5초 후 채널 삭제
                             import asyncio
-                            await asyncio.sleep(10)
-                            await interaction.channel.delete()
+                            await asyncio.sleep(5)
+                            try:
+                                await interaction.channel.delete()
+                                print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 완료")
+                            except Exception as e:
+                                print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 실패: {e}")
                     elif character == "Eros" and session.get('stage_num') == 3:
                         # Eros 챕터3 선물 사용 처리
                         success, result = await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
@@ -2128,10 +2132,14 @@ class BotSelector(commands.Bot):
                             success_embed, completion_embed = result
                             await interaction.channel.send(embed=success_embed)
                             await interaction.channel.send(embed=completion_embed)
-                            # 10초 후 채널 삭제
+                            # 5초 후 채널 삭제
                             import asyncio
-                            await asyncio.sleep(10)
-                            await interaction.channel.delete()
+                            await asyncio.sleep(5)
+                            try:
+                                await interaction.channel.delete()
+                                print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 완료")
+                            except Exception as e:
+                                print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 실패: {e}")
                     else:
                         # 기타 스토리 모드 선물 처리
                         print(f"[DEBUG] Story mode gift given to {character} in stage {session.get('stage_num')}")
@@ -2330,7 +2338,7 @@ class BotSelector(commands.Bot):
                         reward_text = "You received: **No gifts available for this rarity.**\nCheck your inventory with `/inventory`."
                     complete_embed = discord.Embed(
                         title="🍯 Mission Accomplished!",
-                        description=f"Perfect! You have served all {total_characters} team members with their correct drinks!\n{reward_text}",
+                        description=f"Perfect! You have served all {total_characters} team members with their correct drinks!\n{reward_text}\n\n⏰ This channel will be automatically deleted in 5 seconds.",
                         color=discord.Color.gold()
                     )
                     await interaction.followup.send(embed=complete_embed)
@@ -2344,17 +2352,35 @@ class BotSelector(commands.Bot):
                     await interaction.followup.send(embed=transition_embed)
                     # 세션 종료 처리
                     session["is_active"] = False
+                    
+                    # 5초 후 채널 삭제 (성공)
+                    import asyncio
+                    await asyncio.sleep(5)
+                    try:
+                        await interaction.channel.delete()
+                        print(f"[DEBUG][Eros] 챕터2 성공 후 채널 삭제 완료")
+                    except Exception as e:
+                        print(f"[DEBUG][Eros] 챕터2 성공 후 채널 삭제 실패: {e}")
                 else:
                     # 실패: 일부 정답이 틀림
                     wrong_count = total_characters - correct_count
                     failure_embed = discord.Embed(
                         title="❌ Mission Failed",
-                        description=f"You have served all {total_characters} team members, but {wrong_count} of them received incorrect drinks.\n\n**Mission failed. Please try Chapter 2 again.**",
+                        description=f"You have served all {total_characters} team members, but {wrong_count} of them received incorrect drinks.\n\n**Mission failed. Please try Chapter 2 again.**\n\n⏰ This channel will be automatically deleted in 5 seconds.",
                         color=discord.Color.red()
                     )
                     await interaction.followup.send(embed=failure_embed)
                     # 세션 종료 처리 (챕터3 오픈 안함)
                     session["is_active"] = False
+                    
+                    # 5초 후 채널 삭제 (실패)
+                    import asyncio
+                    await asyncio.sleep(5)
+                    try:
+                        await interaction.channel.delete()
+                        print(f"[DEBUG][Eros] 챕터2 실패 후 채널 삭제 완료")
+                    except Exception as e:
+                        print(f"[DEBUG][Eros] 챕터2 실패 후 채널 삭제 실패: {e}")
             story_sessions[interaction.channel.id] = session
 
         @self.tree.command(
