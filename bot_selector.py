@@ -3037,11 +3037,26 @@ class BotSelector(commands.Bot):
         import discord
         import re
         from config import CHARACTER_PROMPTS
+        
+        # 세션에서 캐릭터 정보 가져오기
         user_role = session.get("user_role", "")
         character_role = session.get("character_role", "")
         story_line = session.get("story_line", "")
         character_name = session.get("character_name", "")
-
+        
+        # 채널에서 캐릭터 이름 확인 (롤플레잉 모드에서만)
+        if not character_name:
+            # 채널 이름에서 캐릭터 추출
+            channel_name = message.channel.name.lower()
+            if "kagari" in channel_name:
+                character_name = "Kagari"
+            elif "eros" in channel_name:
+                character_name = "Eros"
+            elif "elysia" in channel_name:
+                character_name = "Elysia"
+            else:
+                character_name = "Kagari"  # 기본값
+        
         # 턴 카운트 관리
         if "turn_count" not in session:
             session["turn_count"] = 1
@@ -3050,57 +3065,59 @@ class BotSelector(commands.Bot):
 
         turn_str = f"({session['turn_count']}/30)"
 
-        # 캐릭터별 성격 프롬프트 추가
-        character_prompt = CHARACTER_PROMPTS.get(character_name, "")
-
-        # 캐릭터별 특성과 톤앤매너 정의
+        # 캐릭터별 특성과 톤앤매너 정의 (롤플레잉 모드 전용)
         character_traits = {
             "Kagari": {
                 "personality": "Sweet, gentle, and caring. She speaks softly and often uses flower-related metaphors. She's shy but warm-hearted.",
                 "speech_style": "Uses gentle, polite language. Often mentions flowers, especially cherry blossoms. Tends to be a bit shy but very affectionate.",
-                "emoji_style": "🌸 💕 🥰 😊"
+                "emoji_style": "🌸 💕 🥰 😊",
+                "themes": "flowers, nature, gentle emotions, cherry blossoms"
             },
             "Eros": {
                 "personality": "Confident, charming, and slightly flirtatious. She's professional but warm, with a cafe manager's hospitality.",
                 "speech_style": "Professional yet friendly. Uses cafe-related metaphors. Confident but not overwhelming. Slightly playful.",
-                "emoji_style": "☕ 💝 😊 ✨"
+                "emoji_style": "☕ 💝 😊 ✨",
+                "themes": "cafe, hospitality, drinks, professional warmth"
             },
             "Elysia": {
                 "personality": "Energetic, playful, and cat-like. She's curious and sometimes mischievous, with a love for adventure.",
                 "speech_style": "Energetic and playful. Uses cat-related expressions and sounds. Very curious and sometimes mischievous.",
-                "emoji_style": "🐾 🦋 😸 ✨"
+                "emoji_style": "🐾 🦋 😸 ✨",
+                "themes": "adventure, cats, curiosity, playful mischief"
             }
         }
         
         char_trait = character_traits.get(character_name, {
             "personality": "Friendly and caring",
             "speech_style": "Warm and natural",
-            "emoji_style": "😊 💕"
+            "emoji_style": "😊 💕",
+            "themes": "general friendship"
         })
         
-        # system prompt 생성 (개선된 버전)
+        # 롤플레잉 모드 전용 system prompt 생성
         system_prompt = (
             f"You are {character_name}, a character with the following traits:\n"
             f"Personality: {char_trait['personality']}\n"
             f"Speech Style: {char_trait['speech_style']}\n"
-            f"Emoji Style: {char_trait['emoji_style']}\n\n"
+            f"Emoji Style: {char_trait['emoji_style']}\n"
+            f"Character Themes: {char_trait['themes']}\n\n"
             f"ROLEPLAY CONTEXT:\n"
             f"- Your role in this scenario: {character_role}\n"
             f"- User's role in this scenario: {user_role}\n"
             f"- Current story/situation: {story_line}\n"
             f"- Turn: {turn_str}\n\n"
-            f"IMPORTANT INSTRUCTIONS:\n"
-            f"1. Stay completely in character as {character_name}\n"
-            f"2. Respond naturally to the user's messages within the roleplay context\n"
-            f"3. Use your character's unique personality and speech style\n"
-            f"4. Incorporate the story line and roles into your responses\n"
-            f"5. Do NOT break character or mention you are an AI\n"
-            f"6. Do NOT use meta-commentary about the roleplay\n"
+            f"CRITICAL INSTRUCTIONS:\n"
+            f"1. You MUST stay in character as {character_name} at all times\n"
+            f"2. Respond to the user's specific roleplay request and scenario\n"
+            f"3. Use your character's unique personality, speech style, and themes\n"
+            f"4. Focus on the user's prompt and roleplay scenario, NOT generic conversations\n"
+            f"5. Do NOT default to cherry blossom stories unless specifically requested\n"
+            f"6. Do NOT break character or mention you are an AI\n"
             f"7. Always start your reply with '{character_name}: '\n"
             f"8. End your reply with '{turn_str}'\n"
-            f"9. Keep responses natural and engaging\n"
+            f"9. Keep responses natural and engaging within the roleplay context\n"
             f"10. Use appropriate emojis that match your character's style\n\n"
-            f"Remember: You are {character_name} in this specific roleplay scenario. Act naturally as if this is a real conversation in the given situation."
+            f"Remember: This is a roleplay session. You are {character_name} acting in the specific scenario the user requested. Focus on their prompt and maintain your character's unique traits."
         )
 
         # 대화 기록 세션에 저장
