@@ -553,7 +553,7 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
 
 # --- Main Story Logic ---
 
-async def start_story_stage(bot: "BotSelector", user: discord.User, character_name: str, stage_num: int):
+async def start_story_stage(bot: "BotSelector", user: discord.User, character_name: str, stage_num: int, current_channel=None):
     """지정된 스토리 스테이지를 시작하고, 전용 채널을 생성합니다."""
     guild = user.guild
     stage_info = get_chapter_info(character_name, stage_num)
@@ -564,8 +564,17 @@ async def start_story_stage(bot: "BotSelector", user: discord.User, character_na
     # 채널 이름 및 생성
     channel_name = f"{character_name.lower()}-s{stage_num}-{user.name.lower()[:10]}"
     category = discord.utils.get(guild.categories, name="chatbot")
+    
+    # 현재 스토리 채널이 있으면 삭제 (다른 챕터로 이동하는 경우)
+    if current_channel and any(f'-s{i}-' in current_channel.name for i in range(1, 10)):
+        try:
+            await current_channel.delete()
+            print(f"[DEBUG] Deleted current story channel: {current_channel.name}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to delete current story channel: {e}")
+    
     if category:
-        # 기존 채널 정리
+        # 같은 이름의 기존 채널 정리 (혹시 모를 중복 방지)
         for ch in category.text_channels:
             if ch.name == channel_name:
                 await ch.delete()
@@ -812,7 +821,7 @@ async def handle_chapter3_gift_usage(bot: "BotSelector", user_id: int, character
         reward_rarity_text = "⚪ Common"
 
     # 카드 보상 지급
-    bot.db.add_user_card(user_id, reward_card, 1)
+    bot.db.add_user_card(user_id, character_name, reward_card)
 
     # 스토리 완료 처리
     bot.db.complete_story_stage(user_id, character_name, 3)

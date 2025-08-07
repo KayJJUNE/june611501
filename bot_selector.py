@@ -715,6 +715,7 @@ class BotSelector(commands.Bot):
         self.setup_commands()
         self.roleplay_sessions = {}
         self.story_sessions = {}
+        self.dm_sessions = {}  # DM 세션 관리
 
     async def check_story_quests(self, user_id: int) -> list:
         """스토리 퀘스트 상태를 확인합니다."""
@@ -855,9 +856,53 @@ class BotSelector(commands.Bot):
         )
         async def bot_command(interaction: discord.Interaction):
             try:
+                # DM에서 사용하는 경우
+                if isinstance(interaction.channel, discord.DMChannel):
+                    user_id = interaction.user.id
+                    
+                    # DM 세션이 없으면 생성
+                    if user_id not in self.dm_sessions:
+                        self.dm_sessions[user_id] = {
+                            'last_activity': time.time(),
+                            'character_name': None
+                        }
+                    
+                    embed = discord.Embed(
+                        title="🌸 DM에서 캐릭터 선택",
+                        description="DM에서 대화할 캐릭터를 선택하세요.",
+                        color=discord.Color.gold()
+                    )
+                    embed.add_field(
+                        name="🌸 Kagari",
+                        value="Cold-hearted Yokai Warrior",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="💝 Eros",
+                        value="Cute Honeybee",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="⚔️ Elysia",
+                        value="Nya Kitty Girl",
+                        inline=True
+                    )
+                    
+                    # DM용 캐릭터 선택 뷰 생성
+                    view = discord.ui.View()
+                    view.add_item(DMCharacterSelect(self))
+                    
+                    await interaction.response.send_message(
+                        embed=embed,
+                        view=view,
+                        ephemeral=True
+                    )
+                    return
+                
+                # 서버 채널에서 사용하는 경우
                 if not isinstance(interaction.channel, discord.TextChannel):
                     await interaction.response.send_message(
-                        "This command can only be used in server channels.",
+                        "This command can only be used in server channels or DM.",
                         ephemeral=True
                     )
                     return
@@ -1134,27 +1179,40 @@ class BotSelector(commands.Bot):
             description="Check your current affinity with the character"
         )
         async def affinity_command(interaction: discord.Interaction):
-            if not isinstance(interaction.channel, discord.TextChannel):
-                await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
-                return
-
             try:
                 print("\n[Affinity check started]")
-                # Find the character bot for the current channel
-                current_bot = None
-                for char_name, bot in self.character_bots.items():
-                    if interaction.channel.id in bot.active_channels:
-                        current_bot = bot
-                        break
+                user_id = interaction.user.id
+                character_name = None
+                
+                # DM에서 사용하는 경우
+                if isinstance(interaction.channel, discord.DMChannel):
+                    if user_id not in self.dm_sessions or 'character_name' not in self.dm_sessions[user_id]:
+                        await interaction.response.send_message("❌ 먼저 `/bot` 명령어로 캐릭터를 선택해주세요.", ephemeral=True)
+                        return
+                    character_name = self.dm_sessions[user_id]['character_name']
+                else:
+                    # 서버 채널에서 사용하는 경우
+                    if not isinstance(interaction.channel, discord.TextChannel):
+                        await interaction.response.send_message("This command can only be used in server channels or DM.", ephemeral=True)
+                        return
+                    
+                    # Find the character bot for the current channel
+                    current_bot = None
+                    for char_name, bot in self.character_bots.items():
+                        if interaction.channel.id in bot.active_channels:
+                            current_bot = bot
+                            break
 
-                if not current_bot:
-                    await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
-                    return
+                    if not current_bot:
+                        await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
+                        return
+                    
+                    character_name = current_bot.character_name
 
-                print(f"Character bot found: {current_bot.character_name}")
+                print(f"Character name: {character_name}")
 
                 # Get affinity info
-                affinity_info = current_bot.db.get_affinity(interaction.user.id, current_bot.character_name)
+                affinity_info = self.db.get_affinity(interaction.user.id, character_name)
                 print(f"Affinity info: {affinity_info}")
 
                 if not affinity_info:
@@ -1178,12 +1236,12 @@ class BotSelector(commands.Bot):
                 }
 
                 # Affinity embed
-                char_info = CHARACTER_INFO.get(current_bot.character_name, {})
+                char_info = CHARACTER_INFO.get(character_name, {})
                 char_color = char_info.get('color', discord.Color.purple())
 
                 embed = discord.Embed(
                     title=f"{char_info.get('emoji', '💝')} Affinity for {interaction.user.display_name}",
-                    description=f"Affinity information with {char_info.get('name', current_bot.character_name)}.",
+                    description=f"Affinity information with {char_info.get('name', character_name)}.",
                     color=char_color
                 )
 
@@ -1236,7 +1294,7 @@ class BotSelector(commands.Bot):
                 print("Embed created")
 
                 # Get the correct image URL from config.py
-                char_image_url = CHARACTER_IMAGES.get(current_bot.character_name)
+                char_image_url = CHARACTER_IMAGES.get(character_name)
                 if char_image_url:
                     embed.set_thumbnail(url=char_image_url)
 
@@ -2053,10 +2111,26 @@ class BotSelector(commands.Bot):
                     from story_mode import handle_chapter3_gift_usage, handle_chapter3_gift_failure
                     if character == "Kagari" and session.get('stage_num') == 3:
                         # Kagari 챕터3 선물 사용 처리
-                        await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
+                        success, result = await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
+                        if success:
+                            success_embed, completion_embed = result
+                            await interaction.channel.send(embed=success_embed)
+                            await interaction.channel.send(embed=completion_embed)
+                            # 10초 후 채널 삭제
+                            import asyncio
+                            await asyncio.sleep(10)
+                            await interaction.channel.delete()
                     elif character == "Eros" and session.get('stage_num') == 3:
                         # Eros 챕터3 선물 사용 처리
-                        await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
+                        success, result = await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
+                        if success:
+                            success_embed, completion_embed = result
+                            await interaction.channel.send(embed=success_embed)
+                            await interaction.channel.send(embed=completion_embed)
+                            # 10초 후 채널 삭제
+                            import asyncio
+                            await asyncio.sleep(10)
+                            await interaction.channel.delete()
                     else:
                         # 기타 스토리 모드 선물 처리
                         print(f"[DEBUG] Story mode gift given to {character} in stage {session.get('stage_num')}")
@@ -2410,7 +2484,7 @@ class BotSelector(commands.Bot):
         quests = []
 
         # 1. 대화 20회 퀘스트
-        # --- 오늘의 실제 대화 수를 get_total_daily_messages로 계산 ---
+        # --- 오늘의 실제 대화 수를 get_total_daily_messages로 계산 (모든 언어 포함) ---
         total_daily_messages = self.db.get_total_daily_messages(user_id)
         quest_id = 'daily_conversation'
         claimed = self.db.is_quest_claimed(user_id, quest_id)
@@ -2864,6 +2938,17 @@ class BotSelector(commands.Bot):
     async def on_message(self, message: discord.Message):
         user_id = message.author.id
         self.db.update_login_streak(user_id)
+        
+        # 봇이 보낸 메시지는 무시
+        if message.author == self.user:
+            return
+
+        # DM에서의 메시지 처리
+        if isinstance(message.channel, discord.DMChannel):
+            await self.handle_dm_message(message)
+            return
+
+        # 서버 채널에서의 메시지 처리
         if message.author.bot or not message.guild:
             return
 
@@ -3013,6 +3098,114 @@ class BotSelector(commands.Bot):
             bot.remove_channel(channel_id)
         if hasattr(self, 'remove_channel'):
             self.remove_channel(channel_id)
+
+    async def handle_dm_message(self, message: discord.Message):
+        """DM에서의 메시지를 처리합니다."""
+        user_id = message.author.id
+        
+        # DM 세션 확인
+        if user_id not in self.dm_sessions:
+            # 새로운 DM 세션 시작
+            await self.start_dm_session(message)
+            return
+        
+        session = self.dm_sessions[user_id]
+        
+        # 세션이 만료되었는지 확인 (30분)
+        if time.time() - session['last_activity'] > 1800:
+            del self.dm_sessions[user_id]
+            await self.start_dm_session(message)
+            return
+        
+        # 세션 업데이트
+        session['last_activity'] = time.time()
+        
+        # 현재 선택된 캐릭터가 있는지 확인
+        if 'character_name' not in session:
+            await message.channel.send("❌ 캐릭터가 선택되지 않았습니다. `/bot` 명령어로 캐릭터를 선택해주세요.")
+            return
+        
+        character_name = session['character_name']
+        
+        # 메시지 처리
+        try:
+            # 언어 감지
+            language = self.detect_language(message.content)
+            
+            # 데이터베이스에 메시지 저장
+            self.db.add_message(
+                channel_id=message.channel.id,
+                user_id=user_id,
+                character_name=character_name,
+                role="user",
+                content=message.content,
+                language=language
+            )
+            
+            # 감정 분석 및 호감도 업데이트
+            emotion_score = await self.get_ai_response([{"role": "user", "content": message.content}])
+            self.db.add_emotion_log(user_id, character_name, emotion_score, message.content)
+            
+            # AI 응답 생성
+            ai_response = await self.get_ai_response([
+                {"role": "user", "content": message.content}
+            ], emotion_score)
+            
+            # 응답 전송
+            await message.channel.send(f"**{character_name}**: {ai_response}")
+            
+            # 랜덤 카드 획득 체크
+            card_type, card_id = self.get_random_card(character_name, user_id)
+            if card_id:
+                card_info = get_card_info_by_id(card_id)
+                if card_info:
+                    embed = discord.Embed(
+                        title="🎉 새로운 카드를 획득했습니다!",
+                        description=f"**{card_info['name']}**\n{card_info['description']}",
+                        color=0x00ff00
+                    )
+                    embed.set_thumbnail(url=card_info['image_url'])
+                    await message.channel.send(embed=embed)
+            
+        except Exception as e:
+            print(f"Error in handle_dm_message: {e}")
+            await message.channel.send("❌ 메시지 처리 중 오류가 발생했습니다.")
+
+    async def start_dm_session(self, message: discord.Message):
+        """새로운 DM 세션을 시작합니다."""
+        user_id = message.author.id
+        
+        # DM 세션 초기화
+        self.dm_sessions[user_id] = {
+            'last_activity': time.time(),
+            'character_name': None
+        }
+        
+        # 환영 메시지 전송
+        embed = discord.Embed(
+            title="🌸 ZeroLink 챗봇에 오신 것을 환영합니다!",
+            description="DM에서도 챗봇과 대화할 수 있습니다.\n\n**사용 방법:**\n1. `/bot` 명령어로 캐릭터를 선택하세요\n2. 선택한 캐릭터와 자유롭게 대화하세요\n3. 30분간 활동이 없으면 세션이 자동으로 종료됩니다\n\n**사용 가능한 명령어:**\n• `/bot` - 캐릭터 선택\n• `/affinity` - 호감도 확인\n• `/mycard` - 보유 카드 확인\n• `/quest` - 퀘스트 확인\n• `/help` - 도움말",
+            color=0xff69b4
+        )
+        embed.set_footer(text="ZeroLink 챗봇 DM 모드")
+        
+        await message.channel.send(embed=embed)
+
+    def detect_language(self, text: str) -> str:
+        """텍스트의 언어를 감지합니다."""
+        try:
+            from langdetect import detect
+            lang = detect(text)
+            if lang in ['ko', 'ko-KR']:
+                return 'ko'
+            elif lang in ['zh', 'zh-CN', 'zh-TW']:
+                return 'zh'
+            elif lang in ['ja', 'ja-JP']:
+                return 'ja'
+            else:
+                return 'en'
+        except:
+            return 'en'
 
     def get_random_card(self, character_name: str, user_id: int) -> tuple[str, str]:
         """랜덤 카드 획득 (중복 방지)"""
@@ -3708,7 +3901,7 @@ class QuestView(discord.ui.View):
 
             async def callback(self, interaction: discord.Interaction):
                 await interaction.response.send_message(f"Starting Stage {self.stage_num}...", ephemeral=True)
-                channel = await start_story_stage(self.bot_selector, interaction.user, self.character_name, self.stage_num)
+                channel = await start_story_stage(self.bot_selector, interaction.user, self.character_name, self.stage_num, interaction.channel)
                 await interaction.followup.send(f"Your story begins in {channel.mention}!", ephemeral=True)
 
     # ... (rest of the BotSelector class)
@@ -3920,15 +4113,7 @@ class NewStoryChapterSelect(discord.ui.Select):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        # 스토리 채널에서 실행된 경우, 이전 채널을 삭제
-        if self.current_channel and any(f'-s{i}-' in self.current_channel.name for i in range(1, 10)):
-            try:
-                await self.current_channel.delete()
-                print(f"[DEBUG] Deleted previous story channel: {self.current_channel.name}")
-            except Exception as e:
-                print(f"[DEBUG] Failed to delete previous story channel: {e}")
-
-        channel = await start_story_stage(self.bot, user, self.character_name, stage_num)
+        channel = await start_story_stage(self.bot, user, self.character_name, stage_num, self.current_channel)
         await interaction.followup.send(f"Your story begins in {channel.mention}!", ephemeral=True)
 
 class NewStoryView(discord.ui.View):
@@ -3937,6 +4122,58 @@ class NewStoryView(discord.ui.View):
         self.add_item(NewStoryCharacterSelect(bot_instance, available_characters))
 
     # (여기 있던 async def check_story_quests 함수 전체 삭제)
+
+class DMCharacterSelect(discord.ui.Select):
+    def __init__(self, bot_selector: "BotSelector"):
+        self.bot_selector = bot_selector
+        options = [
+            discord.SelectOption(
+                label="Kagari",
+                description="Cold-hearted Yokai Warrior",
+                emoji="🌸",
+                value="Kagari"
+            ),
+            discord.SelectOption(
+                label="Eros",
+                description="Cute Honeybee",
+                emoji="💝",
+                value="Eros"
+            ),
+            discord.SelectOption(
+                label="Elysia",
+                description="Nya Kitty Girl",
+                emoji="⚔️",
+                value="Elysia"
+            )
+        ]
+        super().__init__(
+            placeholder="캐릭터를 선택하세요...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            selected_character = self.values[0]
+            user_id = interaction.user.id
+            
+            # DM 세션에 캐릭터 설정
+            if user_id in self.bot_selector.dm_sessions:
+                self.bot_selector.dm_sessions[user_id]['character_name'] = selected_character
+                self.bot_selector.dm_sessions[user_id]['last_activity'] = time.time()
+            
+            embed = discord.Embed(
+                title=f"✅ {selected_character} 선택 완료!",
+                description=f"이제 DM에서 {selected_character}와 자유롭게 대화할 수 있습니다.\n\n**사용 가능한 명령어:**\n• `/affinity` - 호감도 확인\n• `/mycard` - 보유 카드 확인\n• `/quest` - 퀘스트 확인\n• `/help` - 도움말",
+                color=0x00ff00
+            )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            print(f"Error in DMCharacterSelect callback: {e}")
+            await interaction.response.send_message("❌ 캐릭터 선택 중 오류가 발생했습니다.", ephemeral=True)
 
 async def main():
     intents = discord.Intents.all()
