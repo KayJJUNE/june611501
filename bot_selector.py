@@ -2463,6 +2463,34 @@ class BotSelector(commands.Bot):
                 print(f"Error in cleanup_cards_command: {e}")
                 await interaction.response.send_message("❌ An error occurred while cleaning up duplicate cards.", ephemeral=True)
 
+    def get_next_reset_time(self, quest_type: str) -> str:
+        """퀘스트 타입에 따른 다음 리셋 시간을 반환합니다."""
+        from datetime import datetime, timedelta
+        from pytz import timezone
+        
+        # CST 시간대 (중국 표준시)
+        cst = timezone('Asia/Shanghai')
+        now_cst = datetime.now(cst)
+        
+        if quest_type == "daily":
+            # 다음 날 00:00 CST
+            next_reset = (now_cst + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            # UTC로 변환 (CST는 UTC+8)
+            utc_time = next_reset - timedelta(hours=8)
+            return f"Resets at {utc_time.strftime('%H:%M UTC')} daily"
+        elif quest_type == "weekly":
+            # 다음 월요일 00:00 CST
+            days_until_monday = (7 - now_cst.weekday()) % 7
+            if days_until_monday == 0:  # 오늘이 월요일이면 다음 주 월요일
+                days_until_monday = 7
+            next_monday = now_cst + timedelta(days=days_until_monday)
+            next_reset = next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
+            # UTC로 변환 (CST는 UTC+8)
+            utc_time = next_reset - timedelta(hours=8)
+            return f"Resets at {utc_time.strftime('%H:%M UTC')} every Monday"
+        
+        return ""
+
     def create_quest_embed(self, user_id: int, quest_status: dict) -> discord.Embed:
         """
         퀘스트 현황을 보여주는 임베드를 생성합니다.
@@ -2477,13 +2505,15 @@ class BotSelector(commands.Bot):
         )
         embed.set_footer(text="Click the [Claim] button to claim rewards for completed quests.")
 
-        # 일일 퀘스트
+        # 일일 퀘스트 (업데이트 시간 포함)
+        daily_reset_time = self.get_next_reset_time("daily")
         daily_quests_str = self.format_daily_quests(quest_status['daily'])
-        embed.add_field(name="📅 Daily Quests", value=daily_quests_str, inline=False)
+        embed.add_field(name=f"📅 Daily Quests ({daily_reset_time})", value=daily_quests_str, inline=False)
 
-        # 주간 퀘스트
+        # 주간 퀘스트 (업데이트 시간 포함)
+        weekly_reset_time = self.get_next_reset_time("weekly")
         weekly_quests_str = self.format_weekly_quests(quest_status['weekly'])
-        embed.add_field(name="🗓️ Weekly Quests", value=weekly_quests_str, inline=False)
+        embed.add_field(name=f"🗓️ Weekly Quests ({weekly_reset_time})", value=weekly_quests_str, inline=False)
 
         # 레벨업 퀘스트
         levelup_quests_str = self.format_levelup_quests(quest_status['levelup'])
