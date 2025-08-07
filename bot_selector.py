@@ -4108,7 +4108,14 @@ class NewStoryCharacterSelect(discord.ui.Select):
                     "🎴 Special Tier Card"
                 )
 
-            embed.set_image(url=story_info['banner_image'])
+            # Kagari의 경우 썸네일 이미지를 유지하고, 다른 캐릭터들은 배너 이미지 사용
+            if character_name == "Kagari":
+                # Kagari는 썸네일 이미지만 사용 (이미 위에서 설정됨)
+                pass
+            else:
+                # 다른 캐릭터들은 배너 이미지 사용
+                embed.set_image(url=story_info['banner_image'])
+            
             embed.add_field(name="Scenarios", value=chapter_list_str, inline=True)
             embed.add_field(name="Rewards", value=rewards_str, inline=True)
             print("[DEBUG] Embed created.")

@@ -309,6 +309,77 @@ def get_card_ranking():
         'detailed_cards': df
     }
 
+def get_gift_usage_ranking():
+    """선물 소비 랭킹을 반환합니다."""
+    conn = get_conn()
+    
+    # 유저별 총 선물 소비 수량
+    total_gift_usage = pd.read_sql_query("""
+        SELECT 
+            user_id,
+            SUM(quantity) as total_gifts_used
+        FROM user_gifts
+        GROUP BY user_id
+        ORDER BY total_gifts_used DESC
+    """, conn)
+    
+    # 캐릭터별 선물 소비 수량 (gift_id에서 캐릭터 추출)
+    character_gift_usage = pd.read_sql_query("""
+        SELECT 
+            user_id,
+            CASE 
+                WHEN gift_id LIKE 'kagari%' OR gift_id LIKE 'KAGARI%' THEN 'Kagari'
+                WHEN gift_id LIKE 'eros%' OR gift_id LIKE 'EROS%' THEN 'Eros'
+                WHEN gift_id LIKE 'elysia%' OR gift_id LIKE 'ELYSIA%' THEN 'Elysia'
+                ELSE 'Unknown'
+            END as character_name,
+            SUM(quantity) as character_gifts_used
+        FROM user_gifts
+        GROUP BY user_id, 
+            CASE 
+                WHEN gift_id LIKE 'kagari%' OR gift_id LIKE 'KAGARI%' THEN 'Kagari'
+                WHEN gift_id LIKE 'eros%' OR gift_id LIKE 'EROS%' THEN 'Eros'
+                WHEN gift_id LIKE 'elysia%' OR gift_id LIKE 'ELYSIA%' THEN 'Elysia'
+                ELSE 'Unknown'
+            END
+        HAVING 
+            CASE 
+                WHEN gift_id LIKE 'kagari%' OR gift_id LIKE 'KAGARI%' THEN 'Kagari'
+                WHEN gift_id LIKE 'eros%' OR gift_id LIKE 'EROS%' THEN 'Eros'
+                WHEN gift_id LIKE 'elysia%' OR gift_id LIKE 'ELYSIA%' THEN 'Elysia'
+                ELSE 'Unknown'
+            END != 'Unknown'
+    """, conn)
+    
+    # 선물 종류별 소비 수량
+    gift_type_usage = pd.read_sql_query("""
+        SELECT 
+            user_id,
+            CASE 
+                WHEN gift_id LIKE '%rare%' OR gift_id LIKE '%RARE%' THEN 'Rare'
+                WHEN gift_id LIKE '%common%' OR gift_id LIKE '%COMMON%' THEN 'Common'
+                WHEN gift_id LIKE '%special%' OR gift_id LIKE '%SPECIAL%' THEN 'Special'
+                ELSE 'Other'
+            END as gift_type,
+            SUM(quantity) as gift_type_used
+        FROM user_gifts
+        GROUP BY user_id, 
+            CASE 
+                WHEN gift_id LIKE '%rare%' OR gift_id LIKE '%RARE%' THEN 'Rare'
+                WHEN gift_id LIKE '%common%' OR gift_id LIKE '%COMMON%' THEN 'Common'
+                WHEN gift_id LIKE '%special%' OR gift_id LIKE '%SPECIAL%' THEN 'Special'
+                ELSE 'Other'
+            END
+    """, conn)
+    
+    conn.close()
+    
+    return {
+        'total_gift_usage': total_gift_usage,
+        'character_gift_usage': character_gift_usage,
+        'gift_type_usage': gift_type_usage
+    }
+
 def get_message_trend():
     conn = get_conn()
     df = pd.read_sql_query("""
@@ -508,6 +579,59 @@ def show_card_ranking():
     detailed_df = pd.DataFrame(detailed_stats)
     
     return total_ranking, character_ranking, tier_ranking, detailed_df
+
+def show_gift_usage_ranking():
+    """선물 소비 랭킹을 표시합니다."""
+    gift_data = get_gift_usage_ranking()
+    
+    # 총 선물 소비 랭킹 (상위 20명)
+    total_ranking = gift_data['total_gift_usage'].head(20).copy()
+    total_ranking['rank'] = range(1, len(total_ranking) + 1)
+    total_ranking = total_ranking[['rank', 'user_id', 'total_gifts_used']]
+    
+    # 캐릭터별 선물 소비 랭킹
+    character_ranking = gift_data['character_gift_usage'].copy()
+    character_ranking = character_ranking.pivot_table(
+        index='user_id', 
+        columns='character_name', 
+        values='character_gifts_used', 
+        fill_value=0
+    ).reset_index()
+    
+    # 선물 종류별 소비 랭킹
+    gift_type_ranking = gift_data['gift_type_usage'].copy()
+    gift_type_ranking = gift_type_ranking.pivot_table(
+        index='user_id', 
+        columns='gift_type', 
+        values='gift_type_used', 
+        fill_value=0
+    ).reset_index()
+    
+    # 상세 통계 (상위 10명)
+    detailed_stats = []
+    for user_id in total_ranking['user_id'].head(10):
+        user_char_gifts = character_ranking[character_ranking['user_id'] == user_id]
+        user_gift_types = gift_type_ranking[gift_type_ranking['user_id'] == user_id]
+        
+        if not user_char_gifts.empty and not user_gift_types.empty:
+            char_stats = user_char_gifts.iloc[0]
+            type_stats = user_gift_types.iloc[0]
+            
+            detailed_stats.append({
+                'user_id': user_id,
+                'total_gifts_used': total_ranking[total_ranking['user_id'] == user_id]['total_gifts_used'].iloc[0],
+                'Kagari_gifts': char_stats.get('Kagari', 0),
+                'Eros_gifts': char_stats.get('Eros', 0),
+                'Elysia_gifts': char_stats.get('Elysia', 0),
+                'Rare_gifts': type_stats.get('Rare', 0),
+                'Common_gifts': type_stats.get('Common', 0),
+                'Special_gifts': type_stats.get('Special', 0),
+                'Other_gifts': type_stats.get('Other', 0)
+            })
+    
+    detailed_df = pd.DataFrame(detailed_stats)
+    
+    return total_ranking, character_ranking, gift_type_ranking, detailed_df
 
 def get_level_statistics():
     conn = get_conn()
@@ -947,6 +1071,13 @@ if __name__ == "__main__":
             gr.Dataframe(detailed_df, label="🎯 상위 10명 상세 통계 (캐릭터별/티어별)")
             gr.Dataframe(character_ranking, label="👥 캐릭터별 카드 수 분포")
             gr.Dataframe(tier_ranking, label="⭐ 티어별 카드 수 분포")
+            
+            gr.Markdown("## 🎁 선물 소비 랭킹")
+            gift_total_ranking, gift_character_ranking, gift_type_ranking, gift_detailed_df = show_gift_usage_ranking()
+            gr.Dataframe(gift_total_ranking, label="📊 총 선물 소비 랭킹 (상위 20명)")
+            gr.Dataframe(gift_detailed_df, label="🎯 상위 10명 상세 통계 (캐릭터별/선물종류별)")
+            gr.Dataframe(gift_character_ranking, label="👥 캐릭터별 선물 소비 분포")
+            gr.Dataframe(gift_type_ranking, label="🎁 선물 종류별 소비 분포")
 
         with gr.Tab("AI/키워드/서머리"):
             gr.Markdown("## 키워드/AI/서머리 데이터")
