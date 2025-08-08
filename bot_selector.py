@@ -3341,30 +3341,78 @@ class BotSelector(commands.Bot):
             return 'en'
 
     def get_random_card(self, character_name: str, user_id: int) -> tuple[str, str]:
-        """랜덤 카드 획득 (중복 방지)"""
+        """호감도 등급에 따른 랜덤 카드 획득 (중복 방지, 티어별 분배)"""
         try:
             card_info = CHARACTER_CARD_INFO.get(character_name, {})
             if not card_info:
                 return None, None
             
+            # 사용자의 호감도 등급 확인
+            affinity_info = self.db.get_affinity(user_id, character_name)
+            if not affinity_info:
+                return None, None
+            
+            current_score = affinity_info['emotion_score']
+            grade = get_affinity_grade(current_score)
+            
             # 사용자가 보유한 카드 목록 가져오기 (중복 제거된 버전)
             user_cards = self.db.get_user_cards(user_id, character_name)
-            user_card_ids = [card[0] for card in user_cards]  # card_id만 추출
+            user_card_ids = [card[0].upper() for card in user_cards]  # 대소문자 무관하게 비교
             
             # 아직 보유하지 않은 카드들만 필터링
             available_cards = []
             for card_id in card_info:
-                if card_id not in user_card_ids:
+                if card_id.upper() not in user_card_ids:
                     available_cards.append(card_id)
             
             if not available_cards:
                 print(f"[DEBUG] No available cards for user {user_id} ({character_name}) - all cards already owned")
                 return None, None
             
+            # 호감도 등급에 따른 티어별 분배 확률
+            tier_distributions = {
+                "Rookie": {"C": 0.8, "B": 0.2, "A": 0.0, "S": 0.0},
+                "Iron": {"C": 0.6, "B": 0.3, "A": 0.1, "S": 0.0},
+                "Bronze": {"C": 0.5, "B": 0.3, "A": 0.15, "S": 0.05},
+                "Silver": {"C": 0.4, "B": 0.35, "A": 0.2, "S": 0.05},
+                "Gold": {"C": 0.3, "B": 0.4, "A": 0.25, "S": 0.05},
+                "Platinum": {"C": 0.2, "B": 0.4, "A": 0.3, "S": 0.1},
+                "Diamond": {"C": 0.1, "B": 0.3, "A": 0.4, "S": 0.2}
+            }
+            
+            distribution = tier_distributions.get(grade, {"C": 0.5, "B": 0.3, "A": 0.15, "S": 0.05})
+            
+            # 티어별로 사용 가능한 카드 분류
+            tier_cards = {"C": [], "B": [], "A": [], "S": []}
+            for card_id in available_cards:
+                card_detail = card_info.get(card_id, {})
+                tier = card_detail.get('tier', 'C')
+                if tier in tier_cards:
+                    tier_cards[tier].append(card_id)
+            
+            # 확률에 따라 티어 선택
             import random
-            card_id = random.choice(available_cards)
-            print(f"[DEBUG] Selected random card {card_id} for user {user_id} ({character_name})")
-            return None, card_id
+            selected_tier = None
+            rand = random.random()
+            cumulative = 0
+            
+            for tier, prob in distribution.items():
+                cumulative += prob
+                if rand <= cumulative and tier_cards[tier]:
+                    selected_tier = tier
+                    break
+            
+            # 선택된 티어에서 랜덤 카드 선택
+            if selected_tier and tier_cards[selected_tier]:
+                card_id = random.choice(tier_cards[selected_tier])
+                print(f"[DEBUG] Selected {selected_tier}-tier card {card_id} for user {user_id} ({character_name}, grade: {grade})")
+                return None, card_id
+            else:
+                # 선택된 티어에 카드가 없으면 전체에서 랜덤 선택
+                card_id = random.choice(available_cards)
+                print(f"[DEBUG] Selected random card {card_id} for user {user_id} ({character_name}) - fallback")
+                return None, card_id
+                
         except Exception as e:
             print(f"Error in get_random_card: {e}")
             return None, None
@@ -3809,15 +3857,53 @@ class GiftConfirmButton(discord.ui.Button['GiftView']):
                     level_up_embed = self.create_level_up_embed(character_name, prev_grade, new_grade)
                     await interaction.channel.send(embed=level_up_embed)
 
-                    # 2. Check for and give card reward
-                    card_id_to_give = milestone_to_card_id(threshold, character_name)
+                    # 2. Check for and give card reward based on affinity grade
+                    new_grade = get_affinity_grade(current_score)
+                    
+                    # 호감도 등급에 따른 카드 지급 확률 및 티어 분배
+                    card_id_to_give = None
+                    
+                    # 먼저 마일스톤 카드 확인 (고정 카드)
+                    milestone_card = milestone_to_card_id(threshold, character_name)
+                    if milestone_card:
+                        user_cards = self.db.get_user_cards(user_id, character_name)
+                        has_milestone_card = any(card[0].upper() == milestone_card.upper() for card in user_cards)
+                        
+                        if not has_milestone_card:
+                            card_id_to_give = milestone_card
+                            print(f"[DEBUG] Giving milestone card {milestone_card} to user {user_id}")
+                        else:
+                            print(f"[DEBUG] User {user_id} already has milestone card {milestone_card}")
+                    
+                    # 마일스톤 카드가 없거나 이미 보유한 경우, 호감도 등급에 따른 랜덤 카드 지급
                     if not card_id_to_give:
-                        continue
-
-                    user_cards = self.db.get_user_cards(user_id, character_name)
-                    has_card = any(card[0] == card_id_to_give for card in user_cards)
-
-                    if not has_card:
+                        # 호감도 등급별 카드 지급 확률
+                        grade_chances = {
+                            "Rookie": 0.05,    # 5%
+                            "Iron": 0.10,      # 10%
+                            "Bronze": 0.15,    # 15%
+                            "Silver": 0.20,    # 20%
+                            "Gold": 0.25,      # 25%
+                            "Platinum": 0.30,  # 30%
+                            "Diamond": 0.35    # 35%
+                        }
+                        
+                        import random
+                        chance = grade_chances.get(new_grade, 0.10)
+                        
+                        if random.random() < chance:
+                            # 중복 방지된 랜덤 카드 지급
+                            card_type, card_id = self.get_random_card(character_name, user_id)
+                            if card_id:
+                                card_id_to_give = card_id
+                                print(f"[DEBUG] Giving random card {card_id} to user {user_id} (grade: {new_grade}, chance: {chance})")
+                            else:
+                                print(f"[DEBUG] No available cards for user {user_id} ({character_name})")
+                        else:
+                            print(f"[DEBUG] Card not given to user {user_id} (grade: {new_grade}, chance: {chance})")
+                    
+                    # 카드 지급
+                    if card_id_to_give:
                         card_embed = discord.Embed(
                             title="🎉 Get a new card!",
                             description=f"Congratulations! {character_name} has sent you a token of affection.\nYou got a {get_card_info_by_id(card_id_to_give)['tier']} tier card!\nClick claim to receive your card.",
