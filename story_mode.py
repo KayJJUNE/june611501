@@ -851,26 +851,35 @@ async def handle_kagari_story(bot: "BotSelector", message: discord.Message, sess
 
 async def handle_chapter3_gift_usage(bot: "BotSelector", user_id: int, character_name: str, gift_id: str, channel_id: int):
     """챕터3에서 선물 사용을 처리합니다."""
+    print(f"[DEBUG] handle_chapter3_gift_usage called - user_id: {user_id}, character: {character_name}, gift_id: {gift_id}, channel_id: {channel_id}")
+    
     session = story_sessions.get(channel_id)
+    print(f"[DEBUG] Session found: {session is not None}")
     if not session or session.get("stage_num") != 3 or not session.get("waiting_for_gift"):
+        print(f"[DEBUG] Session validation failed - stage_num: {session.get('stage_num') if session else 'None'}, waiting_for_gift: {session.get('waiting_for_gift') if session else 'None'}")
         return False, "This is not a Chapter 3 story session waiting for a gift."
 
     if session["user_id"] != user_id:
+        print(f"[DEBUG] User ID mismatch - session user: {session['user_id']}, current user: {user_id}")
         return False, "This story session is not yours."
 
     session["gift_attempts"] += 1
+    print(f"[DEBUG] Gift attempts: {session['gift_attempts']}")
 
-    # 선물 사용 (DB에서 소모)
-    if not bot.db.use_user_gift(user_id, gift_id, 1):
-        return False, "Failed to use the gift. Please check your inventory."
+    # 선물 사용은 이미 bot_selector.py에서 처리되었으므로 여기서는 건너뜀
+    # if not bot.db.use_user_gift(user_id, gift_id, 1):
+    #     print(f"[DEBUG] Failed to use gift: {gift_id}")
+    #     return False, "Failed to use the gift. Please check your inventory."
 
     # 선물 등급 확인
     gift_details = get_gift_details(gift_id)
     gift_rarity = gift_details.get('rarity', 'Common')
+    print(f"[DEBUG] Gift details: {gift_details}, rarity: {gift_rarity}")
 
     # 등급별 보상 결정
     chapter_info = get_chapter_info(character_name, 3)
     rewards = chapter_info['rewards']
+    print(f"[DEBUG] Chapter rewards: {rewards}")
 
     if gift_rarity == "Epic":
         reward_card = rewards['epic']['card']
@@ -882,13 +891,17 @@ async def handle_chapter3_gift_usage(bot: "BotSelector", user_id: int, character
         reward_card = rewards['common']['card']
         reward_rarity_text = "⚪ Common"
 
+    print(f"[DEBUG] Reward card: {reward_card}, rarity text: {reward_rarity_text}")
+
     # 카드 보상 지급
     bot.db.add_user_card(user_id, character_name, reward_card)
+    print(f"[DEBUG] Card added to user: {reward_card}")
 
     # 스토리 완료 처리
     bot.db.complete_story_stage(user_id, character_name, 3)
     session["is_active"] = False
     session["waiting_for_gift"] = False
+    print(f"[DEBUG] Story stage completed and session updated")
 
     # 성공 메시지
     success_embed = discord.Embed(
@@ -897,7 +910,7 @@ async def handle_chapter3_gift_usage(bot: "BotSelector", user_id: int, character
             f"Kagari is happy to receive **{gift_details['name']}**.\n"
             f"She says she'll never forget this moment and gives you a warm smile.\n\n"
             f"**Reward:** {reward_rarity_text} Card **{reward_card}** obtained!\n"
-            f"Check your cards with `/cards`."
+            f"Check your cards with `/mycard`."
         ),
         color=discord.Color.pink()
     )
@@ -913,6 +926,7 @@ async def handle_chapter3_gift_usage(bot: "BotSelector", user_id: int, character
         color=discord.Color.gold()
     )
 
+    print(f"[DEBUG] Returning success with embeds")
     return True, (success_embed, completion_embed)
 
 async def handle_chapter3_gift_failure(bot: "BotSelector", user_id: int, character_name: str, channel_id: int):

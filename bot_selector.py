@@ -2112,11 +2112,18 @@ class BotSelector(commands.Bot):
                     from story_mode import handle_chapter3_gift_usage, handle_chapter3_gift_failure
                     if character == "Kagari" and session.get('stage_num') == 3:
                         # Kagari 챕터3 선물 사용 처리
+                        print(f"[DEBUG] Kagari Chapter 3 gift processing - user_id: {user_id}, item: {item}")
                         success, result = await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
+                        print(f"[DEBUG] handle_chapter3_gift_usage result - success: {success}, result type: {type(result)}")
                         if success:
-                            success_embed, completion_embed = result
-                            await interaction.channel.send(embed=success_embed)
-                            await interaction.channel.send(embed=completion_embed)
+                            if isinstance(result, tuple) and len(result) == 2:
+                                success_embed, completion_embed = result
+                                print(f"[DEBUG] Sending success_embed and completion_embed")
+                                await interaction.channel.send(embed=success_embed)
+                                await interaction.channel.send(embed=completion_embed)
+                            else:
+                                print(f"[DEBUG] Unexpected result format: {result}")
+                                await interaction.channel.send(embed=result)
                             # 5초 후 채널 삭제
                             import asyncio
                             await asyncio.sleep(5)
@@ -2125,13 +2132,19 @@ class BotSelector(commands.Bot):
                                 print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 완료")
                             except Exception as e:
                                 print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 실패: {e}")
+                        else:
+                            print(f"[DEBUG] handle_chapter3_gift_usage failed: {result}")
+                        return  # 스토리 모드 처리 완료 후 함수 종료
                     elif character == "Eros" and session.get('stage_num') == 3:
                         # Eros 챕터3 선물 사용 처리
                         success, result = await handle_chapter3_gift_usage(self, user_id, character, item, interaction.channel_id)
                         if success:
-                            success_embed, completion_embed = result
-                            await interaction.channel.send(embed=success_embed)
-                            await interaction.channel.send(embed=completion_embed)
+                            if isinstance(result, tuple) and len(result) == 2:
+                                success_embed, completion_embed = result
+                                await interaction.channel.send(embed=success_embed)
+                                await interaction.channel.send(embed=completion_embed)
+                            else:
+                                await interaction.channel.send(embed=result)
                             # 5초 후 채널 삭제
                             import asyncio
                             await asyncio.sleep(5)
@@ -2140,9 +2153,11 @@ class BotSelector(commands.Bot):
                                 print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 완료")
                             except Exception as e:
                                 print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 실패: {e}")
+                        return  # 스토리 모드 처리 완료 후 함수 종료
                     else:
                         # 기타 스토리 모드 선물 처리
                         print(f"[DEBUG] Story mode gift given to {character} in stage {session.get('stage_num')}")
+                        # 일반 선물 전송 로직 계속 실행
             except Exception as e:
                 print(f"[ERROR] /gift 명령어 처리 중 오류: {e}")
                 import traceback
