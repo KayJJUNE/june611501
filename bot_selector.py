@@ -3359,11 +3359,16 @@ class BotSelector(commands.Bot):
             user_cards = self.db.get_user_cards(user_id, character_name)
             user_card_ids = [card[0].upper() for card in user_cards]  # 대소문자 무관하게 비교
             
+            print(f"[DEBUG] get_random_card - user {user_id} ({character_name}) has cards: {user_card_ids}")
+            print(f"[DEBUG] get_random_card - total available cards in config: {list(card_info.keys())}")
+            
             # 아직 보유하지 않은 카드들만 필터링
             available_cards = []
             for card_id in card_info:
                 if card_id.upper() not in user_card_ids:
                     available_cards.append(card_id)
+            
+            print(f"[DEBUG] get_random_card - available cards after filtering: {available_cards}")
             
             if not available_cards:
                 print(f"[DEBUG] No available cards for user {user_id} ({character_name}) - all cards already owned")

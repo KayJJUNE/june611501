@@ -1180,11 +1180,11 @@ class CardClaimButton(discord.ui.Button):
             await interaction.response.send_message("An error occurred while claiming the card.", ephemeral=True)
 
 class CardClaimView(discord.ui.View):
-    def __init__(self, user_id, card_id, character_name, db):
+    def __init__(self, user_id, character_name, card_id, db):
         super().__init__(timeout=None)
         self.user_id = user_id
-        self.card_id = card_id.upper()
         self.character_name = character_name
+        self.card_id = card_id.upper()
         self.db = db
 
     @discord.ui.button(label="Claim Card", style=discord.ButtonStyle.primary, emoji="🎴")
@@ -1230,7 +1230,7 @@ def get_card_claim_embed_and_view(user_id, character_name, card_id, db):
     )
     if card_info.get("image_path"):
         embed.set_image(url=card_info.get("image_path"))
-    view = CardClaimView(user_id, card_id, character_name, db)
+    view = CardClaimView(user_id, character_name, card_id, db)
     return embed, view
 
 def get_card_tier_by_affinity(affinity):
