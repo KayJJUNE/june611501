@@ -126,12 +126,25 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
+                # CST 시간대의 현재 시간을 명시적으로 저장
+                now_cst = datetime.now(CST)
+                print(f"[DEBUG] add_message - now_cst: {now_cst}, type: {type(now_cst)}")
+                
                 cursor.execute(
-                    "INSERT INTO conversations (channel_id, user_id, character_name, message_role, content, language) VALUES (%s, %s, %s, %s, %s, %s)",
-                    (channel_id, user_id, character_name, role, content, language)
+                    "INSERT INTO conversations (channel_id, user_id, character_name, message_role, content, language, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (channel_id, user_id, character_name, role, content, language, now_cst)
                 )
+                
+                # INSERT 후 실제로 저장된 데이터 확인
+                cursor.execute(
+                    "SELECT timestamp FROM conversations WHERE user_id = %s ORDER BY id DESC LIMIT 1",
+                    (user_id,)
+                )
+                saved_timestamp = cursor.fetchone()
+                print(f"[DEBUG] add_message - saved timestamp: {saved_timestamp}")
+                
             conn.commit()
-            print(f"[DEBUG] add_message DB INSERT SUCCESS for user_id={user_id}, character_name={character_name}")
+            print(f"[DEBUG] add_message DB INSERT SUCCESS for user_id={user_id}, character_name={character_name}, timestamp={now_cst}")
         except Exception as e:
             print(f"Error adding message to DB: {e}")
             if conn: conn.rollback()
@@ -1004,11 +1017,41 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 today_cst = get_today_cst()
+                print(f"[DEBUG] get_total_daily_messages - user_id={user_id}, today_cst={today_cst}")
+                
+                # 먼저 해당 사용자의 모든 메시지를 확인
+                cursor.execute(
+                    "SELECT timestamp, message_role FROM conversations WHERE user_id = %s ORDER BY timestamp DESC LIMIT 5",
+                    (user_id,)
+                )
+                recent_messages = cursor.fetchall()
+                print(f"[DEBUG] get_total_daily_messages - recent messages: {recent_messages}")
+                
+                # 전체 메시지 수도 확인
+                cursor.execute(
+                    "SELECT COUNT(*) FROM conversations WHERE user_id = %s",
+                    (user_id,)
+                )
+                total_count = cursor.fetchone()[0]
+                print(f"[DEBUG] get_total_daily_messages - total messages for user: {total_count}")
+                
+                # 오늘 날짜의 메시지 수 확인 (타임존 변환 없이)
+                cursor.execute(
+                    "SELECT COUNT(*) FROM conversations WHERE user_id = %s AND DATE(timestamp) = %s AND message_role = 'user'",
+                    (user_id, today_cst)
+                )
+                count_simple = cursor.fetchone()[0]
+                print(f"[DEBUG] get_total_daily_messages - count (simple date): {count_simple}")
+                
+                # 기존 방식 (타임존 변환)
                 cursor.execute(
                     "SELECT COUNT(*) FROM conversations WHERE user_id = %s AND DATE(timestamp AT TIME ZONE 'Asia/Shanghai') = %s AND message_role = 'user'",
                     (user_id, today_cst)
                 )
-                return cursor.fetchone()[0]
+                count = cursor.fetchone()[0]
+                print(f"[DEBUG] get_total_daily_messages - count (with timezone): {count}")
+                
+                return count
         except Exception as e:
             print(f"Error getting total daily messages: {e}")
             return 0
