@@ -1641,11 +1641,12 @@ class DatabaseManager:
                 return False
             return True
         
-        # 일반 사용자는 하루 20개 제한
-        if daily_count >= 20:
-            return False
+        # 일반 사용자는 일일 20개 + 메시지 잔액 사용 가능
+        if daily_count < 20:
+            # 일일 20개 미만이면 사용 가능
+            return True
         
-        # 메시지 잔액이 있으면 사용 가능
+        # 일일 20개를 모두 사용했으면 메시지 잔액 확인
         balance = self.get_user_message_balance(user_id)
         return balance > 0
 

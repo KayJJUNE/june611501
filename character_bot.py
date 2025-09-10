@@ -550,8 +550,9 @@ class CharacterBot(commands.Bot):
                 # 일일 메시지는 conversations 테이블에 저장되면서 자동으로 카운트됨
                 pass
             else:
-                # 일반 사용자는 메시지 잔액 차감
-                self.db.use_user_message(user_id)
+                # 일반 사용자는 일일 20개 초과 시에만 메시지 잔액 차감
+                if daily_count >= 20:
+                    self.db.use_user_message(user_id)
 
         affinity_before = self.db.get_affinity(user_id, character)
         if not affinity_before:
