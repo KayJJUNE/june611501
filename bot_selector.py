@@ -2590,6 +2590,92 @@ class BotSelector(commands.Bot):
                 await interaction.response.send_message("Error occurred while checking balance.", ephemeral=True)
 
         @self.tree.command(
+            name="log",
+            description="Check your payment and delivery history"
+        )
+        async def log_command(interaction: discord.Interaction):
+            """Check your payment and delivery history."""
+            try:
+                user_id = interaction.user.id
+                activity = self.db.get_user_recent_activity(user_id, limit=5)
+                
+                embed = discord.Embed(
+                    title="📋 Payment & Delivery Log",
+                    description="Your recent payment and item delivery history",
+                    color=discord.Color.green()
+                )
+                
+                # 결제 기록이 있는 경우
+                if activity['payments']:
+                    payment_text = ""
+                    for payment in activity['payments']:
+                        status_emoji = "✅" if payment['status'] == 'completed' else "❌"
+                        time_str = payment['created_at'].strftime("%m/%d %H:%M") if payment['created_at'] else "Unknown"
+                        payment_text += f"{status_emoji} **{payment['product_id']}** - {payment['amount']} {payment['currency']} ({time_str})\n"
+                    
+                    embed.add_field(
+                        name="💳 Recent Payments",
+                        value=payment_text or "No recent payments",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="💳 Recent Payments",
+                        value="No payment history found",
+                        inline=False
+                    )
+                
+                # 상품 지급 기록이 있는 경우
+                if activity['deliveries']:
+                    delivery_text = ""
+                    for delivery in activity['deliveries']:
+                        status_emoji = "✅" if delivery['status'] == 'delivered' else "❌"
+                        time_str = delivery['delivered_at'].strftime("%m/%d %H:%M") if delivery['delivered_at'] else "Unknown"
+                        
+                        # 상품 정보 포맷팅
+                        product_info = f"**{delivery['product_id']}**"
+                        if delivery['quantity']:
+                            if 'messages' in delivery['quantity']:
+                                product_info += f" - {delivery['quantity']['messages']} Messages"
+                            if 'gifts' in delivery['quantity']:
+                                product_info += f" - {delivery['quantity']['gifts']} Gifts"
+                            if 'daily_messages' in delivery['quantity']:
+                                product_info += f" - {delivery['quantity']['daily_messages']} Daily Messages"
+                        
+                        delivery_text += f"{status_emoji} {product_info} ({time_str})\n"
+                    
+                    embed.add_field(
+                        name="📦 Recent Deliveries",
+                        value=delivery_text or "No recent deliveries",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="📦 Recent Deliveries",
+                        value="No delivery history found",
+                        inline=False
+                    )
+                
+                # 통계 정보
+                embed.add_field(
+                    name="📊 Statistics",
+                    value=f"Total Payments: {activity['total_payments']}\nTotal Deliveries: {activity['total_deliveries']}",
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="💡 Note",
+                    value="This shows your last 5 transactions. Use `/store` to purchase more items.",
+                    inline=False
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            except Exception as e:
+                print(f"Error in log_command: {e}")
+                await interaction.response.send_message("Error occurred while checking your log.", ephemeral=True)
+
+        @self.tree.command(
             name="reset_quest",
             description="[Admin] Reset all quest claim records for a user."
         )

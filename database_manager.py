@@ -1909,3 +1909,80 @@ class DatabaseManager:
             return None
         finally:
             self.return_connection(conn)
+
+    def get_user_payment_history(self, user_id: int, limit: int = 10) -> list:
+        """사용자의 결제 기록을 조회합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT transaction_id, product_id, amount, currency, 
+                           payment_method, status, created_at
+                    FROM payment_transactions 
+                    WHERE user_id = %s 
+                    ORDER BY created_at DESC 
+                    LIMIT %s
+                """, (user_id, limit))
+                results = cursor.fetchall()
+                return [
+                    {
+                        'transaction_id': row[0],
+                        'product_id': row[1],
+                        'amount': row[2],
+                        'currency': row[3],
+                        'payment_method': row[4],
+                        'status': row[5],
+                        'created_at': row[6]
+                    }
+                    for row in results
+                ]
+        except Exception as e:
+            print(f"Error getting payment history: {e}")
+            return []
+        finally:
+            self.return_connection(conn)
+
+    def get_user_delivery_history(self, user_id: int, limit: int = 10) -> list:
+        """사용자의 상품 지급 기록을 조회합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT product_id, transaction_id, delivery_type, 
+                           quantity, delivered_at, status
+                    FROM product_delivery_log 
+                    WHERE user_id = %s 
+                    ORDER BY delivered_at DESC 
+                    LIMIT %s
+                """, (user_id, limit))
+                results = cursor.fetchall()
+                return [
+                    {
+                        'product_id': row[0],
+                        'transaction_id': row[1],
+                        'delivery_type': row[2],
+                        'quantity': json.loads(row[3]) if row[3] else {},
+                        'delivered_at': row[4],
+                        'status': row[5]
+                    }
+                    for row in results
+                ]
+        except Exception as e:
+            print(f"Error getting delivery history: {e}")
+            return []
+        finally:
+            self.return_connection(conn)
+
+    def get_user_recent_activity(self, user_id: int, limit: int = 5) -> dict:
+        """사용자의 최근 결제 및 지급 활동을 조회합니다."""
+        payment_history = self.get_user_payment_history(user_id, limit)
+        delivery_history = self.get_user_delivery_history(user_id, limit)
+        
+        return {
+            'payments': payment_history,
+            'deliveries': delivery_history,
+            'total_payments': len(payment_history),
+            'total_deliveries': len(delivery_history)
+        }
