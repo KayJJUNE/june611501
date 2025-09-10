@@ -37,20 +37,33 @@ class ProductManager:
         
         try:
             rewards = product.get('rewards', {})
+            product_type = product.get('type')
             
-            # 메시지 지급
-            if 'messages' in rewards:
+            # 일회성 상품의 메시지 지급
+            if product_type == 'one_time' and 'messages' in rewards:
                 message_count = rewards['messages']
-                if message_count > 0:  # -1은 무제한을 의미
+                if message_count > 0:
                     db.add_user_messages(user_id, message_count)
                     print(f"Added {message_count} messages to user {user_id}")
             
-            # 기프트 지급
-            if 'gifts' in rewards:
+            # 구독 상품의 기프트 지급 (일회성)
+            if product_type == 'subscription' and 'gifts' in rewards:
                 gift_count = rewards['gifts']
                 for _ in range(gift_count):
                     # 랜덤 기프트 지급 (모든 캐릭터에서)
-                    gift_name = db.add_random_gift_to_user(user_id, "Kagari")  # 기본 캐릭터
+                    gift_name = db.add_random_gift_to_user(user_id, "Kagari")
+                    if not gift_name:
+                        gift_name = db.add_random_gift_to_user(user_id, "Eros")
+                    if not gift_name:
+                        gift_name = db.add_random_gift_to_user(user_id, "Elysia")
+                    print(f"Added subscription gift to user {user_id}")
+            
+            # 일회성 상품의 기프트 지급
+            if product_type == 'one_time' and 'gifts' in rewards:
+                gift_count = rewards['gifts']
+                for _ in range(gift_count):
+                    # 랜덤 기프트 지급 (모든 캐릭터에서)
+                    gift_name = db.add_random_gift_to_user(user_id, "Kagari")
                     if not gift_name:
                         gift_name = db.add_random_gift_to_user(user_id, "Eros")
                     if not gift_name:
@@ -58,15 +71,14 @@ class ProductManager:
                     print(f"Added random gift to user {user_id}")
             
             # 구독 처리
-            if product.get('type') == 'subscription':
+            if product_type == 'subscription':
                 duration_days = product.get('duration_days', 30)
                 db.add_user_subscription(user_id, product_id, duration_days)
                 print(f"Added subscription {product_id} for {duration_days} days to user {user_id}")
-            
-            # 이벤트 카드 지급 (S카드)
-            if 'event_card' in rewards:
-                # 랜덤 S카드 지급 로직 (구현 필요)
-                print(f"Event card delivery not implemented yet for user {user_id}")
+                
+                # 구독 시작 시 즉시 일일 보상 지급
+                db.process_daily_subscription_rewards(user_id)
+                print(f"Processed initial daily subscription rewards for user {user_id}")
             
             return True
             
