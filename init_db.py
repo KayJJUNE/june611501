@@ -3,6 +3,34 @@ import os
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 
+def migrate_database():
+    """기존 데이터베이스에 새로운 컬럼을 추가합니다."""
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cursor:
+            try:
+                # conversations 테이블에 is_daily_message 컬럼 추가 (이미 존재하면 무시)
+                cursor.execute("""
+                    ALTER TABLE conversations 
+                    ADD COLUMN IF NOT EXISTS is_daily_message BOOLEAN DEFAULT TRUE
+                """)
+                print("✅ is_daily_message 컬럼이 성공적으로 추가되었습니다.")
+            except Exception as e:
+                print(f"⚠️ is_daily_message 컬럼 추가 중 오류 (이미 존재할 수 있음): {e}")
+            
+            try:
+                # 기존 데이터의 is_daily_message를 TRUE로 설정 (기본값)
+                cursor.execute("""
+                    UPDATE conversations 
+                    SET is_daily_message = TRUE 
+                    WHERE is_daily_message IS NULL
+                """)
+                print("✅ 기존 데이터의 is_daily_message가 TRUE로 설정되었습니다.")
+            except Exception as e:
+                print(f"⚠️ 기존 데이터 업데이트 중 오류: {e}")
+            
+            conn.commit()
+            print("✅ 데이터베이스 마이그레이션이 완료되었습니다.")
+
 def create_all_tables():
     with psycopg2.connect(DATABASE_URL) as conn:
         with conn.cursor() as cursor:
@@ -344,3 +372,12 @@ def create_all_tables():
                 )
             ''')
         conn.commit()
+
+if __name__ == "__main__":
+    print("🚀 데이터베이스 초기화를 시작합니다...")
+    create_all_tables()
+    print("✅ 모든 테이블이 생성되었습니다.")
+    
+    print("\n🔄 데이터베이스 마이그레이션을 시작합니다...")
+    migrate_database()
+    print("✅ 데이터베이스 초기화가 완료되었습니다!")
