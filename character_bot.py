@@ -472,24 +472,52 @@ class CharacterBot(commands.Bot):
         now = datetime.utcnow()
 
         # 메시지 제한 확인
-        daily_count = self.db.get_user_daily_message_count(user_id)
-        balance = self.db.get_user_message_balance(user_id)
+        daily_used = self.db.get_user_daily_message_count(user_id)
+        paid_used = self.db.get_user_paid_message_count(user_id)
+        paid_balance = self.db.get_user_message_balance(user_id)
         is_admin = self.db.is_user_admin(user_id)
         is_subscribed = self.db.is_user_subscribed(user_id)
         
+        # 메시지 사용 가능 여부 확인
+        can_send = False
+        message_type = None  # 'daily' 또는 'paid'
+        
         if is_admin:
             # 관리자는 제한 없음
-            pass
+            can_send = True
+            message_type = 'daily'
         elif is_subscribed:
             # 구독 사용자는 일일 20개 + 구독 추가 메시지 사용 가능
             subscription_daily_messages = self.db.get_subscription_daily_messages(user_id)
             max_daily_messages = 20 + subscription_daily_messages
-            
-            if daily_count >= max_daily_messages:
-                # 구독 사용자의 일일 제한에 도달
+            if daily_used < max_daily_messages:
+                can_send = True
+                message_type = 'daily'
+            else:
+                can_send = False
+        else:
+            # 일반 사용자: 일일 20개 먼저, 그 다음 유료 메시지
+            if daily_used < 20:
+                # 일일 메시지가 남아있으면 일일 메시지 사용
+                can_send = True
+                message_type = 'daily'
+            elif daily_used >= 20 and paid_balance > 0:
+                # 일일 메시지를 모두 사용했지만 유료 메시지가 있으면 유료 메시지 사용
+                can_send = True
+                message_type = 'paid'
+            else:
+                # 일일 메시지도 모두 사용하고 유료 메시지도 없으면 사용 불가
+                can_send = False
+        
+        # 메시지 사용 불가능한 경우
+        if not can_send:
+            if is_subscribed:
+                # 구독 사용자 제한
+                subscription_daily_messages = self.db.get_subscription_daily_messages(user_id)
+                max_daily_messages = 20 + subscription_daily_messages
                 embed = discord.Embed(
                     title="🚫 Daily Message Limit",
-                    description=f"You have reached your daily message limit.\n\n**Messages used today:** {daily_count}/{max_daily_messages}\n**Remaining messages:** 0\n\n**Daily breakdown:** 20 (base) + {subscription_daily_messages} (subscription) = {max_daily_messages} total",
+                    description=f"You have reached your daily message limit.\n\n**Messages used today:** {daily_used}/{max_daily_messages}\n**Remaining messages:** 0\n\n**Daily breakdown:** 20 (base) + {subscription_daily_messages} (subscription) = {max_daily_messages} total",
                     color=discord.Color.red()
                 )
                 embed.add_field(
@@ -497,18 +525,11 @@ class CharacterBot(commands.Bot):
                     value="Your subscription gives you extra messages daily. Check back tomorrow!",
                     inline=False
                 )
-                await message.channel.send(embed=embed)
-                return
-        else:
-            # 일반 사용자는 일일 20개 + 메시지 잔액 사용 가능
-            if daily_count < 20:
-                # 일일 20개 미만이면 사용 가능
-                pass
-            elif daily_count >= 20 and balance <= 0:
-                # 일일 20개를 모두 사용했고 메시지 잔액이 없으면 제한
+            else:
+                # 일반 사용자 제한
                 embed = discord.Embed(
-                    title="🚫 Message Limit Reached",
-                    description=f"You have used all your daily messages and have no message balance.\n\n**Daily messages used:** {daily_count}/20\n**Message balance:** {balance}\n\n**Daily messages reset at UTC+0**\n**Purchase message packs for additional messages**",
+                    title="🚫 Message Balance Low",
+                    description=f"Your message balance is low.\n\n**Daily messages used:** {daily_used}/20\n**Message balance:** {paid_balance}\n\n**Daily messages reset at UTC+0**\n**Purchased messages have no time limit**",
                     color=discord.Color.red()
                 )
                 embed.add_field(
@@ -516,32 +537,34 @@ class CharacterBot(commands.Bot):
                     value="`/store` You can purchase message packs using commands.",
                     inline=False
                 )
-                await message.channel.send(embed=embed)
-                return
+            
+            await message.channel.send(embed=embed)
+            return
 
         # 언어 감지
         detected_language = self.detect_language(message.content)
         
         # 유저 메시지 DB 저장 (conversations 테이블)
+        is_daily = (message_type == 'daily')
         self.db.add_message(
             message.channel.id,   # channel_id
             user_id,              # user_id
             character,            # character_name
             "user",              # role
             message.content,      # content
-            detected_language     # 감지된 언어
+            detected_language,    # 감지된 언어
+            is_daily             # 일일 메시지 여부
         )
 
         # 메시지 사용 처리
         if not self.db.is_user_admin(user_id):
-            if self.db.is_user_subscribed(user_id):
-                # 구독 사용자는 일일 메시지만 사용 (메시지 잔액 차감 안함)
-                # 일일 메시지는 conversations 테이블에 저장되면서 자동으로 카운트됨
-                pass
+            if message_type == 'paid':
+                # 유료 메시지 사용 시 잔액 차감
+                self.db.use_user_message(user_id)
+                print(f"Used paid message for user {user_id}, remaining balance: {self.db.get_user_message_balance(user_id)}")
             else:
-                # 일반 사용자는 일일 20개 초과 시에만 메시지 잔액 차감
-                if daily_count >= 20:
-                    self.db.use_user_message(user_id)
+                # 일일 메시지 사용 시 차감 없음 (자동으로 카운트됨)
+                print(f"Used daily message for user {user_id}, daily used: {self.db.get_user_daily_message_count(user_id)}")
 
         affinity_before = self.db.get_affinity(user_id, character)
         if not affinity_before:

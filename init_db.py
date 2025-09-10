@@ -17,7 +17,8 @@ def create_all_tables():
                     content TEXT,
                     language TEXT,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    token_count INTEGER
+                    token_count INTEGER,
+                    is_daily_message BOOLEAN DEFAULT TRUE
                 )
             ''')
             # affinity

@@ -121,8 +121,8 @@ class DatabaseManager:
             self.return_connection(conn)
 
     # 메시지 관련 함수
-    def add_message(self, channel_id: int, user_id: int, character_name: str, role: str, content: str, language: str = None):
-        print(f"[DEBUG] add_message called: channel_id={channel_id}, user_id={user_id}, character_name={character_name}, role={role}, content={content}, language={language}")
+    def add_message(self, channel_id: int, user_id: int, character_name: str, role: str, content: str, language: str = None, is_daily_message: bool = True):
+        print(f"[DEBUG] add_message called: channel_id={channel_id}, user_id={user_id}, character_name={character_name}, role={role}, content={content}, language={language}, is_daily_message={is_daily_message}")
         conn = None
         try:
             conn = self.get_connection()
@@ -132,20 +132,20 @@ class DatabaseManager:
                 print(f"[DEBUG] add_message - now_cst: {now_cst}, type: {type(now_cst)}")
                 
                 cursor.execute(
-                    "INSERT INTO conversations (channel_id, user_id, character_name, message_role, content, language, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (channel_id, user_id, character_name, role, content, language, now_cst)
+                    "INSERT INTO conversations (channel_id, user_id, character_name, message_role, content, language, timestamp, is_daily_message) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (channel_id, user_id, character_name, role, content, language, now_cst, is_daily_message)
                 )
                 
                 # INSERT 후 실제로 저장된 데이터 확인
                 cursor.execute(
-                    "SELECT timestamp FROM conversations WHERE user_id = %s ORDER BY id DESC LIMIT 1",
+                    "SELECT timestamp, is_daily_message FROM conversations WHERE user_id = %s ORDER BY id DESC LIMIT 1",
                     (user_id,)
                 )
-                saved_timestamp = cursor.fetchone()
-                print(f"[DEBUG] add_message - saved timestamp: {saved_timestamp}")
+                saved_data = cursor.fetchone()
+                print(f"[DEBUG] add_message - saved timestamp: {saved_data[0]}, is_daily_message: {saved_data[1]}")
                 
             conn.commit()
-            print(f"[DEBUG] add_message DB INSERT SUCCESS for user_id={user_id}, character_name={character_name}, timestamp={now_cst}")
+            print(f"[DEBUG] add_message DB INSERT SUCCESS for user_id={user_id}, character_name={character_name}, timestamp={now_cst}, is_daily_message={is_daily_message}")
         except Exception as e:
             print(f"Error adding message to DB: {e}")
             if conn: conn.rollback()
@@ -1606,7 +1606,7 @@ class DatabaseManager:
         return user_id in admin_ids
 
     def get_user_daily_message_count(self, user_id: int) -> int:
-        """사용자의 오늘 메시지 수를 반환합니다 (UTC+0 기준)."""
+        """사용자의 오늘 일일 메시지 사용 수를 반환합니다 (UTC+0 기준)."""
         conn = None
         try:
             conn = self.get_connection()
@@ -1616,6 +1616,7 @@ class DatabaseManager:
                     WHERE user_id = %s 
                     AND message_role = 'user' 
                     AND DATE(timestamp AT TIME ZONE 'UTC') = CURRENT_DATE
+                    AND is_daily_message = true
                 """, (user_id,))
                 result = cursor.fetchone()
                 return result[0] if result else 0
@@ -1624,6 +1625,53 @@ class DatabaseManager:
             return 0
         finally:
             self.return_connection(conn)
+
+    def get_user_paid_message_count(self, user_id: int) -> int:
+        """사용자의 오늘 유료 메시지 사용 수를 반환합니다 (UTC+0 기준)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM conversations 
+                    WHERE user_id = %s 
+                    AND message_role = 'user' 
+                    AND DATE(timestamp AT TIME ZONE 'UTC') = CURRENT_DATE
+                    AND is_daily_message = false
+                """, (user_id,))
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting paid message count: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
+
+    def can_user_send_message_new(self, user_id: int) -> bool:
+        """새로운 메시지 사용 가능 여부 확인 로직"""
+        # 관리자는 제한 없음
+        if self.is_user_admin(user_id):
+            return True
+        
+        daily_used = self.get_user_daily_message_count(user_id)
+        paid_balance = self.get_user_message_balance(user_id)
+        
+        # 구독 사용자는 일일 20개 + 구독 추가 메시지
+        if self.is_user_subscribed(user_id):
+            subscription_daily_messages = self.get_subscription_daily_messages(user_id)
+            max_daily_messages = 20 + subscription_daily_messages
+            return daily_used < max_daily_messages
+        
+        # 일반 사용자: 일일 20개 + 유료 메시지
+        if daily_used < 20:
+            # 일일 메시지가 남아있으면 사용 가능
+            return True
+        elif daily_used >= 20 and paid_balance > 0:
+            # 일일 메시지를 모두 사용했지만 유료 메시지가 있으면 사용 가능
+            return True
+        else:
+            # 일일 메시지도 모두 사용하고 유료 메시지도 없으면 사용 불가
+            return False
 
     def can_user_send_message(self, user_id: int) -> bool:
         """사용자가 메시지를 보낼 수 있는지 확인합니다."""
