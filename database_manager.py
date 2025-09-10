@@ -6,6 +6,7 @@ import gift_manager
 from init_db import create_all_tables
 from pytz import timezone
 from psycopg2.extras import RealDictCursor
+from typing import Optional, Dict, Any
 
 # --- CST 시간대 객체 ---
 CST = timezone('Asia/Shanghai')
