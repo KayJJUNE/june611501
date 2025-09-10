@@ -47,6 +47,7 @@ import importlib
 # --- 상단 임포트/유틸 추가 ---
 from character_bot import CardClaimView
 from character_bot import get_affinity_grade
+from products import product_manager
 
 # 강제로 gift_manager 모듈을 다시 로드하여 캐시 문제를 해결합니다.
 import gift_manager
@@ -2400,26 +2401,90 @@ class BotSelector(commands.Bot):
 
         @self.tree.command(
             name="store",
-            description="Visit the ZeroLink store to purchase various packages"
+            description="Visit our store to purchase message packs and subscriptions!"
         )
         async def store_command(interaction: discord.Interaction):
             try:
+                # 사용자 현재 상태 확인
+                user_id = interaction.user.id
+                balance = self.db.get_user_message_balance(user_id)
+                daily_count = self.db.get_user_daily_message_count(user_id)
+                is_admin = self.db.is_user_admin(user_id)
+                is_subscribed = self.db.is_user_subscribed(user_id)
+                
                 embed = discord.Embed(
                     title="🛒 ZeroLink Store",
-                    description="Visit our store to purchase various packages and enhance your experience!",
+                    description="Purchase message packs and subscriptions to enhance your chat experience!",
                     color=discord.Color.blue(),
                     url="https://zerolink714209.tartagames.com/"
                 )
                 
+                # 현재 상태 표시
+                if is_admin:
+                    status_text = "👑 **Admin** - No message limits"
+                elif is_subscribed:
+                    status_text = "⭐ **Subscribed** - No message limits"
+                else:
+                    remaining = max(0, 20 - daily_count)
+                    status_text = f"📊 **Daily Messages:** {daily_count}/20\n💳 **Message Balance:** {balance}"
+                
                 embed.add_field(
-                    name="🌟 Available Packages",
-                    value="• Premium Character Access\n• Special Gift Packages\n• Exclusive Content\n• And much more!",
+                    name="📈 Your Status",
+                    value=status_text,
+                    inline=False
+                )
+                
+                # 상품 정보 표시
+                products = product_manager.get_all_products()
+                
+                # 메시지 팩
+                message_products = [p for p in products.values() if 'MESSAGE_PACK' in p['id']]
+                if message_products:
+                    message_list = "\n".join([
+                        f"• **{p['name']}** - {p['description']}"
+                        for p in message_products
+                    ])
+                    embed.add_field(
+                        name="💬 Message Packs",
+                        value=message_list,
+                        inline=True
+                    )
+                
+                # 구독 상품
+                subscription_products = [p for p in products.values() if p.get('type') == 'subscription']
+                if subscription_products:
+                    sub_list = "\n".join([
+                        f"• **{p['name']}** - {p['description']}"
+                        for p in subscription_products
+                    ])
+                    embed.add_field(
+                        name="📅 Subscriptions",
+                        value=sub_list,
+                        inline=True
+                    )
+                
+                # 기프트 팩
+                gift_products = [p for p in products.values() if 'GIFT_PACK' in p['id']]
+                if gift_products:
+                    gift_list = "\n".join([
+                        f"• **{p['name']}** - {p['description']}"
+                        for p in gift_products
+                    ])
+                    embed.add_field(
+                        name="🎁 Gift Packs",
+                        value=gift_list,
+                        inline=True
+                    )
+                
+                embed.add_field(
+                    name="🔗 Visit Store",
+                    value="[Click here to purchase items](https://zerolink714209.tartagames.com/)",
                     inline=False
                 )
                 
                 embed.add_field(
-                    name="🔗 Store Link",
-                    value="[Click here to visit the store](https://zerolink714209.tartagames.com/)",
+                    name="💡 How to Purchase",
+                    value="1. Click the store link above\n2. Select your desired items\n3. Complete payment\n4. Items will be automatically delivered to your account",
                     inline=False
                 )
                 
@@ -2435,6 +2500,94 @@ class BotSelector(commands.Bot):
                     "An error occurred while loading the store. Please try again.",
                     ephemeral=True
                 )
+
+        @self.tree.command(
+            name="balance",
+            description="Check your message balance and usage"
+        )
+        async def balance_command(interaction: discord.Interaction):
+            """Check your message balance and usage."""
+            try:
+                user_id = interaction.user.id
+                balance = self.db.get_user_message_balance(user_id)
+                daily_count = self.db.get_user_daily_message_count(user_id)
+                is_admin = self.db.is_user_admin(user_id)
+                is_subscribed = self.db.is_user_subscribed(user_id)
+                
+                embed = discord.Embed(
+                    title="💬 Message Balance",
+                    color=discord.Color.blue()
+                )
+                
+                if is_admin:
+                    embed.add_field(
+                        name="👑 Admin",
+                        value="No message limits",
+                        inline=False
+                    )
+                elif is_subscribed:
+                    # 구독 사용자
+                    subscription_daily_messages = self.db.get_subscription_daily_messages(user_id)
+                    max_daily_messages = 20 + subscription_daily_messages
+                    remaining = max(0, max_daily_messages - daily_count)
+                    
+                    embed.add_field(
+                        name="⭐ Subscribed User",
+                        value=f"Daily limit: {max_daily_messages} messages (20 base + {subscription_daily_messages} subscription)",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="📊 Today's Usage",
+                        value=f"{daily_count}/{max_daily_messages} messages",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="⏰ Remaining Today",
+                        value=f"{remaining} messages",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="🎁 Subscription Benefits",
+                        value=f"20 (daily) + {subscription_daily_messages} (subscription) = {max_daily_messages} total daily\n*Daily messages reset at UTC+0*",
+                        inline=False
+                    )
+                else:
+                    # 일반 사용자
+                    remaining = max(0, 20 - daily_count)
+                    embed.add_field(
+                        name="📊 Daily Messages",
+                        value=f"{daily_count}/20 messages\n*Resets daily at UTC+0*",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="⏰ Remaining Today",
+                        value=f"{remaining} messages",
+                        inline=True
+                    )
+                
+                if is_subscribed:
+                    # 구독 사용자는 메시지 잔액 표시 안함 (일일 메시지만 사용)
+                    pass
+                else:
+                    # 일반 사용자는 메시지 잔액 표시
+                    embed.add_field(
+                        name="💳 Message Balance",
+                        value=f"{balance} messages\n*Purchased messages - no time limit*",
+                        inline=True
+                    )
+                
+                if not is_admin and not is_subscribed and daily_count >= 20:
+                    embed.add_field(
+                        name="💡 Purchase Message Pack",
+                        value="Use `/store` command to purchase message packs or subscriptions.",
+                        inline=False
+                    )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            except Exception as e:
+                print(f"Error in balance_command: {e}")
+                await interaction.response.send_message("Error occurred while checking balance.", ephemeral=True)
 
         @self.tree.command(
             name="reset_quest",

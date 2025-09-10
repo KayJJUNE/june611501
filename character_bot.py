@@ -471,6 +471,65 @@ class CharacterBot(commands.Bot):
         character = self.character_name
         now = datetime.utcnow()
 
+        # 메시지 제한 확인
+        daily_count = self.db.get_user_daily_message_count(user_id)
+        balance = self.db.get_user_message_balance(user_id)
+        is_admin = self.db.is_user_admin(user_id)
+        is_subscribed = self.db.is_user_subscribed(user_id)
+        
+        if is_admin:
+            # 관리자는 제한 없음
+            pass
+        elif is_subscribed:
+            # 구독 사용자는 일일 20개 + 구독 추가 메시지 사용 가능
+            subscription_daily_messages = self.db.get_subscription_daily_messages(user_id)
+            max_daily_messages = 20 + subscription_daily_messages
+            
+            if daily_count >= max_daily_messages:
+                # 구독 사용자의 일일 제한에 도달
+                embed = discord.Embed(
+                    title="🚫 Daily Message Limit",
+                    description=f"You have reached your daily message limit.\n\n**Messages used today:** {daily_count}/{max_daily_messages}\n**Remaining messages:** 0\n\n**Daily breakdown:** 20 (base) + {subscription_daily_messages} (subscription) = {max_daily_messages} total",
+                    color=discord.Color.red()
+                )
+                embed.add_field(
+                    name="💡 Subscription Benefits",
+                    value="Your subscription gives you extra messages daily. Check back tomorrow!",
+                    inline=False
+                )
+                await message.channel.send(embed=embed)
+                return
+        else:
+            # 일반 사용자는 일일 20개 제한
+            if daily_count >= 20:
+                # 하루 20개 제한에 도달
+                embed = discord.Embed(
+                    title="🚫 Message Limit",
+                    description=f"You have reached your daily message limit.\n\n**Messages used today:** {daily_count}/20\n**Remaining messages:** 0\n\nPlease purchase a message pack or try again tomorrow!",
+                    color=discord.Color.red()
+                )
+                embed.add_field(
+                    name="💡 Purchase a message pack",
+                    value="`/store` You can purchase message packs using commands.",
+                    inline=False
+                )
+                await message.channel.send(embed=embed)
+                return
+            elif balance <= 0:
+                # 메시지 잔액 부족
+                embed = discord.Embed(
+                    title="🚫 Message Balance Low",
+                    description=f"Your message balance is low.\n\n**Current balance:** {balance} messages\n**Daily messages used:** {daily_count}/20\n\n**Daily messages reset at UTC+0**\n**Purchased messages have no time limit**",
+                    color=discord.Color.red()
+                )
+                embed.add_field(
+                    name="💡 Purchase a message pack",
+                    value="`/store` You can purchase message packs using commands.",
+                    inline=False
+                )
+                await message.channel.send(embed=embed)
+                return
+
         # 언어 감지
         detected_language = self.detect_language(message.content)
         
@@ -483,6 +542,16 @@ class CharacterBot(commands.Bot):
             message.content,      # content
             detected_language     # 감지된 언어
         )
+
+        # 메시지 사용 처리
+        if not self.db.is_user_admin(user_id):
+            if self.db.is_user_subscribed(user_id):
+                # 구독 사용자는 일일 메시지만 사용 (메시지 잔액 차감 안함)
+                # 일일 메시지는 conversations 테이블에 저장되면서 자동으로 카운트됨
+                pass
+            else:
+                # 일반 사용자는 메시지 잔액 차감
+                self.db.use_user_message(user_id)
 
         affinity_before = self.db.get_affinity(user_id, character)
         if not affinity_before:

@@ -1525,3 +1525,337 @@ class DatabaseManager:
             if conn: conn.rollback()
         finally:
             self.return_connection(conn)
+
+    # 메시지 잔액 관리 함수들
+    def get_user_message_balance(self, user_id: int) -> int:
+        """사용자의 메시지 잔액을 반환합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT total_messages FROM user_message_balance WHERE user_id = %s",
+                    (user_id,)
+                )
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting user message balance: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
+
+    def add_user_messages(self, user_id: int, amount: int) -> bool:
+        """사용자에게 메시지를 추가합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO user_message_balance (user_id, total_messages, last_updated)
+                    VALUES (%s, %s, NOW())
+                    ON CONFLICT (user_id) DO UPDATE SET 
+                        total_messages = user_message_balance.total_messages + EXCLUDED.total_messages,
+                        last_updated = NOW()
+                """, (user_id, amount))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error adding user messages: {e}")
+            if conn: conn.rollback()
+            return False
+        finally:
+            self.return_connection(conn)
+
+    def use_user_message(self, user_id: int) -> bool:
+        """사용자의 메시지를 1개 차감합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                # 먼저 잔액 확인
+                cursor.execute(
+                    "SELECT total_messages FROM user_message_balance WHERE user_id = %s FOR UPDATE",
+                    (user_id,)
+                )
+                result = cursor.fetchone()
+                
+                if not result or result[0] <= 0:
+                    return False
+                
+                # 메시지 차감
+                cursor.execute("""
+                    UPDATE user_message_balance 
+                    SET total_messages = total_messages - 1, last_updated = NOW()
+                    WHERE user_id = %s
+                """, (user_id,))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error using user message: {e}")
+            if conn: conn.rollback()
+            return False
+        finally:
+            self.return_connection(conn)
+
+    def is_user_admin(self, user_id: int) -> bool:
+        """사용자가 관리자인지 확인합니다."""
+        # 하드코딩된 관리자 ID들 (실제로는 Discord 권한으로 확인해야 함)
+        admin_ids = [1363156675959460061]  # 봇 ID 제외
+        return user_id in admin_ids
+
+    def get_user_daily_message_count(self, user_id: int) -> int:
+        """사용자의 오늘 메시지 수를 반환합니다 (UTC+0 기준)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM conversations 
+                    WHERE user_id = %s 
+                    AND message_role = 'user' 
+                    AND DATE(timestamp AT TIME ZONE 'UTC') = CURRENT_DATE
+                """, (user_id,))
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting daily message count: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
+
+    def can_user_send_message(self, user_id: int) -> bool:
+        """사용자가 메시지를 보낼 수 있는지 확인합니다."""
+        # 관리자는 제한 없음
+        if self.is_user_admin(user_id):
+            return True
+        
+        daily_count = self.get_user_daily_message_count(user_id)
+        
+        # 구독 사용자는 일일 20개 + 구독 추가 메시지
+        if self.is_user_subscribed(user_id):
+            subscription_daily_messages = self.get_subscription_daily_messages(user_id)
+            max_daily_messages = 20 + subscription_daily_messages
+            if daily_count >= max_daily_messages:
+                return False
+            return True
+        
+        # 일반 사용자는 하루 20개 제한
+        if daily_count >= 20:
+            return False
+        
+        # 메시지 잔액이 있으면 사용 가능
+        balance = self.get_user_message_balance(user_id)
+        return balance > 0
+
+    # 구독 관리 함수들
+    def add_user_subscription(self, user_id: int, product_id: str, duration_days: int) -> bool:
+        """사용자에게 구독을 추가합니다."""
+        conn = None
+        try:
+            from datetime import datetime, timedelta
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                start_date = datetime.utcnow()
+                end_date = start_date + timedelta(days=duration_days)
+                
+                cursor.execute("""
+                    INSERT INTO user_subscriptions (user_id, product_id, start_date, end_date)
+                    VALUES (%s, %s, %s, %s)
+                """, (user_id, product_id, start_date, end_date))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error adding user subscription: {e}")
+            if conn: conn.rollback()
+            return False
+        finally:
+            self.return_connection(conn)
+
+    def get_active_subscriptions(self, user_id: int) -> list:
+        """사용자의 활성 구독 목록을 반환합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT product_id, end_date FROM user_subscriptions 
+                    WHERE user_id = %s AND is_active = TRUE AND end_date > NOW()
+                """, (user_id,))
+                return cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting active subscriptions: {e}")
+            return []
+        finally:
+            self.return_connection(conn)
+
+    def is_user_subscribed(self, user_id: int) -> bool:
+        """사용자가 활성 구독을 가지고 있는지 확인합니다."""
+        subscriptions = self.get_active_subscriptions(user_id)
+        return len(subscriptions) > 0
+
+    def get_subscription_daily_messages(self, user_id: int) -> int:
+        """구독 사용자의 일일 추가 메시지 수를 반환합니다."""
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                # 활성 구독 중에서 가장 높은 daily_messages 값을 가진 구독을 찾음
+                cursor.execute("""
+                    SELECT us.product_id, p.rewards
+                    FROM user_subscriptions us
+                    JOIN products p ON us.product_id = p.id
+                    WHERE us.user_id = %s AND us.is_active = true AND us.end_date > NOW()
+                    ORDER BY (p.rewards->>'daily_messages')::int DESC
+                    LIMIT 1
+                """, (user_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    product_id, rewards = result
+                    rewards_data = json.loads(rewards) if isinstance(rewards, str) else rewards
+                    return rewards_data.get('daily_messages', 0)
+                return 0
+        except Exception as e:
+            print(f"Error getting subscription daily messages: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
+
+    def process_daily_subscription_rewards(self, user_id: int) -> bool:
+        """구독 사용자에게 일일 보상을 지급합니다."""
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                # 활성 구독 조회
+                cursor.execute("""
+                    SELECT us.product_id, p.rewards
+                    FROM user_subscriptions us
+                    JOIN products p ON us.product_id = p.id
+                    WHERE us.user_id = %s AND us.is_active = true AND us.end_date > NOW()
+                """, (user_id,))
+                subscriptions = cursor.fetchall()
+                
+                if not subscriptions:
+                    return False
+                
+                # 가장 높은 daily_messages 값을 가진 구독 찾기
+                max_daily_messages = 0
+                max_gifts = 0
+                
+                for product_id, rewards in subscriptions:
+                    rewards_data = json.loads(rewards) if isinstance(rewards, str) else rewards
+                    daily_messages = rewards_data.get('daily_messages', 0)
+                    gifts = rewards_data.get('gifts', 0)
+                    
+                    if daily_messages > max_daily_messages:
+                        max_daily_messages = daily_messages
+                    if gifts > max_gifts:
+                        max_gifts = gifts
+                
+                # 일일 메시지 지급 (기존 메시지 잔액에 추가)
+                if max_daily_messages > 0:
+                    self.add_user_messages(user_id, max_daily_messages)
+                    print(f"Added {max_daily_messages} daily subscription messages to user {user_id}")
+                
+                # 기프트 지급 (누적)
+                if max_gifts > 0:
+                    for _ in range(max_gifts):
+                        # 랜덤 기프트 지급 (모든 캐릭터에서)
+                        gift_name = self.add_random_gift_to_user(user_id, "Kagari")
+                        if not gift_name:
+                            gift_name = self.add_random_gift_to_user(user_id, "Eros")
+                        if not gift_name:
+                            gift_name = self.add_random_gift_to_user(user_id, "Elysia")
+                        print(f"Added daily subscription gift to user {user_id}")
+                
+                return True
+                
+        except Exception as e:
+            print(f"Error processing daily subscription rewards: {e}")
+            return False
+        finally:
+            self.return_connection(conn)
+
+    def add_payment_transaction(self, transaction_id: str, user_id: int, product_id: str, 
+                              amount: float, currency: str, status: str, 
+                              payment_method: str, timestamp: int) -> str:
+        """결제 거래를 기록합니다."""
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO payment_transactions 
+                    (transaction_id, user_id, product_id, amount, currency, status, payment_method, created_at, processed_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    transaction_id, user_id, product_id, amount, currency, 
+                    status, payment_method, 
+                    datetime.fromtimestamp(timestamp),
+                    datetime.utcnow()
+                ))
+                result = cursor.fetchone()
+                conn.commit()
+                return str(result[0])
+        except Exception as e:
+            print(f"Error adding payment transaction: {e}")
+            conn.rollback()
+            return None
+        finally:
+            self.return_connection(conn)
+
+    def get_transaction_by_id(self, transaction_id: str) -> Optional[Dict]:
+        """거래 ID로 거래 정보를 조회합니다."""
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * FROM payment_transactions 
+                    WHERE transaction_id = %s
+                """, (transaction_id,))
+                result = cursor.fetchone()
+                if result:
+                    return {
+                        'id': result[0],
+                        'transaction_id': result[1],
+                        'user_id': result[2],
+                        'product_id': result[3],
+                        'amount': result[4],
+                        'currency': result[5],
+                        'status': result[6],
+                        'payment_method': result[7],
+                        'created_at': result[8],
+                        'processed_at': result[9]
+                    }
+                return None
+        except Exception as e:
+            print(f"Error getting transaction by ID: {e}")
+            return None
+        finally:
+            self.return_connection(conn)
+
+    def add_product_delivery_log(self, user_id: int, product_id: str, transaction_id: str,
+                               delivery_type: str, quantity: Dict, delivered_at: datetime,
+                               status: str) -> str:
+        """상품 지급 로그를 기록합니다."""
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO product_delivery_log 
+                    (user_id, product_id, transaction_id, delivery_type, quantity, delivered_at, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    user_id, product_id, transaction_id, delivery_type, 
+                    json.dumps(quantity), delivered_at, status
+                ))
+                result = cursor.fetchone()
+                conn.commit()
+                return str(result[0])
+        except Exception as e:
+            print(f"Error adding product delivery log: {e}")
+            conn.rollback()
+            return None
+        finally:
+            self.return_connection(conn)

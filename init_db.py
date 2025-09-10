@@ -293,4 +293,53 @@ def create_all_tables():
                     PRIMARY KEY (user_id, character_name, stage_num)
                 )
             ''')
+            # user_message_balance - 메시지 잔액 관리
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_message_balance (
+                    user_id BIGINT PRIMARY KEY,
+                    total_messages INTEGER DEFAULT 0,
+                    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            ''')
+            # user_subscriptions - 구독 정보 관리
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_subscriptions (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    product_id VARCHAR(100) NOT NULL,
+                    start_date TIMESTAMP WITH TIME ZONE NOT NULL,
+                    end_date TIMESTAMP WITH TIME ZONE NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            ''')
+            # payment_transactions - 결제 기록
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payment_transactions (
+                    id SERIAL PRIMARY KEY,
+                    transaction_id VARCHAR(255) UNIQUE NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    product_id VARCHAR(100) NOT NULL,
+                    amount INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    payment_method VARCHAR(100),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    processed_at TIMESTAMP WITH TIME ZONE,
+                    webhook_data JSONB
+                )
+            ''')
+            # product_delivery_log - 상품 지급 로그
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS product_delivery_log (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    product_id VARCHAR(100) NOT NULL,
+                    transaction_id VARCHAR(255),
+                    delivery_type VARCHAR(50) NOT NULL, -- 'messages', 'gifts', 'subscription'
+                    quantity INTEGER NOT NULL,
+                    delivered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    status VARCHAR(50) DEFAULT 'delivered'
+                )
+            ''')
         conn.commit()

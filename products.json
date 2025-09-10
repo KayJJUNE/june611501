@@ -1,0 +1,80 @@
+{
+  "products": {
+    "PREMIUM_PACK_30D": {
+      "id": "PREMIUM_PACK_30D",
+      "name": "Premium Subscription Pack (30 Days)",
+      "description": "20 (Daily) + 100 Additional Messages + 3 Random Gifts",
+      "type": "subscription",
+      "duration_days": 30,
+      "rewards": {
+        "daily_messages": 100,
+        "gifts": 3
+      }
+    },
+    "SUBSCRIPTION_50": {
+      "id": "SUBSCRIPTION_50",
+      "name": "50 Message Subscription",
+      "description": "20 (Daily) + 50 Additional Messages + 5 Random Gifts",
+      "type": "subscription",
+      "rewards": {
+        "daily_messages": 50,
+        "gifts": 5
+      }
+    },
+    "UNLIMITED_SUBSCRIPTION": {
+      "id": "UNLIMITED_SUBSCRIPTION",
+      "name": "Unlimited Subscription",
+      "description": "Unlimited Messages + 10 Random Gifts",
+      "type": "subscription",
+      "rewards": {
+        "messages": -1,
+        "gifts": 10
+      }
+    },
+    "GIFT_PACK_5": {
+      "id": "GIFT_PACK_5",
+      "name": "Gift Pack (5 Items)",
+      "description": "5 Random Gifts",
+      "type": "one_time",
+      "rewards": {
+        "gifts": 5
+      }
+    },
+    "GIFT_PACK_10": {
+      "id": "GIFT_PACK_10",
+      "name": "Gift Pack (10 Items)",
+      "description": "10 Random Gifts",
+      "type": "one_time",
+      "rewards": {
+        "gifts": 10
+      }
+    },
+    "MESSAGE_PACK_100": {
+      "id": "MESSAGE_PACK_100",
+      "name": "Message Pack (100 Messages)",
+      "description": "100 Messages",
+      "type": "one_time",
+      "rewards": {
+        "messages": 100
+      }
+    },
+    "MESSAGE_PACK_150": {
+      "id": "MESSAGE_PACK_150",
+      "name": "Message Pack (150 Messages)",
+      "description": "150 Messages",
+      "type": "one_time",
+      "rewards": {
+        "messages": 150
+      }
+    },
+    "MESSAGE_PACK_200": {
+      "id": "MESSAGE_PACK_200",
+      "name": "Message Pack (200 Messages)",
+      "description": "200 Messages",
+      "type": "one_time",
+      "rewards": {
+        "messages": 200
+      }
+    }
+  }
+}
