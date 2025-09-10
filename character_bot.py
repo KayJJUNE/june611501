@@ -500,26 +500,15 @@ class CharacterBot(commands.Bot):
                 await message.channel.send(embed=embed)
                 return
         else:
-            # 일반 사용자는 일일 20개 제한
-            if daily_count >= 20:
-                # 하루 20개 제한에 도달
+            # 일반 사용자는 일일 20개 + 메시지 잔액 사용 가능
+            if daily_count < 20:
+                # 일일 20개 미만이면 사용 가능
+                pass
+            elif daily_count >= 20 and balance <= 0:
+                # 일일 20개를 모두 사용했고 메시지 잔액이 없으면 제한
                 embed = discord.Embed(
-                    title="🚫 Message Limit",
-                    description=f"You have reached your daily message limit.\n\n**Messages used today:** {daily_count}/20\n**Remaining messages:** 0\n\nPlease purchase a message pack or try again tomorrow!",
-                    color=discord.Color.red()
-                )
-                embed.add_field(
-                    name="💡 Purchase a message pack",
-                    value="`/store` You can purchase message packs using commands.",
-                    inline=False
-                )
-                await message.channel.send(embed=embed)
-                return
-            elif balance <= 0:
-                # 메시지 잔액 부족
-                embed = discord.Embed(
-                    title="🚫 Message Balance Low",
-                    description=f"Your message balance is low.\n\n**Current balance:** {balance} messages\n**Daily messages used:** {daily_count}/20\n\n**Daily messages reset at UTC+0**\n**Purchased messages have no time limit**",
+                    title="🚫 Message Limit Reached",
+                    description=f"You have used all your daily messages and have no message balance.\n\n**Daily messages used:** {daily_count}/20\n**Message balance:** {balance}\n\n**Daily messages reset at UTC+0**\n**Purchase message packs for additional messages**",
                     color=discord.Color.red()
                 )
                 embed.add_field(
