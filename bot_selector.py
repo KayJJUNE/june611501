@@ -2437,6 +2437,13 @@ class BotSelector(commands.Bot):
                 # 상품 정보 표시
                 products = product_manager.get_all_products()
                 
+                # 상품 리스트 제목 추가
+                embed.add_field(
+                    name="📋 Product List",
+                    value="",
+                    inline=False
+                )
+                
                 # 메시지 팩
                 message_products = [p for p in products.values() if 'MESSAGE_PACK' in p['id']]
                 if message_products:
@@ -2485,6 +2492,12 @@ class BotSelector(commands.Bot):
                 embed.add_field(
                     name="💡 How to Purchase",
                     value="1. Click the store link above\n2. Select your desired items\n3. Complete payment\n4. Items will be automatically delivered to your account",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name="📝 Note",
+                    value="All products are for Discord use only. Please review our policies before purchasing. Purchasing any product implies agreement to our terms and policies.\n\n[Terms & Policy](https://zerolink714209.tartagames.com/privacy)",
                     inline=False
                 )
                 
