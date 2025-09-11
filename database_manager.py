@@ -2020,7 +2020,7 @@ class DatabaseManager:
                 # UTC+8 시간대 (CST) 기준으로 오늘 카드 지급 수 계산
                 cursor.execute("""
                     SELECT COUNT(*) FROM user_cards 
-                    WHERE DATE(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai') = CURRENT_DATE AT TIME ZONE 'Asia/Shanghai'
+                    WHERE DATE(acquired_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai') = CURRENT_DATE AT TIME ZONE 'Asia/Shanghai'
                 """)
                 return cursor.fetchone()[0]
     
