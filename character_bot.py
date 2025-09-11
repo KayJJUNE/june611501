@@ -471,7 +471,7 @@ class CharacterBot(commands.Bot):
         character = self.character_name
         now = datetime.utcnow()
 
-        # 안전장치 확인 (옵셔널 - 이상 징후만 기록)
+        # 안전장치 확인 (BotSelector에서 가져온 안전장치 사용)
         if (hasattr(self, 'bot_selector') and 
             self.bot_selector is not None and 
             hasattr(self.bot_selector, 'safety_guard') and 
@@ -481,22 +481,18 @@ class CharacterBot(commands.Bot):
                     user_id, message.guild.id if message.guild else 0, message.content
                 )
                 
-                # 이상 징후가 있으면 기록만 하고 계속 진행
                 if not safety_check['safe']:
+                    # 안전장치에 의해 차단된 경우
                     blocked_reasons = safety_check['blocked_reasons']
-                    reason_text = ", ".join(blocked_reasons)
-                    
-                    # 이상 징후를 데이터베이스에 기록
-                    self.db.log_suspicious_activity(
-                        user_id=user_id,
-                        activity_type="safety_guard_blocked",
-                        details=f"Blocked reasons: {reason_text}",
-                        message_content=message.content[:100]  # 처음 100자만 저장
-                    )
-                    
-                    print(f"🚨 Suspicious activity detected for user {user_id}: {reason_text}")
-                    # 사용자 플레이를 막지 않고 계속 진행
-                    
+                    if 'spam_detection' in blocked_reasons:
+                        await message.channel.send("🚫 Spam detected. Please wait before sending another message.")
+                    elif 'user_rate_limit' in blocked_reasons:
+                        await message.channel.send("🚫 Too many requests. Please slow down.")
+                    elif 'daily_limit' in blocked_reasons:
+                        await message.channel.send("🚫 Daily message limit exceeded.")
+                    elif 'guild_rate_limit' in blocked_reasons:
+                        await message.channel.send("🚫 Server rate limit exceeded.")
+                    return
             except Exception as e:
                 print(f"Error in safety guard check: {e}")
                 # 안전장치 에러가 발생해도 메시지 처리를 계속 진행

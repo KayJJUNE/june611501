@@ -3155,7 +3155,6 @@ class BotSelector(commands.Bot):
                     total_cards = self.db.get_total_card_count()
                     daily_cards = self.db.get_daily_card_count()
                     abnormal_activity = self.db.get_abnormal_activity_detection()
-                    suspicious_activities = self.db.get_suspicious_activity_summary(days=3)
                 
                 # 에러 통계 수집
                 error_stats = {}
@@ -3221,24 +3220,6 @@ class BotSelector(commands.Bot):
                         name="⚠️ Error Statistics",
                         value=error_summary,
                         inline=True
-                    )
-                
-                # 이상 징후 감지 (최근 3일)
-                if suspicious_activities['total_count'] > 0:
-                    suspicious_text = f"**Total Suspicious Activities:** {suspicious_activities['total_count']}\n"
-                    
-                    # 최근 이상 징후 (최대 5개)
-                    recent_activities = suspicious_activities['recent_activities'][:5]
-                    if recent_activities:
-                        suspicious_text += "**Recent Activities:**\n"
-                        for user_id, activity_type, details, created_at in recent_activities:
-                            time_ago = created_at.strftime("%m-%d %H:%M")
-                            suspicious_text += f"• User {user_id}: {activity_type} ({details[:30]}...) - {time_ago}\n"
-                    
-                    embed.add_field(
-                        name="🚨 Suspicious Activities (3 days)",
-                        value=suspicious_text,
-                        inline=False
                     )
                 
                 # 이상 상황 감지

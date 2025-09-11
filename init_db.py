@@ -385,17 +385,6 @@ def create_all_tables():
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             ''')
-            # suspicious_activity_logs - 이상 징후 로그
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS suspicious_activity_logs (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    activity_type VARCHAR(50) NOT NULL, -- 'safety_guard_blocked', 'spam_detection', 'rate_limit', etc.
-                    details TEXT,
-                    message_content TEXT,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                )
-            ''')
         conn.commit()
 
 if __name__ == "__main__":
