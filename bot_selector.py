@@ -2249,12 +2249,12 @@ class BotSelector(commands.Bot):
                     
                     if not user:
                         await interaction.response.send_message("❌ User not found. Please check the username or ID.", ephemeral=True)
-                        return
-                    
+                return
+
                     if quantity <= 0:
                         await interaction.response.send_message("❌ Quantity must be greater than 0.", ephemeral=True)
-                        return
-                    
+                return
+
                     # Add messages to user balance
                     self.db.add_user_message_balance(user.id, quantity)
                     
@@ -2424,8 +2424,8 @@ class BotSelector(commands.Bot):
                         return
                     
                     # Give gift to user
-                    self.db.add_user_gift(user.id, gift_id, quantity)
-                    
+            self.db.add_user_gift(user.id, gift_id, quantity)
+
                     # Log the transaction
                     self.db.log_admin_give_item(
                         admin_id=interaction.user.id,
@@ -2437,11 +2437,11 @@ class BotSelector(commands.Bot):
                     )
                     
                     gift_info = ALL_GIFTS[gift_id]
-                    embed = discord.Embed(
+            embed = discord.Embed(
                         title="✅ Gift Given Successfully",
                         description=f"**{gift_info['name']}** given to {user.mention}",
-                        color=discord.Color.green()
-                    )
+                color=discord.Color.green()
+            )
                     embed.add_field(name="Admin", value=interaction.user.mention, inline=True)
                     embed.add_field(name="Recipient", value=user.mention, inline=True)
                     embed.add_field(name="Gift", value=gift_info['name'], inline=True)
@@ -3149,12 +3149,13 @@ class BotSelector(commands.Bot):
                     memory_available = "N/A"
                     cpu_percent = "N/A"
                 
-                # 데이터베이스 통계 수집
-                total_messages = self.db.get_total_message_count()
-                daily_messages = self.db.get_daily_message_count()
-                total_cards = self.db.get_total_card_count()
-                daily_cards = self.db.get_daily_card_count()
-                abnormal_activity = self.db.get_abnormal_activity_detection()
+                    # 데이터베이스 통계 수집
+                    total_messages = self.db.get_total_message_count()
+                    daily_messages = self.db.get_daily_message_count()
+                    total_cards = self.db.get_total_card_count()
+                    daily_cards = self.db.get_daily_card_count()
+                    abnormal_activity = self.db.get_abnormal_activity_detection()
+                    suspicious_activities = self.db.get_suspicious_activity_summary(days=3)
                 
                 # 에러 통계 수집
                 error_stats = {}
@@ -3220,6 +3221,24 @@ class BotSelector(commands.Bot):
                         name="⚠️ Error Statistics",
                         value=error_summary,
                         inline=True
+                    )
+                
+                # 이상 징후 감지 (최근 3일)
+                if suspicious_activities['total_count'] > 0:
+                    suspicious_text = f"**Total Suspicious Activities:** {suspicious_activities['total_count']}\n"
+                    
+                    # 최근 이상 징후 (최대 5개)
+                    recent_activities = suspicious_activities['recent_activities'][:5]
+                    if recent_activities:
+                        suspicious_text += "**Recent Activities:**\n"
+                        for user_id, activity_type, details, created_at in recent_activities:
+                            time_ago = created_at.strftime("%m-%d %H:%M")
+                            suspicious_text += f"• User {user_id}: {activity_type} ({details[:30]}...) - {time_ago}\n"
+                    
+                    embed.add_field(
+                        name="🚨 Suspicious Activities (3 days)",
+                        value=suspicious_text,
+                        inline=False
                     )
                 
                 # 이상 상황 감지

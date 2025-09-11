@@ -2054,3 +2054,97 @@ class DatabaseManager:
                     'abnormal_affinity_users': abnormal_affinity,
                     'is_abnormal': recent_messages > 1000 or len(abnormal_affinity) > 0
                 }
+    
+    def log_admin_give_item(self, admin_id: int, user_id: int, item_type: str, item_id: str, quantity: int, reason: str = ""):
+        """관리자가 아이템을 지급한 기록을 로그합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO admin_item_logs (admin_id, user_id, item_type, item_id, quantity, reason, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                """, (admin_id, user_id, item_type, item_id, quantity, reason))
+                conn.commit()
+    
+    def get_admin_item_logs(self, limit: int = 50) -> list:
+        """관리자 아이템 지급 로그를 조회합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT admin_id, user_id, item_type, item_id, quantity, reason, created_at
+                    FROM admin_item_logs
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                """, (limit,))
+                return cursor.fetchall()
+    
+    def get_user_admin_logs(self, user_id: int, limit: int = 20) -> list:
+        """특정 사용자의 관리자 지급 로그를 조회합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT admin_id, item_type, item_id, quantity, reason, created_at
+                    FROM admin_item_logs
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                """, (user_id, limit))
+                return cursor.fetchall()
+    
+    def log_suspicious_activity(self, user_id: int, activity_type: str, details: str, message_content: str = ""):
+        """이상 징후를 로그합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO suspicious_activity_logs (user_id, activity_type, details, message_content, created_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                """, (user_id, activity_type, details, message_content))
+                conn.commit()
+    
+    def get_recent_suspicious_activities(self, days: int = 3) -> list:
+        """최근 N일간의 이상 징후를 조회합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT user_id, activity_type, details, message_content, created_at
+                    FROM suspicious_activity_logs
+                    WHERE created_at >= NOW() - INTERVAL '%s days'
+                    ORDER BY created_at DESC
+                """, (days,))
+                return cursor.fetchall()
+    
+    def get_suspicious_activity_summary(self, days: int = 3) -> dict:
+        """이상 징후 요약 통계를 반환합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # 총 이상 징후 수
+                cursor.execute("""
+                    SELECT COUNT(*) FROM suspicious_activity_logs
+                    WHERE created_at >= NOW() - INTERVAL '%s days'
+                """, (days,))
+                total_count = cursor.fetchone()[0]
+                
+                # 활동 유형별 통계
+                cursor.execute("""
+                    SELECT activity_type, COUNT(*) as count
+                    FROM suspicious_activity_logs
+                    WHERE created_at >= NOW() - INTERVAL '%s days'
+                    GROUP BY activity_type
+                    ORDER BY count DESC
+                """, (days,))
+                activity_stats = cursor.fetchall()
+                
+                # 최근 이상 징후 (상위 10개)
+                cursor.execute("""
+                    SELECT user_id, activity_type, details, created_at
+                    FROM suspicious_activity_logs
+                    WHERE created_at >= NOW() - INTERVAL '%s days'
+                    ORDER BY created_at DESC
+                    LIMIT 10
+                """, (days,))
+                recent_activities = cursor.fetchall()
+                
+                return {
+                    'total_count': total_count,
+                    'activity_stats': activity_stats,
+                    'recent_activities': recent_activities
+                }

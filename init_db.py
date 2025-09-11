@@ -1,7 +1,8 @@
 import psycopg2
 import os
 
-DATABASE_URL = os.environ["DATABASE_URL"]
+# DATABASE_URL 환경변수가 없으면 기본값 사용
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5432/discord_bot")
 
 def migrate_database():
     """기존 데이터베이스에 새로운 컬럼을 추가합니다."""
@@ -369,6 +370,30 @@ def create_all_tables():
                     quantity INTEGER NOT NULL,
                     delivered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                     status VARCHAR(50) DEFAULT 'delivered'
+                )
+            ''')
+            # admin_item_logs - 관리자 아이템 지급 로그
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS admin_item_logs (
+                    id SERIAL PRIMARY KEY,
+                    admin_id BIGINT NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    item_type VARCHAR(50) NOT NULL, -- 'messages', 'card', 'gift', 'affinity'
+                    item_id VARCHAR(100) NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    reason TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            ''')
+            # suspicious_activity_logs - 이상 징후 로그
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS suspicious_activity_logs (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    activity_type VARCHAR(50) NOT NULL, -- 'safety_guard_blocked', 'spam_detection', 'rate_limit', etc.
+                    details TEXT,
+                    message_content TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             ''')
         conn.commit()
