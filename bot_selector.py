@@ -802,6 +802,20 @@ class BotSelector(commands.Bot):
         except Exception as e:
             print(f"⚠️ Error loading active channels: {e}")
             self.active_channels = {}
+    
+    def get_character_for_channel(self, channel_id: int):
+        """채널 ID로 활성 캐릭터를 찾습니다."""
+        try:
+            # 각 캐릭터 봇의 active_channels에서 찾기
+            for char_name, bot in self.character_bots.items():
+                if hasattr(bot, 'active_channels') and channel_id in bot.active_channels:
+                    return bot, char_name
+            
+            # active_channels에서 찾지 못한 경우 None 반환
+            return None, None
+        except Exception as e:
+            print(f"Error in get_character_for_channel: {e}")
+            return None, None
 
     async def on_ready(self):
         print(f'{self.user} has connected to Discord!')
