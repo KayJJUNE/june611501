@@ -2766,9 +2766,18 @@ class BotSelector(commands.Bot):
                     return
                 
                 # 시스템 상태 확인
-                import psutil
-                memory = psutil.virtual_memory()
-                cpu = psutil.cpu_percent(interval=1)
+                try:
+                    import psutil
+                    memory = psutil.virtual_memory()
+                    cpu = psutil.cpu_percent(interval=1)
+                    memory_percent = memory.percent
+                    memory_available = memory.available // (1024**3)
+                    cpu_percent = cpu
+                except ImportError:
+                    # psutil이 없을 경우 기본값 사용
+                    memory_percent = "N/A"
+                    memory_available = "N/A"
+                    cpu_percent = "N/A"
                 
                 # 데이터베이스 통계 수집
                 total_messages = self.db.get_total_message_count()
@@ -2800,7 +2809,7 @@ class BotSelector(commands.Bot):
                 # 시스템 리소스
                 embed.add_field(
                     name="💻 System Resources",
-                    value=f"**Memory:** {memory.percent}%\n**CPU:** {cpu}%\n**Available Memory:** {memory.available // (1024**3)}GB",
+                    value=f"**Memory:** {memory_percent}%\n**CPU:** {cpu_percent}%\n**Available Memory:** {memory_available}GB",
                     inline=True
                 )
                 
