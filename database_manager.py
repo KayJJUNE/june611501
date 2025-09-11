@@ -2039,11 +2039,11 @@ class DatabaseManager:
                 # 최근 1시간 내 호감도 변화가 큰 사용자들
                 cursor.execute("""
                     SELECT user_id, character_name, 
-                           MAX(emotion_score) - MIN(emotion_score) as score_change
-                    FROM affinity_logs 
-                    WHERE created_at > NOW() - INTERVAL '1 hour'
+                           MAX(score) - MIN(score) as score_change
+                    FROM emotion_log 
+                    WHERE timestamp > NOW() - INTERVAL '1 hour'
                     GROUP BY user_id, character_name
-                    HAVING MAX(emotion_score) - MIN(emotion_score) > 50
+                    HAVING MAX(score) - MIN(score) > 50
                     ORDER BY score_change DESC
                     LIMIT 5
                 """)

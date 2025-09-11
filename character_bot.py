@@ -471,12 +471,31 @@ class CharacterBot(commands.Bot):
         character = self.character_name
         now = datetime.utcnow()
 
-        # 메시지 제한 확인
-        daily_used = self.db.get_user_daily_message_count(user_id)
-        paid_used = self.db.get_user_paid_message_count(user_id)
-        paid_balance = self.db.get_user_message_balance(user_id)
-        is_admin = self.db.is_user_admin(user_id)
-        is_subscribed = self.db.is_user_subscribed(user_id)
+        # 안전장치 확인 (BotSelector에서 가져온 안전장치 사용)
+        if hasattr(self, 'bot_selector') and self.bot_selector.safety_guard:
+            safety_check = await self.bot_selector.safety_guard.is_safe_to_process(
+                user_id, message.guild.id if message.guild else 0, message.content
+            )
+            
+            if not safety_check['safe']:
+                # 안전장치에 의해 차단된 경우
+                blocked_reasons = safety_check['blocked_reasons']
+                if 'spam_detection' in blocked_reasons:
+                    await message.channel.send("🚫 Spam detected. Please wait before sending another message.")
+                elif 'user_rate_limit' in blocked_reasons:
+                    await message.channel.send("🚫 Too many requests. Please slow down.")
+                elif 'daily_limit' in blocked_reasons:
+                    await message.channel.send("🚫 Daily message limit exceeded.")
+                elif 'guild_rate_limit' in blocked_reasons:
+                    await message.channel.send("🚫 Server rate limit exceeded.")
+                return
+
+            # 메시지 제한 확인
+            daily_used = self.db.get_user_daily_message_count(user_id)
+            paid_used = self.db.get_user_paid_message_count(user_id)
+            paid_balance = self.db.get_user_message_balance(user_id)
+            is_admin = self.db.is_user_admin(user_id)
+            is_subscribed = self.db.is_user_subscribed(user_id)
         
         # 메시지 사용 가능 여부 확인
         can_send = False
@@ -625,6 +644,15 @@ class CharacterBot(commands.Bot):
             print(f"Error in process_normal_message: {e}")
             import traceback
             traceback.print_exc()
+            
+            # 에러 핸들러에 에러 기록
+            if hasattr(self, 'bot_selector') and self.bot_selector.error_handler:
+                await self.bot_selector.error_handler.log_error(e, "process_normal_message")
+            
+            # 모니터링에 에러 기록
+            if hasattr(self, 'bot_selector') and self.bot_selector.monitor:
+                self.bot_selector.monitor.record_error("process_normal_message")
+            
             await message.channel.send("❌ An error occurred while processing the response.")
 
     async def handle_daily_quest_reward(self, message, character_name: str, user_id: int):
@@ -1118,6 +1146,10 @@ Character Status:
 2. Keep responses natural and in character
 3. Show appropriate emotions and actions in parentheses
 4. Maintain the character's personality
+5. NEVER mention being an AI, bot, or program
+6. Always respond in the same language as the user
+7. Use informal speech style
+8. Add emotional expressions in parentheses like (smiles), (looks away), etc.
 """
         context.append({"role": "system", "content": system_message})
         # Silver, Gold, Platinum 등급에서만 최대 3개 메모리 요약

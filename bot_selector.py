@@ -792,6 +792,17 @@ class BotSelector(commands.Bot):
         # Cog 로드를 제거하고, 명령어는 setup_commands에서 직접 등록
         await self.tree.sync()
 
+    def load_active_channels(self):
+        """데이터베이스에서 활성 채널 정보를 불러옵니다."""
+        try:
+            # 현재는 빈 딕셔너리로 초기화
+            # 나중에 데이터베이스에서 저장된 채널 정보를 불러올 수 있음
+            self.active_channels = {}
+            print("✅ Active channels loaded successfully")
+        except Exception as e:
+            print(f"⚠️ Error loading active channels: {e}")
+            self.active_channels = {}
+
     async def on_ready(self):
         print(f'{self.user} has connected to Discord!')
         # self.tree.sync()는 setup_hook으로 이동했습니다.
