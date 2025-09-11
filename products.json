@@ -2,10 +2,12 @@
   "products": {
     "PREMIUM_PACK_30D": {
       "id": "PREMIUM_PACK_30D",
-      "name": "Premium Subscription Pack (30 Days)",
+      "name": "Premium Subscription Pack (30 Days) - Pre-Season 한정판 이벤트 상품",
       "description": "20 (Daily) + 100 Additional Messages + 3 Random Gifts",
       "type": "subscription",
       "duration_days": 30,
+      "price": 3.99,
+      "currency": "USD",
       "rewards": {
         "daily_messages": 100,
         "gifts": 3
@@ -16,6 +18,9 @@
       "name": "50 Message Subscription",
       "description": "20 (Daily) + 50 Additional Messages + 5 Random Gifts",
       "type": "subscription",
+      "price": 5.99,
+      "currency": "USD",
+      "billing_cycle": "monthly",
       "rewards": {
         "daily_messages": 50,
         "gifts": 5
@@ -23,9 +28,12 @@
     },
     "UNLIMITED_SUBSCRIPTION": {
       "id": "UNLIMITED_SUBSCRIPTION",
-      "name": "Unlimited Subscription",
+      "name": "Pro Subscription",
       "description": "Unlimited Messages + 10 Random Gifts",
       "type": "subscription",
+      "price": 9.99,
+      "currency": "USD",
+      "billing_cycle": "monthly",
       "rewards": {
         "messages": -1,
         "gifts": 10
@@ -33,18 +41,22 @@
     },
     "GIFT_PACK_5": {
       "id": "GIFT_PACK_5",
-      "name": "Gift Pack (5 Items)",
+      "name": "Random Gift (5)",
       "description": "5 Random Gifts",
       "type": "one_time",
+      "price": 2.99,
+      "currency": "USD",
       "rewards": {
         "gifts": 5
       }
     },
     "GIFT_PACK_10": {
       "id": "GIFT_PACK_10",
-      "name": "Gift Pack (10 Items)",
+      "name": "Random Gift (10)",
       "description": "10 Random Gifts",
       "type": "one_time",
+      "price": 3.99,
+      "currency": "USD",
       "rewards": {
         "gifts": 10
       }
@@ -54,24 +66,30 @@
       "name": "Message Pack (100 Messages)",
       "description": "100 Messages",
       "type": "one_time",
+      "price": 1.99,
+      "currency": "USD",
       "rewards": {
         "messages": 100
       }
     },
     "MESSAGE_PACK_150": {
       "id": "MESSAGE_PACK_150",
-      "name": "Message Pack (150 Messages)",
+      "name": "Message Pack 150",
       "description": "150 Messages",
       "type": "one_time",
+      "price": 2.99,
+      "currency": "USD",
       "rewards": {
         "messages": 150
       }
     },
     "MESSAGE_PACK_200": {
       "id": "MESSAGE_PACK_200",
-      "name": "Message Pack (200 Messages)",
+      "name": "Message Pack 200",
       "description": "200 Messages",
       "type": "one_time",
+      "price": 3.99,
+      "currency": "USD",
       "rewards": {
         "messages": 200
       }

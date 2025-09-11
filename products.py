@@ -28,6 +28,56 @@ class ProductManager:
         """Returns all product information.."""
         return self.products
     
+    def get_product_price(self, product_id: str) -> Optional[float]:
+        """상품 가격을 반환합니다."""
+        product = self.get_product(product_id)
+        if product:
+            return product.get('price')
+        return None
+    
+    def get_product_currency(self, product_id: str) -> str:
+        """상품 통화를 반환합니다."""
+        product = self.get_product(product_id)
+        if product:
+            return product.get('currency', 'USD')
+        return 'USD'
+    
+    def get_products_by_type(self, product_type: str) -> Dict[str, Any]:
+        """상품 타입별로 필터링된 상품 목록을 반환합니다."""
+        return {pid: product for pid, product in self.products.items() 
+                if product.get('type') == product_type}
+    
+    def get_subscription_products(self) -> Dict[str, Any]:
+        """구독 상품 목록을 반환합니다."""
+        return self.get_products_by_type('subscription')
+    
+    def get_one_time_products(self) -> Dict[str, Any]:
+        """일회성 상품 목록을 반환합니다."""
+        return self.get_products_by_type('one_time')
+    
+    def format_price(self, product_id: str) -> str:
+        """상품 가격을 포맷된 문자열로 반환합니다."""
+        product = self.get_product(product_id)
+        if not product:
+            return "Price not available"
+        
+        price = product.get('price')
+        currency = product.get('currency', 'USD')
+        billing_cycle = product.get('billing_cycle')
+        
+        if price is None:
+            return "Price not available"
+        
+        formatted_price = f"${price:.2f}"
+        
+        if billing_cycle:
+            if billing_cycle == 'monthly':
+                formatted_price += "/month"
+            elif billing_cycle == 'yearly':
+                formatted_price += "/year"
+        
+        return formatted_price
+    
     def process_product_delivery(self, user_id: int, product_id: str, db) -> bool:
         """상품 지급을 처리합니다."""
         product = self.get_product(product_id)

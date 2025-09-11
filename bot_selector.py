@@ -717,6 +717,29 @@ class BotSelector(commands.Bot):
         self.roleplay_sessions = {}
         self.story_sessions = {}
         self.dm_sessions = {}  # DM 세션 관리
+        
+        # 안전장치 초기화
+        self.emergency_mode = False
+        self.start_time = datetime.now()
+        
+        # 안전장치 모듈 임포트 및 초기화
+        try:
+            from error_handler import ErrorHandler
+            from safety_guard import safety_guard
+            from monitor import BotMonitor
+            
+            self.error_handler = ErrorHandler(self)
+            self.safety_guard = safety_guard
+            self.monitor = BotMonitor(self)
+            
+            # 모니터링 시작
+            asyncio.create_task(self.monitor.start_monitoring())
+            
+        except ImportError as e:
+            print(f"Warning: Safety modules not available: {e}")
+            self.error_handler = None
+            self.safety_guard = None
+            self.monitor = None
 
     async def check_story_quests(self, user_id: int) -> list:
         """스토리 퀘스트 상태를 확인합니다."""
@@ -2448,7 +2471,7 @@ class BotSelector(commands.Bot):
                 message_products = [p for p in products.values() if 'MESSAGE_PACK' in p['id']]
                 if message_products:
                     message_list = "\n".join([
-                        f"• **{p['name']}** - {p['description']}"
+                        f"• **{p['name']}** - {p['description']}\n  💰 {product_manager.format_price(p['id'])}"
                         for p in message_products
                     ])
                     embed.add_field(
@@ -2461,7 +2484,7 @@ class BotSelector(commands.Bot):
                 subscription_products = [p for p in products.values() if p.get('type') == 'subscription']
                 if subscription_products:
                     sub_list = "\n".join([
-                        f"• **{p['name']}** - {p['description']}"
+                        f"• **{p['name']}** - {p['description']}\n  💰 {product_manager.format_price(p['id'])}"
                         for p in subscription_products
                     ])
                     embed.add_field(
@@ -2474,7 +2497,7 @@ class BotSelector(commands.Bot):
                 gift_products = [p for p in products.values() if 'GIFT_PACK' in p['id']]
                 if gift_products:
                     gift_list = "\n".join([
-                        f"• **{p['name']}** - {p['description']}"
+                        f"• **{p['name']}** - {p['description']}\n  💰 {product_manager.format_price(p['id'])}"
                         for p in gift_products
                     ])
                     embed.add_field(
@@ -2729,6 +2752,90 @@ class BotSelector(commands.Bot):
             except Exception as e:
                 print(f"Error in cleanup_cards_command: {e}")
                 await interaction.response.send_message("❌ An error occurred while cleaning up duplicate cards.", ephemeral=True)
+
+        @self.tree.command(
+            name="status",
+            description="[Admin] Check bot status and health"
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def status_command(interaction: discord.Interaction):
+            """봇 상태를 확인합니다."""
+            try:
+                if not self.db.is_user_admin(interaction.user.id):
+                    await interaction.response.send_message("This command is for administrators only.", ephemeral=True)
+                    return
+                
+                # 시스템 상태 확인
+                import psutil
+                memory = psutil.virtual_memory()
+                cpu = psutil.cpu_percent(interval=1)
+                
+                embed = discord.Embed(
+                    title="🤖 Bot Status Report",
+                    color=discord.Color.green(),
+                    timestamp=datetime.now()
+                )
+                
+                # 기본 정보
+                embed.add_field(
+                    name="📊 Basic Info",
+                    value=f"**Latency:** {self.bot.latency:.2f}ms\n**Guilds:** {len(self.bot.guilds)}\n**Users:** {len(self.bot.users)}",
+                    inline=True
+                )
+                
+                # 시스템 리소스
+                embed.add_field(
+                    name="💻 System Resources",
+                    value=f"**Memory:** {memory.percent}%\n**CPU:** {cpu}%\n**Available Memory:** {memory.available // (1024**3)}GB",
+                    inline=True
+                )
+                
+                # 데이터베이스 상태
+                try:
+                    db_test = self.db.get_connection()
+                    db_status = "✅ Connected"
+                    self.db.return_connection(db_test)
+                except Exception as e:
+                    db_status = f"❌ Error: {str(e)[:50]}"
+                
+                embed.add_field(
+                    name="🗄️ Database",
+                    value=db_status,
+                    inline=True
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            except Exception as e:
+                print(f"Error in status_command: {e}")
+                await interaction.response.send_message("Error occurred while checking status.", ephemeral=True)
+
+        @self.tree.command(
+            name="emergency_stop",
+            description="[Admin] Emergency stop for critical issues"
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def emergency_stop_command(interaction: discord.Interaction):
+            """긴급 정지 명령어"""
+            try:
+                if not self.db.is_user_admin(interaction.user.id):
+                    await interaction.response.send_message("This command is for administrators only.", ephemeral=True)
+                    return
+                
+                embed = discord.Embed(
+                    title="🚨 Emergency Stop",
+                    description="Bot is entering safe mode. Some features may be disabled.",
+                    color=discord.Color.red()
+                )
+                
+                # 안전 모드 활성화
+                self.emergency_mode = True
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            except Exception as e:
+                print(f"Error in emergency_stop_command: {e}")
+                await interaction.response.send_message("Error occurred during emergency stop.", ephemeral=True)
 
     def get_next_reset_time(self, quest_type: str) -> str:
         """퀘스트 타입에 따른 다음 리셋 시간을 반환합니다."""
