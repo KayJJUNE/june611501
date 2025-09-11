@@ -1775,84 +1775,6 @@ class BotSelector(commands.Bot):
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        @self.tree.command(
-            name="affinity_set",
-            description="Admin: Manually set a user's affinity score."
-        )
-        @app_commands.default_permissions(administrator=True)
-        async def affinity_set_command(interaction: discord.Interaction, target: discord.Member, value: int, character: str):
-            if not self.settings_manager.is_admin(interaction.user):
-                await interaction.response.send_message("Available to admins only.", ephemeral=True)
-                return
-            # affinity 직접 수정
-            try:
-                # 락이 필요 없다면 아래 한 줄만!
-                from datetime import datetime
-                self.db.update_affinity(target.id, character, last_message="(reset)", last_message_time=datetime.utcnow(), score_change=value, highest_milestone=0)
-                grade = get_affinity_grade(value)
-                embed = discord.Embed(
-                    title="Affinity Score Updated",
-                    description=f"{target.display_name}'s {character} affinity score is set to {value}.\nCurrent grade: **{grade}**",
-                    color=discord.Color.gold()
-                )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            except Exception as e:
-                await interaction.response.send_message(f"错误: {e}", ephemeral=True)
-
-        @self.tree.command(
-            name="card_give",
-            description="Admin: Manually give a card to a user."
-        )
-        @app_commands.default_permissions(administrator=True)
-        async def card_give_command(interaction: discord.Interaction, target: discord.Member, character: str, card_id: str):
-            if not self.settings_manager.is_admin(interaction.user):
-                await interaction.response.send_message("Only admins can use this command.", ephemeral=True)
-                return
-            success = self.db.add_user_card(target.id, character, card_id)
-            if success:
-                embed = discord.Embed(
-                        title="Card given",
-                        description=f"{target.display_name} has been given the {character} {card_id} card.",
-                    color=discord.Color.green()
-                )
-            else:
-                embed = discord.Embed(
-                    title="Card giving failed",
-                    description=f"The card {card_id} has already been given or the giving failed.",
-                    color=discord.Color.red()
-                )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-
-        @self.tree.command(
-            name="message_add_total",
-            description="Admin: Manually set a user's total message count."
-        )
-        @app_commands.default_permissions(administrator=True)
-        async def message_add_total_command(interaction: discord.Interaction, target: discord.Member, total: int):
-            if not self.settings_manager.is_admin(interaction.user):
-                await interaction.response.send_message("Only admins can use this command.", ephemeral=True)
-                return
-            if total < 0:
-                await interaction.response.send_message("The message count must be 0 or more.", ephemeral=True)
-                return
-            # 유저의 현재 총 메시지 수 확인
-            current_count = await self.db.get_user_message_count(target.id)
-            to_add = total - current_count
-            if to_add > 0:
-                for _ in range(to_add):
-                    self.db.add_message(
-                        0,              # channel_id
-                        target.id,      # user_id
-                        "system",      # character_name
-                        "user",        # role
-                        "[Add an admin message]",  # content
-                        "en"           # language
-                    )
-                await interaction.response.send_message(f"{target.display_name}'s total message count is set to {total}.", ephemeral=True)
-            elif to_add == 0:
-                await interaction.response.send_message(f"{target.display_name}'s total message count is already {total}.", ephemeral=True)
-            else:
-                await interaction.response.send_message(f"{target.display_name}'s total message count ({current_count} times) exceeds {total}. (Decrease is not supported)", ephemeral=True)
 
         @self.tree.command(
             name="help",
@@ -2232,6 +2154,457 @@ class BotSelector(commands.Bot):
                 color=discord.Color.green()
             )
             await interaction.response.send_message(embed=embed)
+
+        # ====================================================
+        # 관리자용 물리적 상품 지급 시스템 (/pop)
+        # ====================================================
+        
+        class PopItemTypeSelect(discord.ui.Select):
+            def __init__(self):
+                options = [
+                    discord.SelectOption(label="💬 Messages", value="messages", description="Give messages to user"),
+                    discord.SelectOption(label="🃏 Cards", value="cards", description="Give cards to user"),
+                    discord.SelectOption(label="🎁 Gifts", value="gifts", description="Give gifts to user"),
+                    discord.SelectOption(label="💕 Affinity", value="affinity", description="Give affinity points to user")
+                ]
+                super().__init__(placeholder="Select item type to give...", options=options, min_values=1, max_values=1)
+            
+            async def callback(self, interaction: discord.Interaction):
+                item_type = self.values[0]
+                
+                if item_type == "messages":
+                    view = PopMessagesView()
+                elif item_type == "cards":
+                    view = PopCardsView()
+                elif item_type == "gifts":
+                    view = PopGiftsView()
+                elif item_type == "affinity":
+                    view = PopAffinityView()
+                
+                embed = discord.Embed(
+                    title="🎯 Admin Item Distribution",
+                    description=f"Selected: **{item_type.title()}**\nPlease fill in the details below.",
+                    color=discord.Color.blue()
+                )
+                await interaction.response.edit_message(embed=embed, view=view)
+        
+        class PopMessagesView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=300)
+                self.add_item(PopItemTypeSelect())
+            
+            @discord.ui.button(label="Give Messages", style=discord.ButtonStyle.green, emoji="💬")
+            async def give_messages(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = PopMessagesModal()
+                await interaction.response.send_modal(modal)
+        
+        class PopCardsView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=300)
+                self.add_item(PopItemTypeSelect())
+            
+            @discord.ui.button(label="Give Cards", style=discord.ButtonStyle.green, emoji="🃏")
+            async def give_cards(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = PopCardsModal()
+                await interaction.response.send_modal(modal)
+        
+        class PopGiftsView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=300)
+                self.add_item(PopItemTypeSelect())
+            
+            @discord.ui.button(label="Give Gifts", style=discord.ButtonStyle.green, emoji="🎁")
+            async def give_gifts(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = PopGiftsModal()
+                await interaction.response.send_modal(modal)
+        
+        class PopAffinityView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=300)
+                self.add_item(PopItemTypeSelect())
+            
+            @discord.ui.button(label="Give Affinity", style=discord.ButtonStyle.green, emoji="💕")
+            async def give_affinity(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = PopAffinityModal()
+                await interaction.response.send_modal(modal)
+        
+        class PopMessagesModal(discord.ui.Modal):
+            def __init__(self):
+                super().__init__(title="💬 Give Messages")
+                self.add_item(discord.ui.TextInput(
+                    label="Discord Username/ID",
+                    placeholder="Enter username or user ID",
+                    required=True,
+                    max_length=100
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Message Quantity",
+                    placeholder="Enter number of messages to give",
+                    required=True,
+                    max_length=10
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_input = self.children[0].value.strip()
+                    quantity = int(self.children[1].value.strip())
+                    
+                    # Find user by ID or username
+                    user = None
+                    if user_input.isdigit():
+                        user_id = int(user_input)
+                        user = self.get_user(user_id)
+                    else:
+                        # Search by username
+                        for member in self.guilds[0].members:
+                            if user_input.lower() in member.name.lower() or user_input.lower() in member.display_name.lower():
+                                user = member
+                                break
+                    
+                    if not user:
+                        await interaction.response.send_message("❌ User not found. Please check the username or ID.", ephemeral=True)
+                        return
+                    
+                    if quantity <= 0:
+                        await interaction.response.send_message("❌ Quantity must be greater than 0.", ephemeral=True)
+                        return
+                    
+                    # Add messages to user balance
+                    self.db.add_user_message_balance(user.id, quantity)
+                    
+                    # Log the transaction
+                    self.db.log_admin_give_item(
+                        admin_id=interaction.user.id,
+                        user_id=user.id,
+                        item_type="messages",
+                        item_id="admin_give",
+                        quantity=quantity,
+                        reason="Admin manual distribution"
+                    )
+                    
+                    embed = discord.Embed(
+                        title="✅ Messages Given Successfully",
+                        description=f"**{quantity} messages** given to {user.mention}",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(name="Admin", value=interaction.user.mention, inline=True)
+                    embed.add_field(name="Recipient", value=user.mention, inline=True)
+                    embed.add_field(name="Item", value=f"{quantity} Messages", inline=True)
+                    
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid quantity. Please enter a valid number.", ephemeral=True)
+                except Exception as e:
+                    await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        
+        class PopCardsModal(discord.ui.Modal):
+            def __init__(self):
+                super().__init__(title="🃏 Give Cards")
+                self.add_item(discord.ui.TextInput(
+                    label="Discord Username/ID",
+                    placeholder="Enter username or user ID",
+                    required=True,
+                    max_length=100
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Character",
+                    placeholder="Enter character name (Kagari, Eros, Elysia)",
+                    required=True,
+                    max_length=20
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Card ID",
+                    placeholder="Enter card ID (e.g., kagaris1, erosb2)",
+                    required=True,
+                    max_length=50
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_input = self.children[0].value.strip()
+                    character = self.children[1].value.strip().title()
+                    card_id = self.children[2].value.strip().lower()
+                    
+                    # Find user
+                    user = None
+                    if user_input.isdigit():
+                        user_id = int(user_input)
+                        user = self.get_user(user_id)
+                    else:
+                        for member in self.guilds[0].members:
+                            if user_input.lower() in member.name.lower() or user_input.lower() in member.display_name.lower():
+                                user = member
+                                break
+                    
+                    if not user:
+                        await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                        return
+                    
+                    # Validate character
+                    if character not in ["Kagari", "Eros", "Elysia"]:
+                        await interaction.response.send_message("❌ Invalid character. Use Kagari, Eros, or Elysia.", ephemeral=True)
+                        return
+                    
+                    # Check if card exists
+                    from config import CHARACTER_CARD_INFO
+                    if character not in CHARACTER_CARD_INFO or card_id not in CHARACTER_CARD_INFO[character]:
+                        await interaction.response.send_message("❌ Card ID not found.", ephemeral=True)
+                        return
+                    
+                    # Give card to user
+                    self.db.add_user_card(user.id, character, card_id)
+                    
+                    # Log the transaction
+                    self.db.log_admin_give_item(
+                        admin_id=interaction.user.id,
+                        user_id=user.id,
+                        item_type="card",
+                        item_id=card_id,
+                        quantity=1,
+                        reason="Admin manual distribution"
+                    )
+                    
+                    card_info = CHARACTER_CARD_INFO[character][card_id]
+                    embed = discord.Embed(
+                        title="✅ Card Given Successfully",
+                        description=f"**{card_info['description']}** given to {user.mention}",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(name="Admin", value=interaction.user.mention, inline=True)
+                    embed.add_field(name="Recipient", value=user.mention, inline=True)
+                    embed.add_field(name="Character", value=character, inline=True)
+                    embed.add_field(name="Card", value=card_info['description'], inline=True)
+                    
+                    if card_info.get('image_path'):
+                        embed.set_image(url=card_info['image_path'])
+                    
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    
+                except Exception as e:
+                    await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        
+        class PopGiftsModal(discord.ui.Modal):
+            def __init__(self):
+                super().__init__(title="🎁 Give Gifts")
+                self.add_item(discord.ui.TextInput(
+                    label="Discord Username/ID",
+                    placeholder="Enter username or user ID",
+                    required=True,
+                    max_length=100
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Gift ID",
+                    placeholder="Enter gift ID (e.g., gift_001, gift_002)",
+                    required=True,
+                    max_length=50
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Quantity",
+                    placeholder="Enter quantity to give",
+                    required=True,
+                    max_length=10
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_input = self.children[0].value.strip()
+                    gift_id = self.children[1].value.strip()
+                    quantity = int(self.children[2].value.strip())
+                    
+                    # Find user
+                    user = None
+                    if user_input.isdigit():
+                        user_id = int(user_input)
+                        user = self.get_user(user_id)
+                    else:
+                        for member in self.guilds[0].members:
+                            if user_input.lower() in member.name.lower() or user_input.lower() in member.display_name.lower():
+                                user = member
+                                break
+                    
+                    if not user:
+                        await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                        return
+                    
+                    if quantity <= 0:
+                        await interaction.response.send_message("❌ Quantity must be greater than 0.", ephemeral=True)
+                        return
+                    
+                    # Check if gift exists
+                    from gift_manager import ALL_GIFTS
+                    if gift_id not in ALL_GIFTS:
+                        await interaction.response.send_message("❌ Gift ID not found.", ephemeral=True)
+                        return
+                    
+                    # Give gift to user
+                    self.db.add_user_gift(user.id, gift_id, quantity)
+                    
+                    # Log the transaction
+                    self.db.log_admin_give_item(
+                        admin_id=interaction.user.id,
+                        user_id=user.id,
+                        item_type="gift",
+                        item_id=gift_id,
+                        quantity=quantity,
+                        reason="Admin manual distribution"
+                    )
+                    
+                    gift_info = ALL_GIFTS[gift_id]
+                    embed = discord.Embed(
+                        title="✅ Gift Given Successfully",
+                        description=f"**{gift_info['name']}** given to {user.mention}",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(name="Admin", value=interaction.user.mention, inline=True)
+                    embed.add_field(name="Recipient", value=user.mention, inline=True)
+                    embed.add_field(name="Gift", value=gift_info['name'], inline=True)
+                    embed.add_field(name="Quantity", value=str(quantity), inline=True)
+                    
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid quantity. Please enter a valid number.", ephemeral=True)
+                except Exception as e:
+                    await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        
+        class PopAffinityModal(discord.ui.Modal):
+            def __init__(self):
+                super().__init__(title="💕 Give Affinity")
+                self.add_item(discord.ui.TextInput(
+                    label="Discord Username/ID",
+                    placeholder="Enter username or user ID",
+                    required=True,
+                    max_length=100
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Character",
+                    placeholder="Enter character name (Kagari, Eros, Elysia)",
+                    required=True,
+                    max_length=20
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Affinity Points",
+                    placeholder="Enter affinity points to give",
+                    required=True,
+                    max_length=10
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_input = self.children[0].value.strip()
+                    character = self.children[1].value.strip().title()
+                    affinity_points = int(self.children[2].value.strip())
+                    
+                    # Find user
+                    user = None
+                    if user_input.isdigit():
+                        user_id = int(user_input)
+                        user = self.get_user(user_id)
+                    else:
+                        for member in self.guilds[0].members:
+                            if user_input.lower() in member.name.lower() or user_input.lower() in member.display_name.lower():
+                                user = member
+                                break
+                    
+                    if not user:
+                        await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                        return
+                    
+                    # Validate character
+                    if character not in ["Kagari", "Eros", "Elysia"]:
+                        await interaction.response.send_message("❌ Invalid character. Use Kagari, Eros, or Elysia.", ephemeral=True)
+                        return
+                    
+                    if affinity_points <= 0:
+                        await interaction.response.send_message("❌ Affinity points must be greater than 0.", ephemeral=True)
+                        return
+                    
+                    # Get current affinity
+                    current_affinity = self.db.get_affinity(user.id, character)
+                    if not current_affinity:
+                        self.db.update_affinity(user.id, character, "", datetime.utcnow(), 0, 0)
+                        current_affinity = {"emotion_score": 0}
+                    
+                    # Add affinity points
+                    new_score = current_affinity["emotion_score"] + affinity_points
+                    self.db.update_affinity(
+                        user_id=user.id,
+                        character_name=character,
+                        last_message="Admin given affinity",
+                        last_message_time=datetime.utcnow(),
+                        score_change=affinity_points,
+                        highest_milestone=0
+                    )
+                    
+                    # Log the transaction
+                    self.db.log_admin_give_item(
+                        admin_id=interaction.user.id,
+                        user_id=user.id,
+                        item_type="affinity",
+                        item_id=character,
+                        quantity=affinity_points,
+                        reason="Admin manual distribution"
+                    )
+                    
+                    embed = discord.Embed(
+                        title="✅ Affinity Given Successfully",
+                        description=f"**{affinity_points} affinity points** given to {user.mention} for {character}",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(name="Admin", value=interaction.user.mention, inline=True)
+                    embed.add_field(name="Recipient", value=user.mention, inline=True)
+                    embed.add_field(name="Character", value=character, inline=True)
+                    embed.add_field(name="Points Given", value=str(affinity_points), inline=True)
+                    embed.add_field(name="New Total", value=str(new_score), inline=True)
+                    
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid affinity points. Please enter a valid number.", ephemeral=True)
+                except Exception as e:
+                    await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
+        @self.tree.command(
+            name="pop",
+            description="[Admin] Manually distribute items to users (Messages, Cards, Gifts, Affinity)"
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def pop_command(interaction: discord.Interaction):
+            """관리자용 물리적 상품 지급 명령어"""
+            if not self.db.is_user_admin(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for administrators only.", ephemeral=True)
+                return
+            
+            embed = discord.Embed(
+                title="🎯 Admin Item Distribution System",
+                description="Select the type of item you want to distribute:",
+                color=discord.Color.blue()
+            )
+            embed.add_field(
+                name="💬 Messages",
+                value="Give message balance to users",
+                inline=True
+            )
+            embed.add_field(
+                name="🃏 Cards", 
+                value="Give specific cards to users",
+                inline=True
+            )
+            embed.add_field(
+                name="🎁 Gifts",
+                value="Give gifts to users", 
+                inline=True
+            )
+            embed.add_field(
+                name="💕 Affinity",
+                value="Give affinity points to users",
+                inline=True
+            )
+            embed.set_footer(text="All distributions are logged and tracked")
+            
+            view = PopItemTypeSelect()
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         @self.tree.command(
             name="quest",
