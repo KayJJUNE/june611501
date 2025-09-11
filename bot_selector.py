@@ -2813,7 +2813,7 @@ class BotSelector(commands.Bot):
                 # 기본 정보
                 embed.add_field(
                     name="📊 Basic Info",
-                    value=f"**Latency:** {self.bot.latency:.2f}ms\n**Guilds:** {len(self.bot.guilds)}\n**Users:** {len(self.bot.users)}",
+                    value=f"**Latency:** {self.latency:.2f}ms\n**Guilds:** {len(self.guilds)}\n**Users:** {len(self.users)}",
                     inline=True
                 )
                 
@@ -4449,7 +4449,7 @@ class QuestClaimSelect(discord.ui.Select):
         user_id = interaction.user.id
         quest_id = self.values[0]
 
-        success, message = await self.bot.claim_quest_reward(user_id, quest_id)
+        success, message = await self.claim_quest_reward(user_id, quest_id)
 
         if success:
             response_embed = discord.Embed(
@@ -4461,9 +4461,9 @@ class QuestClaimSelect(discord.ui.Select):
             await interaction.followup.send(embed=response_embed, ephemeral=True)
 
             # Update the original quest board message
-            new_quest_status = await self.bot.get_quest_status(user_id)
-            new_embed = self.bot.create_quest_embed(user_id, new_quest_status)
-            new_view = QuestView(user_id, new_quest_status, self.bot)
+            new_quest_status = await self.get_quest_status(user_id)
+            new_embed = self.create_quest_embed(user_id, new_quest_status)
+            new_view = QuestView(user_id, new_quest_status, self)
             await interaction.edit_original_response(embed=new_embed, view=new_view)
         else:
             await interaction.followup.send(f"❌ {message}", ephemeral=True)
@@ -4528,7 +4528,7 @@ class QuestView(discord.ui.View):
             async def callback(self, interaction: discord.Interaction):
                 selected_char = self.values[0]
                 # story_character_select_callback 호출
-                await self.bot.story_character_select_callback(interaction, selected_char)
+                await self.story_character_select_callback(interaction, selected_char)
 
 
     class StoryStageSelectView(discord.ui.View):
@@ -4607,7 +4607,7 @@ class NewStoryCharacterSelect(discord.ui.Select):
 
             # 스토리 진행 상황 가져오기
             print(f"[DEBUG] Getting story progress for user {user_id} and character {character_name}...")
-            progress = self.bot.db.get_story_progress(user_id, character_name)
+            progress = self.db.get_story_progress(user_id, character_name)
             print(f"[DEBUG] Story progress received: {progress}")
 
             # 새로운 임베드 생성 (요청사항 반영)
@@ -4785,7 +4785,7 @@ class NewStoryChapterSelect(discord.ui.Select):
         user = interaction.user
 
         # 호감도 체크
-        affinity_info = self.bot.db.get_affinity(user.id, self.character_name)
+        affinity_info = self.db.get_affinity(user.id, self.character_name)
         current_affinity = affinity_info.get('emotion_score', 0) if affinity_info else 0
 
         chapter_info = next((c for c in STORY_CHAPTERS[self.character_name]['chapters'] if c['id'] == stage_num), None)
