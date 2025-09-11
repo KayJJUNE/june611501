@@ -1776,6 +1776,8 @@ class BotSelector(commands.Bot):
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+
+
         @self.tree.command(
             name="help",
             description="How to use the chatbot, affinity, card, story, ranking, FAQ guide"
@@ -2124,36 +2126,6 @@ class BotSelector(commands.Bot):
                 except Exception as e2:
                     print(f"[ERROR] followup.send 실패: {e2}")
 
-        async def give_gift_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-            choices = []
-            for gift_id, details in ALL_GIFTS.items():
-                choice_name = f"{details['name']} ({gift_id})"
-                if current.lower() in choice_name.lower():
-                    choices.append(app_commands.Choice(name=choice_name, value=gift_id))
-            return choices[:25]
-
-        @self.tree.command(name="give_gift", description="[Admin] Give a gift to a specific user.")
-        @app_commands.describe(user="The user to receive the gift", gift_id="The ID of the gift to give", quantity="The quantity to give")
-        @app_commands.checks.has_permissions(administrator=True)
-        @app_commands.autocomplete(gift_id=give_gift_autocomplete)
-        async def give_gift(interaction: discord.Interaction, user: discord.User, gift_id: str, quantity: int = 1):
-            if gift_id not in ALL_GIFTS:
-                await interaction.response.send_message(f"Gift ID '{gift_id}' does not exist.", ephemeral=True)
-                return
-
-            if quantity < 1:
-                await interaction.response.send_message("Quantity must be 1 or greater.", ephemeral=True)
-                return
-
-            self.db.add_user_gift(user.id, gift_id, quantity)
-
-            gift_info = get_gift_details(gift_id)
-            embed = discord.Embed(
-                title="🎁 Gift Given",
-                description=f"Successfully gave {quantity} of **{gift_info['name']}** to {user.mention}.",
-                color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed)
 
         # ====================================================
         # 관리자용 물리적 상품 지급 시스템 (/pop)
