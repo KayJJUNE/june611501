@@ -2,7 +2,7 @@
   "products": {
     "PREMIUM_PACK_30D": {
       "id": "PREMIUM_PACK_30D",
-      "name": "Premium Subscription Pack (30 Days) - Pre-Season 한정판 이벤트 상품",
+      "name": "Premium Subscription Pack (30 Days) - Pre-Season Limited Event Item",
       "description": "20 (Daily) + 100 Additional Messages + 3 Random Gifts",
       "type": "subscription",
       "duration_days": 30,
