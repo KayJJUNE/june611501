@@ -1602,7 +1602,7 @@ class DatabaseManager:
     def is_user_admin(self, user_id: int) -> bool:
         """사용자가 관리자인지 확인합니다."""
         # 하드코딩된 관리자 ID들 (실제로는 Discord 권한으로 확인해야 함)
-        admin_ids = [1363156675959460061]  # 봇 ID 제외
+        admin_ids = [534941503345262613]  # 관리자 ID
         return user_id in admin_ids
 
     def get_user_daily_message_count(self, user_id: int) -> int:
@@ -1986,3 +1986,71 @@ class DatabaseManager:
             'total_payments': len(payment_history),
             'total_deliveries': len(delivery_history)
         }
+    
+    def get_total_message_count(self) -> int:
+        """총 유저 메시지 수를 반환합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM conversations WHERE message_role = 'user'")
+                return cursor.fetchone()[0]
+    
+    def get_daily_message_count(self) -> int:
+        """오늘(UTC+8 기준) 대화한 횟수를 반환합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # UTC+8 시간대 (CST) 기준으로 오늘 메시지 수 계산
+                cursor.execute("""
+                    SELECT COUNT(*) FROM conversations 
+                    WHERE message_role = 'user' 
+                    AND DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai') = CURRENT_DATE AT TIME ZONE 'Asia/Shanghai'
+                """)
+                return cursor.fetchone()[0]
+    
+    def get_total_card_count(self) -> int:
+        """총 카드 지급 횟수를 반환합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM user_cards")
+                return cursor.fetchone()[0]
+    
+    def get_daily_card_count(self) -> int:
+        """오늘(UTC+8 기준) 카드 지급 횟수를 반환합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # UTC+8 시간대 (CST) 기준으로 오늘 카드 지급 수 계산
+                cursor.execute("""
+                    SELECT COUNT(*) FROM user_cards 
+                    WHERE DATE(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai') = CURRENT_DATE AT TIME ZONE 'Asia/Shanghai'
+                """)
+                return cursor.fetchone()[0]
+    
+    def get_abnormal_activity_detection(self) -> dict:
+        """이상 상황을 감지합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # 최근 1시간 내 메시지 수
+                cursor.execute("""
+                    SELECT COUNT(*) FROM conversations 
+                    WHERE message_role = 'user' 
+                    AND timestamp > NOW() - INTERVAL '1 hour'
+                """)
+                recent_messages = cursor.fetchone()[0]
+                
+                # 최근 1시간 내 호감도 변화가 큰 사용자들
+                cursor.execute("""
+                    SELECT user_id, character_name, 
+                           MAX(emotion_score) - MIN(emotion_score) as score_change
+                    FROM affinity_logs 
+                    WHERE created_at > NOW() - INTERVAL '1 hour'
+                    GROUP BY user_id, character_name
+                    HAVING MAX(emotion_score) - MIN(emotion_score) > 50
+                    ORDER BY score_change DESC
+                    LIMIT 5
+                """)
+                abnormal_affinity = cursor.fetchall()
+                
+                return {
+                    'recent_messages_1h': recent_messages,
+                    'abnormal_affinity_users': abnormal_affinity,
+                    'is_abnormal': recent_messages > 1000 or len(abnormal_affinity) > 0
+                }

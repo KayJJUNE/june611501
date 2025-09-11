@@ -2770,9 +2770,23 @@ class BotSelector(commands.Bot):
                 memory = psutil.virtual_memory()
                 cpu = psutil.cpu_percent(interval=1)
                 
+                # 데이터베이스 통계 수집
+                total_messages = self.db.get_total_message_count()
+                daily_messages = self.db.get_daily_message_count()
+                total_cards = self.db.get_total_card_count()
+                daily_cards = self.db.get_daily_card_count()
+                abnormal_activity = self.db.get_abnormal_activity_detection()
+                
+                # 에러 통계 수집
+                error_stats = {}
+                error_analysis = {}
+                if self.error_handler:
+                    error_stats = self.error_handler.get_error_stats()
+                    error_analysis = self.error_handler.get_detailed_error_analysis()
+                
                 embed = discord.Embed(
                     title="🤖 Bot Status Report",
-                    color=discord.Color.green(),
+                    color=discord.Color.green() if not abnormal_activity['is_abnormal'] else discord.Color.orange(),
                     timestamp=datetime.now()
                 )
                 
@@ -2803,6 +2817,61 @@ class BotSelector(commands.Bot):
                     value=db_status,
                     inline=True
                 )
+                
+                # 메시지 통계
+                embed.add_field(
+                    name="💬 Message Statistics",
+                    value=f"**Total Messages:** {total_messages:,}\n**Today's Messages:** {daily_messages:,}\n**Time Zone:** UTC+8 (CST)",
+                    inline=True
+                )
+                
+                # 카드 통계
+                embed.add_field(
+                    name="🃏 Card Statistics",
+                    value=f"**Total Cards Given:** {total_cards:,}\n**Today's Cards:** {daily_cards:,}",
+                    inline=True
+                )
+                
+                # 에러 통계
+                if error_stats:
+                    error_summary = f"**Total Errors:** {error_stats['total_errors']}\n**Critical Errors:** {error_stats['critical_errors_count']}"
+                    if error_analysis and error_analysis['log_file_exists']:
+                        error_summary += f"\n**Recent Errors:** {error_analysis['total_recent_errors']}"
+                    embed.add_field(
+                        name="⚠️ Error Statistics",
+                        value=error_summary,
+                        inline=True
+                    )
+                
+                # 이상 상황 감지
+                if abnormal_activity['is_abnormal']:
+                    embed.add_field(
+                        name="🚨 Abnormal Activity Detected",
+                        value=f"**Recent Messages (1h):** {abnormal_activity['recent_messages_1h']}\n**Abnormal Affinity Users:** {len(abnormal_activity['abnormal_affinity_users'])}",
+                        inline=False
+                    )
+                    
+                    # 비정상적인 호감도 변화 사용자들
+                    if abnormal_activity['abnormal_affinity_users']:
+                        abnormal_users = []
+                        for user_id, character, score_change in abnormal_activity['abnormal_affinity_users'][:3]:
+                            abnormal_users.append(f"User {user_id} ({character}): +{score_change}")
+                        embed.add_field(
+                            name="📈 Abnormal Affinity Changes",
+                            value="\n".join(abnormal_users),
+                            inline=False
+                        )
+                
+                # 에러 패턴 분석
+                if error_analysis and error_analysis['recent_error_patterns']:
+                    error_patterns = []
+                    for error_type, count in error_analysis['recent_error_patterns'].items():
+                        error_patterns.append(f"{error_type}: {count}")
+                    embed.add_field(
+                        name="🔍 Recent Error Patterns",
+                        value="\n".join(error_patterns) if error_patterns else "No recent errors",
+                        inline=False
+                    )
                 
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 
