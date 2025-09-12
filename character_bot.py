@@ -600,6 +600,16 @@ class CharacterBot(commands.Bot):
             # [추가] 감정 로그 DB 기록 (모든 캐릭터 공통)
             self.db.add_emotion_log(user_id, character, emotion_score, message.content, now)
 
+            # [추가] 키워드 추출 (Silver, Gold 등급에서만)
+            if new_grade in ['Silver', 'Gold']:
+                try:
+                    keywords = self.keyword_manager.extract_keywords(message.content)
+                    if keywords:
+                        self.keyword_manager.save_keywords(user_id, character, keywords)
+                        print(f"[키워드] {character} - {len(keywords)}개 키워드 추출됨")
+                except Exception as e:
+                    print(f"[키워드 에러] {e}")
+
             response = await self.get_ai_response(context)
             await self.send_bot_message(message.channel, response, user_id)
 
@@ -635,6 +645,15 @@ class CharacterBot(commands.Bot):
             # 새로운 최고 마일스톤 달성 시에만 보상 로직 실행
             if new_milestone > highest_milestone_before:
                 await self.handle_milestone_reward(message, character, user_id, new_milestone)
+
+            # [추가] 서머리 생성 (10개 메시지마다)
+            try:
+                recent_message_count = self.db.get_user_recent_message_count(user_id, character, 10)
+                if recent_message_count >= 10:
+                    # 10개 메시지마다 서머리 생성
+                    await self.create_memory_summary(user_id, character)
+            except Exception as e:
+                print(f"[서머리 에러] {e}")
 
         except Exception as e:
             print(f"Error in process_normal_message: {e}")
