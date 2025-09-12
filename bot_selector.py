@@ -2236,10 +2236,10 @@ class BotSelector(commands.Bot):
                     user = None
                     if user_input.isdigit():
                         user_id = int(user_input)
-                        user = self.get_user(user_id)
+                        user = interaction.client.get_user(user_id)
                     else:
                         # Search by username
-                        for member in self.guilds[0].members:
+                        for member in interaction.guild.members:
                             if user_input.lower() in member.name.lower() or user_input.lower() in member.display_name.lower():
                                 user = member
                                 break
@@ -2313,9 +2313,9 @@ class BotSelector(commands.Bot):
                     user = None
                     if user_input.isdigit():
                         user_id = int(user_input)
-                        user = self.get_user(user_id)
+                        user = interaction.client.get_user(user_id)
                     else:
-                        for member in self.guilds[0].members:
+                        for member in interaction.guild.members:
                             if user_input.lower() in member.name.lower() or user_input.lower() in member.display_name.lower():
                                 user = member
                                 break
@@ -2399,9 +2399,9 @@ class BotSelector(commands.Bot):
                     user = None
                     if user_input.isdigit():
                         user_id = int(user_input)
-                        user = self.get_user(user_id)
+                        user = interaction.client.get_user(user_id)
                     else:
-                        for member in self.guilds[0].members:
+                        for member in interaction.guild.members:
                             if user_input.lower() in member.name.lower() or user_input.lower() in member.display_name.lower():
                                 user = member
                                 break
@@ -2483,9 +2483,9 @@ class BotSelector(commands.Bot):
                     user = None
                     if user_input.isdigit():
                         user_id = int(user_input)
-                        user = self.get_user(user_id)
+                        user = interaction.client.get_user(user_id)
                     else:
-                        for member in self.guilds[0].members:
+                        for member in interaction.guild.members:
                             if user_input.lower() in member.name.lower() or user_input.lower() in member.display_name.lower():
                                 user = member
                                 break
