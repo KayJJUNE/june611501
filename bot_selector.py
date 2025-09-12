@@ -246,96 +246,96 @@ except NameError:
         def __init__(self, *args, **kwargs):
             super().__init__()
 
-class RoleplayModal(discord.ui.Modal, title="Roleplay Settings"):
-    def __init__(self, character_name):
-        super().__init__()
-        self.character_name = character_name
-        self.user_role = discord.ui.TextInput(label="Your Role", max_length=150, required=True)
-        self.character_role = discord.ui.TextInput(label="Character Role", max_length=150, required=True)
-        self.story_line = discord.ui.TextInput(label="Story Line", max_length=1500, required=True, style=discord.TextStyle.paragraph)
-        self.add_item(self.user_role)
-        self.add_item(self.character_role)
-        self.add_item(self.story_line)
+    class RoleplayModal(discord.ui.Modal, title="Roleplay Settings"):
+        def __init__(self, character_name):
+            super().__init__()
+            self.character_name = character_name
+            self.user_role = discord.ui.TextInput(label="Your Role", max_length=150, required=True)
+            self.character_role = discord.ui.TextInput(label="Character Role", max_length=150, required=True)
+            self.story_line = discord.ui.TextInput(label="Story Line", max_length=1500, required=True, style=discord.TextStyle.paragraph)
+            self.add_item(self.user_role)
+            self.add_item(self.character_role)
+            self.add_item(self.story_line)
 
-    async def on_submit(self, interaction: discord.Interaction):
-        # 글자수 초과 체크 (혹시 모를 예외 상황 대비)
-        if len(self.user_role.value) > 150 or len(self.character_role.value) > 150:
-            await interaction.response.send_message(
-                "❌ 'Your Role and Character Role must be entered in 150 characters or less..", ephemeral=True
-            )
-            return
-        if len(self.story_line.value) > 1500:
-            await interaction.response.send_message(
-                "❌ 'The Story Line must be entered within 1,500 characters..", ephemeral=True
-            )
-            return
-        try:
-            bot_selector = interaction.client
-            if not hasattr(bot_selector, "roleplay_sessions"):
-                bot_selector.roleplay_sessions = {}
+        async def on_submit(self, interaction: discord.Interaction):
+            # 글자수 초과 체크 (혹시 모를 예외 상황 대비)
+            if len(self.user_role.value) > 150 or len(self.character_role.value) > 150:
+                await interaction.response.send_message(
+                    "❌ 'Your Role and Character Role must be entered in 150 characters or less..", ephemeral=True
+                )
+                return
+            if len(self.story_line.value) > 1500:
+                await interaction.response.send_message(
+                    "❌ 'The Story Line must be entered within 1,500 characters..", ephemeral=True
+                )
+                return
+            try:
+                bot_selector = interaction.client
+                if not hasattr(bot_selector, "roleplay_sessions"):
+                    bot_selector.roleplay_sessions = {}
 
-            # 1. 새로운 롤플레잉 채널 생성
-            guild = interaction.guild
-            category = discord.utils.get(guild.categories, name="roleplay")
-            if not category:
-                category = await guild.create_category("roleplay")
-            channel_name = f"rp-{self.character_name.lower()}-{interaction.user.name.lower()}-{int(datetime.now().timestamp())}"
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-            }
-            channel = await guild.create_text_channel(
-                name=channel_name,
-                category=category,
-                topic=f"Roleplay with {self.character_name} for {interaction.user.name}",
-                overwrites=overwrites
-            )
+                # 1. 새로운 롤플레잉 채널 생성
+                guild = interaction.guild
+                category = discord.utils.get(guild.categories, name="roleplay")
+                if not category:
+                    category = await guild.create_category("roleplay")
+                channel_name = f"rp-{self.character_name.lower()}-{interaction.user.name.lower()}-{int(datetime.now().timestamp())}"
+                overwrites = {
+                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                    interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                    guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                }
+                channel = await guild.create_text_channel(
+                    name=channel_name,
+                    category=category,
+                    topic=f"Roleplay with {self.character_name} for {interaction.user.name}",
+                    overwrites=overwrites
+                )
 
-            # 2. 세션 정보 저장 (새 채널에만)
-            bot_selector.roleplay_sessions[channel.id] = {
-                "is_active": True,
-                "user_id": interaction.user.id,
-                "character_name": self.character_name,
-                "user_role": self.user_role.value,
-                "character_role": self.character_role.value,
-                "story_line": self.story_line.value,
-                "turns_remaining": 30
-            }
+                # 2. 세션 정보 저장 (새 채널에만)
+                bot_selector.roleplay_sessions[channel.id] = {
+                    "is_active": True,
+                    "user_id": interaction.user.id,
+                    "character_name": self.character_name,
+                    "user_role": self.user_role.value,
+                    "character_role": self.character_role.value,
+                    "story_line": self.story_line.value,
+                    "turns_remaining": 30
+                }
 
-            # 3. 새 채널에 임베드 출력
-            from config import CHARACTER_INFO
-            char_info = CHARACTER_INFO.get(self.character_name, {})
-            embed = discord.Embed(
-                title=f"🎭 Roleplay Session with {self.character_name} Begins! 🎭",
-                description=(
-                    f"🎬 **Roleplay Scenario** 🎬\n"
-                    f"**Your Role:** `{self.user_role.value}`\n"
-                    f"**{self.character_name}'s Role:** `{self.character_role.value}`\n"
-                    f"**Story/Situation:**\n> {self.story_line.value}\n\n"
-                    f"✨ {self.character_name} will now act according to their role and personality in this scenario! ✨\n"
-                    f"💬 Enjoy 30 turns of immersive roleplay conversation."
-                ),
-                color=discord.Color.magenta()
-            )
-            icon_url = char_info.get('image') if char_info.get('image') else "https://i.postimg.cc/BZTJr9Np/ec6047e888811f61cc4b896a4c3dd22e.gif"
-            embed.set_thumbnail(url=icon_url)
-            embed.set_footer(text="🎭 Spot Zero Immersive Roleplay Mode")
-            await channel.send(embed=embed)
+                # 3. 새 채널에 임베드 출력
+                from config import CHARACTER_INFO
+                char_info = CHARACTER_INFO.get(self.character_name, {})
+                embed = discord.Embed(
+                    title=f"🎭 Roleplay Session with {self.character_name} Begins! 🎭",
+                    description=(
+                        f"🎬 **Roleplay Scenario** 🎬\n"
+                        f"**Your Role:** `{self.user_role.value}`\n"
+                        f"**{self.character_name}'s Role:** `{self.character_role.value}`\n"
+                        f"**Story/Situation:**\n> {self.story_line.value}\n\n"
+                        f"✨ {self.character_name} will now act according to their role and personality in this scenario! ✨\n"
+                        f"💬 Enjoy 30 turns of immersive roleplay conversation."
+                    ),
+                    color=discord.Color.magenta()
+                )
+                icon_url = char_info.get('image') if char_info.get('image') else "https://i.postimg.cc/BZTJr9Np/ec6047e888811f61cc4b896a4c3dd22e.gif"
+                embed.set_thumbnail(url=icon_url)
+                embed.set_footer(text="🎭 Spot Zero Immersive Roleplay Mode")
+                await channel.send(embed=embed)
 
-            # 4. 기존 채널에 안내 메시지 전송
-            rp_link = f"https://discord.com/channels/{guild.id}/{channel.id}"
-            await interaction.response.send_message(
-                f"✨ A new roleplay mode has started! [Click here to join your special channel]({rp_link})",
-                ephemeral=True
-            )
+                # 4. 기존 채널에 안내 메시지 전송
+                rp_link = f"https://discord.com/channels/{guild.id}/{channel.id}"
+                await interaction.response.send_message(
+                    f"✨ A new roleplay mode has started! [Click here to join your special channel]({rp_link})",
+                    ephemeral=True
+                )
 
-        except Exception as e:
-            print(f"[RoleplayModal on_submit error] {e}")
-            import traceback
-            print(traceback.format_exc())
-            if not interaction.response.is_done():
-                await interaction.response.send_message("Something went wrong, please try again.", ephemeral=True)
+            except Exception as e:
+                print(f"[RoleplayModal on_submit error] {e}")
+                import traceback
+                print(traceback.format_exc())
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("Something went wrong, please try again.", ephemeral=True)
 
 # 마일스톤 숫자를 카드 ID로 변환하는 함수
 # 10~100: C1~C10, 110~170: B1~B7, 180~220: A1~A5, 230~240: S1~S2
@@ -4790,7 +4790,7 @@ class QuestClaimSelect(discord.ui.Select):
         user_id = interaction.user.id
         quest_id = self.values[0]
 
-        success, message = await self.claim_quest_reward(user_id, quest_id)
+        success, message = await self.bot.claim_quest_reward(user_id, quest_id)
 
         if success:
             response_embed = discord.Embed(
