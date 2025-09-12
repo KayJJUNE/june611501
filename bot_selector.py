@@ -2249,11 +2249,11 @@ class BotSelector(commands.Bot):
                     
                     if not user:
                         await interaction.response.send_message("❌ User not found. Please check the username or ID.", ephemeral=True)
-                return
+                        return
 
                     if quantity <= 0:
                         await interaction.response.send_message("❌ Quantity must be greater than 0.", ephemeral=True)
-                return
+                        return
 
                     # Add messages to user balance
                     self.db.add_user_message_balance(user.id, quantity)
