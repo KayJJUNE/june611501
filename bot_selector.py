@@ -2424,7 +2424,7 @@ class BotSelector(commands.Bot):
                         return
                     
                     # Give gift to user
-            self.db.add_user_gift(user.id, gift_id, quantity)
+                    self.db.add_user_gift(user.id, gift_id, quantity)
 
                     # Log the transaction
                     self.db.log_admin_give_item(
@@ -2437,11 +2437,11 @@ class BotSelector(commands.Bot):
                     )
                     
                     gift_info = ALL_GIFTS[gift_id]
-            embed = discord.Embed(
+                    embed = discord.Embed(
                         title="✅ Gift Given Successfully",
                         description=f"**{gift_info['name']}** given to {user.mention}",
-                color=discord.Color.green()
-            )
+                        color=discord.Color.green()
+                    )
                     embed.add_field(name="Admin", value=interaction.user.mention, inline=True)
                     embed.add_field(name="Recipient", value=user.mention, inline=True)
                     embed.add_field(name="Gift", value=gift_info['name'], inline=True)
