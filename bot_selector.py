@@ -5126,7 +5126,7 @@ class NewStoryChapterSelect(discord.ui.Select):
         user = interaction.user
 
         # 호감도 체크
-        affinity_info = self.db.get_affinity(user.id, self.character_name)
+        affinity_info = self.bot.db.get_affinity(user.id, self.character_name)
         current_affinity = affinity_info.get('emotion_score', 0) if affinity_info else 0
 
         chapter_info = next((c for c in STORY_CHAPTERS[self.character_name]['chapters'] if c['id'] == stage_num), None)
