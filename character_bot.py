@@ -387,15 +387,9 @@ class CharacterBot(commands.Bot):
         if message.author == self.user:
             return
 
-        # 1:1 채팅이 아닌 경우 처리하지 않음 (메인 봇이 처리)
+        # 1:1 채팅이 아닌 경우 처리하지 않음
         if message.channel.id not in self.active_channels:
             return
-        
-        # DM이 아닌 서버 채널에서의 메시지는 메인 봇이 처리하도록 함
-        if not isinstance(message.channel, discord.DMChannel) and message.guild:
-            # 스토리 모드나 롤플레잉 모드가 아닌 경우에만 메인 봇이 처리
-            if not any(f'-s{i}-' in message.channel.name for i in range(1, 10)) and not message.channel.name.startswith("rp-"):
-                return
 
         # 1. 빈 메시지/시스템 메시지/히스토리 임베드 무시
         if not message.content or message.content.strip() == "":
