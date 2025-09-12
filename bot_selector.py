@@ -2586,7 +2586,7 @@ class BotSelector(commands.Bot):
             )
             embed.set_footer(text="All distributions are logged and tracked")
             
-            view = PopItemTypeSelect()
+            view = PopMessagesView()
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         @self.tree.command(
