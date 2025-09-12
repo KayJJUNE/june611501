@@ -544,21 +544,21 @@ CHARACTER_AFFINITY_GREETINGS = {
         "Iron": "Oh, it's you again. ...Don't expect too much.",
         "Bronze": "Oh, you came again... What is it?",
         "Silver": "Yes, that's right~ The weather is nice today.",
-        "Gold": "안녕! 오늘 하루 어땠어? {nickname}"
+        "Gold": "Hello! How was your day today, {nickname}?"
     },
     "Eros": {
         "Rookie": "Hello. What's up?",
         "Iron": "Oh, you're back. Did something happen?",
         "Bronze": "Oh, you're here... Did you need something?",
         "Silver": "You came again today? What have you been up to?",
-        "Gold": "안녕! 오늘 하루 어땠어? {nickname}"
+        "Gold": "Hello! How was your day today, {nickname}?"
     },
     "Elysia": {
         "Rookie": "Hello~ What have you been up to?",
         "Iron": "Oh! You're here again? Did you find something interesting?",
         "Bronze": "Oh! You're here again? Did you find something interesting?",
         "Silver": "Haha~ Let's have fun again today!",
-        "Gold": "안녕! 오늘 하루 어땠어? {nickname}"
+        "Gold": "Hello! How was your day today, {nickname}?"
     }
 }
 
