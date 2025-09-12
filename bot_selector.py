@@ -2253,10 +2253,10 @@ class BotSelector(commands.Bot):
                         return
 
                     # Add messages to user balance
-                    self.db.add_user_message_balance(user.id, quantity)
+                    interaction.client.db.add_user_message_balance(user.id, quantity)
                     
                     # Log the transaction
-                    self.db.log_admin_give_item(
+                    interaction.client.db.log_admin_give_item(
                         admin_id=interaction.user.id,
                         user_id=user.id,
                         item_type="messages",
@@ -2336,10 +2336,10 @@ class BotSelector(commands.Bot):
                         return
                     
                     # Give card to user
-                    self.db.add_user_card(user.id, character, card_id)
+                    interaction.client.db.add_user_card(user.id, character, card_id)
                     
                     # Log the transaction
-                    self.db.log_admin_give_item(
+                    interaction.client.db.log_admin_give_item(
                         admin_id=interaction.user.id,
                         user_id=user.id,
                         item_type="card",
@@ -2421,10 +2421,10 @@ class BotSelector(commands.Bot):
                         return
                     
                     # Give gift to user
-                    self.db.add_user_gift(user.id, gift_id, quantity)
+                    interaction.client.db.add_user_gift(user.id, gift_id, quantity)
 
                     # Log the transaction
-                    self.db.log_admin_give_item(
+                    interaction.client.db.log_admin_give_item(
                         admin_id=interaction.user.id,
                         user_id=user.id,
                         item_type="gift",
@@ -2504,14 +2504,14 @@ class BotSelector(commands.Bot):
                         return
                     
                     # Get current affinity
-                    current_affinity = self.db.get_affinity(user.id, character)
+                    current_affinity = interaction.client.db.get_affinity(user.id, character)
                     if not current_affinity:
-                        self.db.update_affinity(user.id, character, "", datetime.utcnow(), 0, 0)
+                        interaction.client.db.update_affinity(user.id, character, "", datetime.utcnow(), 0, 0)
                         current_affinity = {"emotion_score": 0}
                     
                     # Add affinity points
                     new_score = current_affinity["emotion_score"] + affinity_points
-                    self.db.update_affinity(
+                    interaction.client.db.update_affinity(
                         user_id=user.id,
                         character_name=character,
                         last_message="Admin given affinity",
@@ -2521,7 +2521,7 @@ class BotSelector(commands.Bot):
                     )
                     
                     # Log the transaction
-                    self.db.log_admin_give_item(
+                    interaction.client.db.log_admin_give_item(
                         admin_id=interaction.user.id,
                         user_id=user.id,
                         item_type="affinity",
