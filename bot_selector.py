@@ -3887,21 +3887,19 @@ class BotSelector(commands.Bot):
 
         # 기존 1:1 채널 처리
         active_character, character_name = self.get_character_for_channel(message.channel.id)
-        if not active_character:
-            return
-
-        # --- Quest System: Daily Login Streak ---
-        try:
-            today = datetime.now(timezone('Asia/Seoul')).date()
-            last_login = self.db.get_last_login_date(message.author.id)
-            if last_login is None or last_login < today:
-                self.db.update_login_streak(message.author.id)
-        except Exception as e:
-            print(f"Error updating login streak for {message.author.id}: {e}")
-
-        # --- Normal Message Processing ---
         if active_character:
+            # --- Quest System: Daily Login Streak ---
+            try:
+                today = datetime.now(timezone('Asia/Seoul')).date()
+                last_login = self.db.get_last_login_date(message.author.id)
+                if last_login is None or last_login < today:
+                    self.db.update_login_streak(message.author.id)
+            except Exception as e:
+                print(f"Error updating login streak for {message.author.id}: {e}")
+
+            # --- Normal Message Processing ---
             await active_character.process_normal_message(message)
+            return  # 1:1 채팅 처리 후 종료
 
     # 롤플레잉 모드 전용 답장 함수
     async def process_roleplay_message(self, message, session):
