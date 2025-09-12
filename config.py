@@ -537,6 +537,31 @@ CHARACTER_AFFINITY_SPEECH = {
     }
 }
 
+# 호감도 레벨별 첫 대화 인사 메시지
+CHARACTER_AFFINITY_GREETINGS = {
+    "Kagari": {
+        "Rookie": "Hello? What do you want?",
+        "Iron": "Oh, it's you again. ...Don't expect too much.",
+        "Bronze": "Oh, you came again... What is it?",
+        "Silver": "Yes, that's right~ The weather is nice today.",
+        "Gold": "안녕! 오늘 하루 어땠어? {nickname}"
+    },
+    "Eros": {
+        "Rookie": "Hello. What's up?",
+        "Iron": "Oh, you're back. Did something happen?",
+        "Bronze": "Oh, you're here... Did you need something?",
+        "Silver": "You came again today? What have you been up to?",
+        "Gold": "안녕! 오늘 하루 어땠어? {nickname}"
+    },
+    "Elysia": {
+        "Rookie": "Hello~ What have you been up to?",
+        "Iron": "Oh! You're here again? Did you find something interesting?",
+        "Bronze": "Oh! You're here again? Did you find something interesting?",
+        "Silver": "Haha~ Let's have fun again today!",
+        "Gold": "안녕! 오늘 하루 어땠어? {nickname}"
+    }
+}
+
 # 이미지 경로를 Cloudflare CDN URL로 변경
 CHARACTER_IMAGES = {
     "Kagari": f"{CLOUDFLARE_IMAGE_BASE_URL}/6f52b492-b0eb-46d8-cd9e-0b5ec8c72800/public",

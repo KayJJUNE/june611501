@@ -1646,6 +1646,26 @@ class DatabaseManager:
         finally:
             self.return_connection(conn)
 
+    def get_user_recent_messages(self, user_id: int, character_name: str, limit: int) -> list:
+        """사용자의 최근 메시지를 반환합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT message_content, timestamp FROM conversations 
+                    WHERE user_id = %s AND character_name = %s AND message_role = 'user'
+                    ORDER BY timestamp DESC
+                    LIMIT %s
+                """, (user_id, character_name, limit))
+                result = cursor.fetchall()
+                return result if result else []
+        except Exception as e:
+            print(f"Error getting recent messages: {e}")
+            return []
+        finally:
+            self.return_connection(conn)
+
     def get_user_paid_message_count(self, user_id: int) -> int:
         """사용자의 오늘 유료 메시지 사용 수를 반환합니다 (UTC+0 기준)."""
         conn = None

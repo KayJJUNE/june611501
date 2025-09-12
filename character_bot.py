@@ -460,6 +460,9 @@ class CharacterBot(commands.Bot):
         character = self.character_name
         now = datetime.utcnow()
 
+        # 첫 대화 체크 및 호감도 레벨별 인사 메시지
+        await self.check_and_send_greeting(message, user_id, character)
+
         # 안전장치 확인 (BotSelector에서 가져온 안전장치 사용)
         if (hasattr(self, 'bot_selector') and 
             self.bot_selector is not None and 
@@ -1525,3 +1528,47 @@ def is_spam(user_id, message, now, user_message_buffers):
     if len(emoji_msgs) >= 5:
         return True, "Spam detected: Emoji or special character repeated 5 or more times."
     return False, ""
+
+    async def check_and_send_greeting(self, message, user_id: int, character: str):
+        """첫 대화인지 확인하고 호감도 레벨별 인사 메시지를 보냅니다."""
+        try:
+            # 오늘 첫 대화인지 확인 (UTC 기준)
+            today = datetime.utcnow().date()
+            recent_messages = self.db.get_user_recent_messages(user_id, character, 1)
+            
+            if not recent_messages:
+                # 첫 대화인 경우 호감도 레벨별 인사 메시지 전송
+                await self.send_affinity_greeting(message, user_id, character)
+        except Exception as e:
+            print(f"[ERROR] check_and_send_greeting: {e}")
+
+    async def send_affinity_greeting(self, message, user_id: int, character: str):
+        """호감도 레벨에 따른 인사 메시지를 전송합니다."""
+        try:
+            from config import CHARACTER_AFFINITY_GREETINGS
+            from utils import get_affinity_grade
+            
+            # 호감도 정보 가져오기
+            affinity_info = self.db.get_affinity(user_id, character)
+            if not affinity_info:
+                # 호감도 정보가 없으면 Rookie로 설정
+                affinity_grade = "Rookie"
+            else:
+                affinity_grade = get_affinity_grade(affinity_info['emotion_score'])
+            
+            # 닉네임 가져오기
+            nickname = self.db.get_user_nickname(user_id, character)
+            if not nickname:
+                nickname = message.author.display_name
+            
+            # 호감도 레벨별 인사 메시지 가져오기
+            greeting_template = CHARACTER_AFFINITY_GREETINGS.get(character, {}).get(affinity_grade, "Hello!")
+            
+            # 닉네임 치환
+            greeting_message = greeting_template.format(nickname=nickname)
+            
+            # 인사 메시지 전송
+            await message.channel.send(greeting_message)
+            
+        except Exception as e:
+            print(f"[ERROR] send_affinity_greeting: {e}")
