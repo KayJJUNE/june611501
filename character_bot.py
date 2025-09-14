@@ -717,11 +717,19 @@ class CharacterBot(commands.Bot):
             import random
             tiers, probs = zip(*tier_probs)
             chosen_tier = random.choices(tiers, weights=probs, k=1)[0]
+            
+            # 사용자가 보유한 카드 목록 가져오기 (카드 ID만)
             user_cards = self.db.get_user_cards(user_id, character)
-            available_cards = get_available_cards(character, chosen_tier, user_cards)
+            user_card_ids = [card[0] for card in user_cards] if user_cards else []
+            
+            # 중복되지 않은 카드만 선택
+            available_cards = get_available_cards(character, chosen_tier, user_card_ids)
             if not available_cards:
+                print(f"[DEBUG] No available cards for {character} tier {chosen_tier}, user already has all cards")
                 return  # 지급할 카드 없음
+            
             card_id = random.choice(available_cards)
+            print(f"[DEBUG] Selected card {card_id} from {len(available_cards)} available cards for {character} tier {chosen_tier}")
 
             # 카드 지급 (CardClaimView 사용) - 미리 저장하지 않고 버튼 클릭 시 저장
             from config import CHARACTER_CARD_INFO
@@ -1434,21 +1442,6 @@ def choose_card_tier(affinity):
     tiers, probs = zip(*tier_probs)
     return random.choices(tiers, weights=probs, k=1)[0]
 
-def get_available_cards(character_name: str, tier: str, user_cards: list) -> list[str]:
-    """사용자가 가진 카드를 제외한 해당 티어의 사용 가능한 카드 목록 반환"""
-    from config import CHARACTER_CARD_INFO
-
-    if character_name not in CHARACTER_CARD_INFO:
-        return []
-
-    # 해당 티어의 모든 카드 찾기
-    all_cards = []
-    for card_id, card_info in CHARACTER_CARD_INFO[character_name].items():
-        if card_info.get('tier') == tier:
-            all_cards.append(card_id)
-
-    # 사용자가 가지고 있지 않은 카드만 반환
-    return [card for card in all_cards if card not in user_cards]
 
 def get_random_card_id(character_name, tier):
     from config import CHARACTER_CARD_INFO

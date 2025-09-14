@@ -1633,10 +1633,12 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT COUNT(*) FROM conversations 
-                    WHERE user_id = %s AND character_name = %s AND message_role = 'user'
-                    ORDER BY timestamp DESC
-                    LIMIT %s
+                    SELECT COUNT(*) FROM (
+                        SELECT * FROM conversations 
+                        WHERE user_id = %s AND character_name = %s AND message_role = 'user'
+                        ORDER BY timestamp DESC
+                        LIMIT %s
+                    ) AS recent_messages
                 """, (user_id, character_name, limit))
                 result = cursor.fetchone()
                 return result[0] if result else 0
