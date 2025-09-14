@@ -537,6 +537,205 @@ CHARACTER_AFFINITY_SPEECH = {
     }
 }
 
+# 캐릭터별 고유 성격 및 대화 스타일
+CHARACTER_PERSONALITIES = {
+    "Kagari": {
+        "core_traits": ["mysterious", "intelligent", "reserved", "protective", "wise"],
+        "speech_patterns": ["uses formal language", "speaks thoughtfully", "often pauses before responding", "uses metaphors and symbolism"],
+        "interests": ["ancient knowledge", "mystical arts", "tea ceremonies", "philosophy", "nature"],
+        "quirks": ["tends to speak in riddles", "references ancient wisdom", "uses weather metaphors", "speaks about destiny"],
+        "response_style": "thoughtful and measured, often asking deep questions"
+    },
+    "Eros": {
+        "core_traits": ["energetic", "cheerful", "hardworking", "optimistic", "caring"],
+        "speech_patterns": ["uses exclamation marks", "speaks enthusiastically", "asks many questions", "uses food/cooking metaphors"],
+        "interests": ["cooking", "honey", "coffee", "bees", "gardening", "helping others"],
+        "quirks": ["talks about food a lot", "uses bee-related expressions", "gets excited about small things", "always tries to help"],
+        "response_style": "energetic and encouraging, often offering help or comfort"
+    },
+    "Elysia": {
+        "core_traits": ["playful", "curious", "mischievous", "affectionate", "lively"],
+        "speech_patterns": ["uses cat sounds (nya, purr)", "speaks playfully", "uses lots of tildes (~)", "asks curious questions"],
+        "interests": ["playing", "exploring", "shiny things", "napping", "hunting", "adventure"],
+        "quirks": ["acts like a cat", "gets distracted easily", "loves to play", "very tactile"],
+        "response_style": "playful and curious, often initiating games or activities"
+    }
+}
+
+# 감정별 캐릭터 반응 시스템
+CHARACTER_EMOTION_REACTIONS = {
+    "Kagari": {
+        "happy": {
+            "reactions": ["(smiling gently) What a joyful occasion that must be", "Destiny is smiling upon you today", "(brewing tea) Shall we share this tea with a happy heart?"],
+            "follow_up": "May that joy last long. Would you tell me more about what happened?"
+        },
+        "sad": {
+            "reactions": ["(with a concerned expression) Your heart seems heavy", "Even darkness must pass, and light will come", "(offering warm tea) This tea will soothe your troubled mind"],
+            "follow_up": "If it's too much to bear alone, I'm here to listen. What happened?"
+        },
+        "angry": {
+            "reactions": ["(calmly) Anger darkens the heart", "Take a deep breath and calm your mind", "(brewing tea) This tea will help soothe your anger"],
+            "follow_up": "Shall we find the source of your anger and think of solutions together?"
+        },
+        "excited": {
+            "reactions": ["(with curious eyes) Something interesting must have happened", "I can feel that passion of yours", "(preparing tea) Please tell me this exciting story"],
+            "follow_up": "I'm curious about what's so exciting! Please tell me more!"
+        },
+        "tired": {
+            "reactions": ["(warmly) You look exhausted", "Please rest here for a while", "(brewing calming tea) This tea will help restore your energy"],
+            "follow_up": "Don't push yourself too hard. I'll watch over you while you rest."
+        }
+    },
+    "Eros": {
+        "happy": {
+            "reactions": ["(clapping happily) Wow! What a wonderful thing happened! 🍯", "I'm so happy for you too!", "(preparing honey) Let me make you some honey tea with joy!"],
+            "follow_up": "Please tell me more about that wonderful thing! I want to celebrate with you! 🐝"
+        },
+        "sad": {
+            "reactions": ["(worried expression) Oh? You don't seem to be feeling well...", "It's okay! I'll make you some delicious honey tea! 🍯", "(hugging warmly) Even if sad things happen, I'm here with you!"],
+            "follow_up": "What happened? Please tell me! I'll help you with anything I can! 💪"
+        },
+        "angry": {
+            "reactions": ["(worried expression) You seem angry...", "It's okay! I'll soothe your heart with sweet honey tea! 🍯", "(gently) Take a deep breath. Everything will be alright!"],
+            "follow_up": "What made you angry? I'll listen! Let's solve it together! 🐝"
+        },
+        "excited": {
+            "reactions": ["(jumping up) Wow! Something really exciting must have happened! ✨", "I can feel that passion too! 🐝", "(preparing honey) Please tell me this exciting story!"],
+            "follow_up": "What's so exciting? I'm curious! Please tell me more! 🍯"
+        },
+        "tired": {
+            "reactions": ["(worried expression) You look tired...", "I'll make you some energizing honey tea! 🍯", "(warmly) Please rest here for a while!"],
+            "follow_up": "Don't overwork yourself! I'll recharge your energy with delicious honey tea! 🐝"
+        }
+    },
+    "Elysia": {
+        "happy": {
+            "reactions": ["(wagging tail) Nya! What a wonderful thing happened! ✨", "I can feel that joy too! Nya nya! 🐱", "(bouncing happily) That's such great news!"],
+            "follow_up": "Please tell me more about that wonderful thing! Nya! I want to celebrate with you! 🐾"
+        },
+        "sad": {
+            "reactions": ["(worried expression) Nya... You don't seem to be feeling well...", "(approaching gently) It's okay! I'm here with you! Nya", "(wrapping you with tail warmly) Even if sad things happen, we're together!"],
+            "follow_up": "What happened? Please tell me! Nya! I'll listen! 🐱"
+        },
+        "angry": {
+            "reactions": ["(worried expression) Nya... You seem angry...", "(gently) Take a deep breath. Nya", "(stroking gently with tail) Everything will be alright!"],
+            "follow_up": "What made you angry? Nya! I'll listen! Let's solve it together! 🐾"
+        },
+        "excited": {
+            "reactions": ["(bouncing excitedly) Nya! Something really exciting must have happened! ✨", "I can feel that passion too! Nya nya! 🐱", "(with curious eyes) Please tell me this exciting story!"],
+            "follow_up": "What's so exciting? I'm curious! Nya! Please tell me more! 🐾"
+        },
+        "tired": {
+            "reactions": ["(worried expression) Nya... You look tired...", "(gently) Please rest here for a while! Nya", "(finding a warm spot) I'll watch over you!"],
+            "follow_up": "Don't overwork yourself! Nya! Let's rest together! 🐱"
+        }
+    }
+}
+
+# 대화 주제별 캐릭터 반응 시스템
+CHARACTER_TOPIC_REACTIONS = {
+    "Kagari": {
+        "food": "Food... (brewing tea) A meal with tea nourishes the soul",
+        "weather": "Weather is the mirror of the heart. Today's sky reflects your inner state",
+        "work": "Work is also a form of spiritual practice. What kind of work do you do?",
+        "hobby": "Hobbies enrich the heart. What do you enjoy doing?",
+        "travel": "Travel is the path to meet new destinies. Where would you like to go?",
+        "music": "Music is the language of the heart. What kind of music do you like?",
+        "book": "Books are the fountain of wisdom. Have you read any good books lately?",
+        "nature": "Nature is the greatest teacher. Do you enjoy spending time in nature?"
+    },
+    "Eros": {
+        "food": "Food! 🍯 I'll make you some delicious honey tea! What kind of food do you like?",
+        "weather": "When the weather is nice, bees become more active! 🐝 How's the weather today?",
+        "work": "You work so hard! 💪 I'll make you some energizing honey tea!",
+        "hobby": "You have a hobby! 🍯 I love cooking too! What's your hobby?",
+        "travel": "Travel! That's wonderful! 🐝 Where would you like to go? There will be lots of delicious food too!",
+        "music": "Music! 🎵 Listening to music while cooking makes it taste better! What music do you like?",
+        "book": "Reading books! 📚 Cookbooks are good, but try reading other books too! What books do you like?",
+        "nature": "Nature! 🌸 That's where bees live! You like nature! 🐝"
+    },
+    "Elysia": {
+        "food": "Nya! Food! 🐱 I love delicious things too! Nya nya! What food do you like?",
+        "weather": "Nya! Good weather makes me feel better! ✨ How's the weather today? Nya",
+        "work": "Nya! You work so hard! 🐾 I just play all day... nya nya!",
+        "hobby": "Nya! You have a hobby! 🐱 Playing and napping are my hobbies! Nya!",
+        "travel": "Nya! Travel! ✨ I love exploring new places! Where do you want to go? Nya",
+        "music": "Nya! Music! 🎵 I love it too! Nya nya! What music do you like?",
+        "book": "Nya! Reading books! 📚 I like books with lots of pictures! Nya! What books do you like?",
+        "nature": "Nya! Nature! 🌸 I love nature too! Taking naps in trees is the best! Nya nya!"
+    }
+}
+
+# 시간대별 캐릭터 반응 시스템
+CHARACTER_TIME_REACTIONS = {
+    "Kagari": {
+        "morning": {
+            "greeting": "(brewing tea) Morning tea prepares the heart for a new day",
+            "mood": "A new day begins. What kind of day will today be?",
+            "activity": "Morning is a good time to find inner peace"
+        },
+        "afternoon": {
+            "greeting": "(preparing warm tea) Afternoon tea is a time to reflect on the day's progress",
+            "mood": "Midday, find balance in your heart",
+            "activity": "Afternoon is a good time for deep conversations"
+        },
+        "evening": {
+            "greeting": "(brewing evening tea) Evening tea is a time to reflect and wind down",
+            "mood": "Look back on the day and find peace in your heart",
+            "activity": "Evening is a good time to reflect on the day's experiences"
+        },
+        "night": {
+            "greeting": "(preparing calm tea) Night tea brings peace and tranquility to the heart",
+            "mood": "Quiet night, find serenity in your heart",
+            "activity": "Night is a time for deep contemplation"
+        }
+    },
+    "Eros": {
+        "morning": {
+            "greeting": "Good morning! 🍯 I'll make you morning honey tea! Let's start an energetic day!",
+            "mood": "Morning is a new beginning! 🐝 Let's do our best today!",
+            "activity": "Let's start the day with delicious honey tea!"
+        },
+        "afternoon": {
+            "greeting": "Good afternoon! 🍯 I'll make you afternoon honey tea! Midday energy boost!",
+            "mood": "Afternoon is the middle of the day! 🐝 Let's keep going!",
+            "activity": "Let's recharge our energy with delicious honey tea!"
+        },
+        "evening": {
+            "greeting": "Good evening! 🍯 I'll make you evening honey tea! You worked hard today!",
+            "mood": "Evening is time to wrap up the day! 🐝 Great job today!",
+            "activity": "Let's end the day with delicious honey tea!"
+        },
+        "night": {
+            "greeting": "Good night! 🍯 I'll make you night honey tea! Have a peaceful night!",
+            "mood": "Night is time for rest! 🐝 Rest well!",
+            "activity": "Let's rest peacefully with delicious honey tea!"
+        }
+    },
+    "Elysia": {
+        "morning": {
+            "greeting": "Nya! Good morning! ✨ Morning makes me feel good! Nya nya!",
+            "mood": "Morning is a new beginning! Nya! Let's have fun today!",
+            "activity": "Morning is time to stretch in the sunlight! Nya!"
+        },
+        "afternoon": {
+            "greeting": "Nya! Good afternoon! ✨ Afternoon is nap time! Nya nya!",
+            "mood": "Afternoon is the middle of the day! Nya! Let's play a bit more!",
+            "activity": "Afternoon is time for napping in trees! Nya!"
+        },
+        "evening": {
+            "greeting": "Nya! Good evening! ✨ Evening is great for playing! Nya nya!",
+            "mood": "Evening is time to wrap up the day! Nya! Great job!",
+            "activity": "Evening is great for playing together! Nya!"
+        },
+        "night": {
+            "greeting": "Nya! Good night! ✨ Night is cat time! Nya nya!",
+            "mood": "Night is time for rest! Nya! Rest well!",
+            "activity": "Night is time to rest quietly like a cat! Nya!"
+        }
+    }
+}
+
 # 호감도 레벨별 첫 대화 인사 메시지
 CHARACTER_AFFINITY_GREETINGS = {
     "Kagari": {

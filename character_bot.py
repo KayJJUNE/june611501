@@ -1150,19 +1150,113 @@ class CharacterBot(commands.Bot):
         except Exception as e:
             print(f"Error creating memory summary: {e}")
 
+    async def analyze_user_emotion(self, message: str) -> str:
+        """사용자 메시지의 감정을 분석합니다."""
+        import re
+        
+        # 감정 키워드 매칭
+        emotion_keywords = {
+            "happy": ["happy", "joy", "glad", "cheerful", "excited", "smile", "laugh", "haha", "hehe", "😊", "😄", "😆", "😁", "😃", "great", "wonderful", "amazing", "fantastic"],
+            "sad": ["sad", "depressed", "cry", "tears", "hurt", "pain", "sorrow", "grief", "😢", "😭", "😔", "😞", "😟", "upset", "down", "blue"],
+            "angry": ["angry", "mad", "furious", "rage", "annoyed", "irritated", "😠", "😡", "🤬", "😤", "frustrated", "pissed"],
+            "excited": ["excited", "thrilled", "pumped", "hyped", "wow", "awesome", "😍", "🤩", "😎", "🔥", "✨", "amazing", "incredible", "fantastic"],
+            "tired": ["tired", "exhausted", "sleepy", "drowsy", "fatigued", "😴", "😪", "😵", "💤", "worn out", "beat"]
+        }
+        
+        message_lower = message.lower()
+        
+        for emotion, keywords in emotion_keywords.items():
+            for keyword in keywords:
+                if keyword in message_lower:
+                    return emotion
+        
+        return "neutral"
+    
+    async def detect_topic(self, message: str) -> str:
+        """메시지의 주제를 감지합니다."""
+        import re
+        
+        topic_keywords = {
+            "food": ["food", "eat", "meal", "cook", "delicious", "hungry", "restaurant", "cafe", "drink", "tea", "coffee", "dinner", "lunch", "breakfast", "snack"],
+            "weather": ["weather", "rain", "snow", "sun", "cloud", "wind", "hot", "cold", "temperature", "sunny", "cloudy", "storm"],
+            "work": ["work", "job", "office", "company", "project", "meeting", "business", "career", "profession", "task"],
+            "hobby": ["hobby", "game", "movie", "drama", "book", "music", "exercise", "drawing", "photo", "sport", "art", "craft"],
+            "travel": ["travel", "trip", "vacation", "destination", "tour", "abroad", "domestic", "journey", "adventure", "explore"],
+            "music": ["music", "song", "singer", "album", "concert", "listen", "melody", "rhythm", "band", "artist", "performance"],
+            "book": ["book", "novel", "comic", "read", "reading", "literature", "author", "publish", "story", "fiction"],
+            "nature": ["nature", "mountain", "sea", "river", "forest", "flower", "tree", "animal", "bird", "sky", "outdoor", "park"]
+        }
+        
+        message_lower = message.lower()
+        
+        for topic, keywords in topic_keywords.items():
+            for keyword in keywords:
+                if keyword in message_lower:
+                    return topic
+        
+        return "general"
+    
+    async def get_time_period(self) -> str:
+        """현재 시간대를 반환합니다."""
+        import datetime
+        
+        current_hour = datetime.datetime.now().hour
+        
+        if 5 <= current_hour < 12:
+            return "morning"
+        elif 12 <= current_hour < 17:
+            return "afternoon"
+        elif 17 <= current_hour < 21:
+            return "evening"
+        else:
+            return "night"
+    
     async def build_conversation_context(self, user_id: int, character: str, current_message: str, call_nickname: bool = False) -> list:
         """대화 컨텍스트를 구성합니다."""
         context = []
-        from config import CHARACTER_INFO, CHARACTER_PROMPTS, CHARACTER_AFFINITY_SPEECH
+        from config import CHARACTER_INFO, CHARACTER_PROMPTS, CHARACTER_AFFINITY_SPEECH, CHARACTER_PERSONALITIES, CHARACTER_EMOTION_REACTIONS, CHARACTER_TOPIC_REACTIONS, CHARACTER_TIME_REACTIONS
+        
         character_info = CHARACTER_INFO.get(character, {})
         character_prompt = CHARACTER_PROMPTS.get(character, "")
+        character_personality = CHARACTER_PERSONALITIES.get(character, {})
         nickname = self.db.get_user_nickname(user_id, character)
         affinity_info = self.db.get_affinity(user_id, character)
         affinity_grade = get_affinity_grade(affinity_info['emotion_score'])
         affinity_speech = CHARACTER_AFFINITY_SPEECH.get(character, {}).get(affinity_grade, {})
         tone = affinity_speech.get("tone", "")
         example = affinity_speech.get("example", "")
+        
+        # 감정 및 주제 분석
+        user_emotion = await self.analyze_user_emotion(current_message)
+        detected_topic = await self.detect_topic(current_message)
+        time_period = await self.get_time_period()
+        
+        # 캐릭터 개성 정보 추출
+        core_traits = character_personality.get("core_traits", [])
+        speech_patterns = character_personality.get("speech_patterns", [])
+        interests = character_personality.get("interests", [])
+        quirks = character_personality.get("quirks", [])
+        response_style = character_personality.get("response_style", "")
+        
+        # 감정별 반응 정보
+        emotion_reactions = CHARACTER_EMOTION_REACTIONS.get(character, {}).get(user_emotion, {})
+        emotion_reaction = ""
+        if emotion_reactions:
+            import random
+            emotion_reaction = random.choice(emotion_reactions.get("reactions", [""]))
+            emotion_follow_up = emotion_reactions.get("follow_up", "")
+        
+        # 주제별 반응 정보
+        topic_reaction = CHARACTER_TOPIC_REACTIONS.get(character, {}).get(detected_topic, "")
+        
+        # 시간대별 반응 정보
+        time_reactions = CHARACTER_TIME_REACTIONS.get(character, {}).get(time_period, {})
+        time_greeting = time_reactions.get("greeting", "")
+        time_mood = time_reactions.get("mood", "")
+        time_activity = time_reactions.get("activity", "")
+        
         nickname_instruction = f"In this response, naturally incorporate the user's nickname '{nickname}' in a way that feels genuine and matches the emotional context. Only use the nickname if it flows naturally with your response." if nickname and call_nickname else "For this response, avoid using the user's nickname and focus on creating a natural conversation flow."
+        
         system_message = f"""{character_prompt}
 
 Character Status:
@@ -1171,17 +1265,47 @@ Character Status:
 - Current tone: {tone}
 - Example response: {example}
 
+Character Personality:
+- Core traits: {', '.join(core_traits)}
+- Speech patterns: {', '.join(speech_patterns)}
+- Interests: {', '.join(interests)}
+- Quirks: {', '.join(quirks)}
+- Response style: {response_style}
+
+Context Analysis:
+- User's detected emotion: {user_emotion}
+- Detected topic: {detected_topic}
+- Current time period: {time_period}
+
+Emotion-based Response:
+{emotion_reaction if emotion_reaction else "Respond naturally to the user's emotional state"}
+
+Topic-based Response:
+{topic_reaction if topic_reaction else "Respond naturally to the conversation topic"}
+
+Time-based Response:
+- Time greeting: {time_greeting}
+- Time mood: {time_mood}
+- Time activity: {time_activity}
+
 {nickname_instruction}
 
 [IMPORTANT] For this conversation:
-1. Use the specified tone and nuance
-2. Keep responses natural and in character
+1. Use the specified tone and nuance based on affinity level
+2. Keep responses natural and in character - embody the core traits and quirks
 3. Show appropriate emotions and actions in parentheses
-4. Maintain the character's personality
-5. NEVER mention being an AI, bot, or program
-6. Always respond in the same language as the user
-7. Use informal speech style
-8. Add emotional expressions in parentheses like (smiles), (looks away), etc.
+4. Maintain the character's unique personality and speech patterns
+5. Reference the character's interests when relevant
+6. Respond to the user's emotional state with empathy and understanding
+7. Incorporate topic-specific responses when relevant
+8. Consider the time of day in your response
+9. NEVER mention being an AI, bot, or program
+10. Always respond in the same language as the user
+11. Use informal speech style
+12. Add emotional expressions in parentheses like (smiles), (looks away), etc.
+13. Follow the character's response style and incorporate their quirks naturally
+14. Pay attention to the user's message context and respond appropriately
+15. Make the conversation feel personal and engaging
 """
         context.append({"role": "system", "content": system_message})
         # Silver, Gold, Platinum 등급에서만 최대 3개 메모리 요약
