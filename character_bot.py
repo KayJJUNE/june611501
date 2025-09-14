@@ -603,6 +603,13 @@ class CharacterBot(commands.Bot):
             # [추가] 감정 로그 DB 기록 (모든 캐릭터 공통)
             self.db.add_emotion_log(user_id, character, emotion_score, message.content, now)
 
+            response = await self.get_ai_response(context)
+            await self.send_bot_message(message.channel, response, user_id)
+
+            # 새로운 점수 및 마일스톤 계산
+            new_score = prev_score + emotion_score
+            new_grade = get_affinity_grade(new_score)
+
             # [추가] 키워드 추출 (Silver, Gold 등급에서만)
             if new_grade in ['Silver', 'Gold']:
                 try:
@@ -612,13 +619,6 @@ class CharacterBot(commands.Bot):
                         print(f"[키워드] {character} - {len(keywords)}개 키워드 추출됨")
                 except Exception as e:
                     print(f"[키워드 에러] {e}")
-
-            response = await self.get_ai_response(context)
-            await self.send_bot_message(message.channel, response, user_id)
-
-            # 새로운 점수 및 마일스톤 계산
-            new_score = prev_score + emotion_score
-            new_grade = get_affinity_grade(new_score)
             new_milestone = (new_score // 10) * 10
 
             # 갱신할 최고 마일스톤 계산 (이전 값과 새 마일스톤 중 더 큰 값)
