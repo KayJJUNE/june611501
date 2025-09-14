@@ -1653,7 +1653,7 @@ class DatabaseManager:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT message_content, timestamp FROM conversations 
+                    SELECT content, timestamp FROM conversations 
                     WHERE user_id = %s AND character_name = %s AND message_role = 'user'
                     ORDER BY timestamp DESC
                     LIMIT %s

@@ -664,11 +664,17 @@ class CharacterBot(commands.Bot):
             traceback.print_exc()
             
             # 에러 핸들러에 에러 기록
-            if hasattr(self, 'bot_selector') and self.bot_selector.error_handler:
+            if (hasattr(self, 'bot_selector') and 
+                self.bot_selector is not None and 
+                hasattr(self.bot_selector, 'error_handler') and 
+                self.bot_selector.error_handler is not None):
                 await self.bot_selector.error_handler.log_error(e, "process_normal_message")
             
             # 모니터링에 에러 기록
-            if hasattr(self, 'bot_selector') and self.bot_selector.monitor:
+            if (hasattr(self, 'bot_selector') and 
+                self.bot_selector is not None and 
+                hasattr(self.bot_selector, 'monitor') and 
+                self.bot_selector.monitor is not None):
                 self.bot_selector.monitor.record_error("process_normal_message")
             
             await message.channel.send("❌ An error occurred while processing the response.")

@@ -33,10 +33,11 @@ def migrate_database():
             print("✅ 데이터베이스 마이그레이션이 완료되었습니다.")
 
 def create_all_tables():
-    with psycopg2.connect(DATABASE_URL) as conn:
-        with conn.cursor() as cursor:
-            # conversations
-            cursor.execute('''
+    try:
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cursor:
+                # conversations
+                cursor.execute('''
                 CREATE TABLE IF NOT EXISTS conversations (
                     id SERIAL PRIMARY KEY,
                     channel_id BIGINT,
@@ -385,7 +386,10 @@ def create_all_tables():
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             ''')
-        conn.commit()
+            conn.commit()
+    except Exception as e:
+        print(f"⚠️ 데이터베이스 연결 실패: {e}")
+        print("데이터베이스 없이 봇을 실행합니다.")
 
 if __name__ == "__main__":
     print("🚀 데이터베이스 초기화를 시작합니다...")
