@@ -386,6 +386,18 @@ def create_all_tables():
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             ''')
+            # user_settings - 사용자 설정
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_settings (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    setting_key VARCHAR(100) NOT NULL,
+                    setting_value TEXT NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    UNIQUE(user_id, setting_key)
+                )
+            ''')
             conn.commit()
     except Exception as e:
         print(f"⚠️ 데이터베이스 연결 실패: {e}")

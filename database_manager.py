@@ -2132,3 +2132,35 @@ class DatabaseManager:
                 """, (user_id, limit))
                 return cursor.fetchall()
     
+    async def set_user_timezone(self, user_id: int, timezone: str) -> bool:
+        """사용자의 시간대를 설정합니다."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO user_settings (user_id, setting_key, setting_value, updated_at)
+                        VALUES (%s, 'timezone', %s, NOW())
+                        ON CONFLICT (user_id, setting_key)
+                        DO UPDATE SET setting_value = %s, updated_at = NOW()
+                    """, (user_id, timezone, timezone))
+                    conn.commit()
+                    return True
+        except Exception as e:
+            print(f"Error setting user timezone: {e}")
+            return False
+    
+    async def get_user_timezone(self, user_id: int) -> str:
+        """사용자의 시간대를 가져옵니다."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT setting_value FROM user_settings
+                        WHERE user_id = %s AND setting_key = 'timezone'
+                    """, (user_id,))
+                    result = cursor.fetchone()
+                    return result[0] if result else None
+        except Exception as e:
+            print(f"Error getting user timezone: {e}")
+            return None
+    

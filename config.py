@@ -670,68 +670,68 @@ CHARACTER_TOPIC_REACTIONS = {
 CHARACTER_TIME_REACTIONS = {
     "Kagari": {
         "morning": {
-            "greeting": "(brewing tea) Morning tea prepares the heart for a new day",
-            "mood": "A new day begins. What kind of day will today be?",
-            "activity": "Morning is a good time to find inner peace"
+            "greeting": "(brewing tea) Morning tea prepares the heart for a new day. The gentle steam rising from the cup carries with it the promise of new beginnings. How are you feeling this morning?",
+            "mood": "A new day begins, and with it comes endless possibilities. The morning light brings clarity to the mind and warmth to the heart. What kind of day do you hope today will be?",
+            "activity": "Morning is a perfect time to find inner peace and set intentions for the day. Would you like to share what's on your mind, or perhaps we could simply enjoy this quiet moment together?"
         },
         "afternoon": {
-            "greeting": "(preparing warm tea) Afternoon tea is a time to reflect on the day's progress",
-            "mood": "Midday, find balance in your heart",
-            "activity": "Afternoon is a good time for deep conversations"
+            "greeting": "(preparing warm tea) Afternoon tea is a sacred pause in the day's journey. It's a moment to reflect on how the morning has unfolded and prepare for what lies ahead. How has your day been treating you?",
+            "mood": "Midday brings a natural pause in life's rhythm. It's a time to find balance between what we've accomplished and what still awaits us. How are you feeling about the day so far?",
+            "activity": "Afternoon is ideal for deeper conversations and meaningful connections. The gentle light and slower pace create the perfect atmosphere for sharing thoughts and experiences. What would you like to talk about?"
         },
         "evening": {
-            "greeting": "(brewing evening tea) Evening tea is a time to reflect and wind down",
-            "mood": "Look back on the day and find peace in your heart",
-            "activity": "Evening is a good time to reflect on the day's experiences"
+            "greeting": "(brewing evening tea) Evening tea is a gentle ritual of reflection and gratitude. As the day draws to a close, we can appreciate all that has been given to us. How was your day?",
+            "mood": "Evening brings a sense of completion and peace. It's a time to look back on the day's experiences with gratitude and wisdom. What moments from today are you most grateful for?",
+            "activity": "Evening is perfect for reflecting on the day's journey and sharing meaningful conversations. The quiet atmosphere invites deeper thoughts and heartfelt sharing. What's on your mind tonight?"
         },
         "night": {
-            "greeting": "(preparing calm tea) Night tea brings peace and tranquility to the heart",
-            "mood": "Quiet night, find serenity in your heart",
-            "activity": "Night is a time for deep contemplation"
+            "greeting": "(preparing calm tea) Night tea brings peace and tranquility to the heart. In the quiet darkness, we can find rest and renewal for tomorrow's journey. Are you ready to wind down?",
+            "mood": "The quiet night offers a sanctuary for the soul. It's a time to release the day's worries and embrace the peace that comes with darkness. How are you feeling as the day comes to an end?",
+            "activity": "Night is a sacred time for deep contemplation and gentle conversation. The stillness allows for meaningful reflection and intimate sharing. What thoughts are you carrying into the night?"
         }
     },
     "Eros": {
         "morning": {
-            "greeting": "Good morning! 🍯 I'll make you morning honey tea! Let's start an energetic day!",
-            "mood": "Morning is a new beginning! 🐝 Let's do our best today!",
-            "activity": "Let's start the day with delicious honey tea!"
+            "greeting": "Good morning! 🍯 Rise and shine! I'm already busy making you the most energizing honey tea to start your day right! The bees have been working hard all night to bring us the sweetest honey. How are you feeling this morning?",
+            "mood": "Morning is such an exciting time! 🐝 It's like a fresh canvas waiting to be painted with wonderful experiences. I can already feel the energy buzzing through the air! What amazing things are you planning to do today?",
+            "activity": "Let's fuel up with this delicious honey tea I made just for you! It's packed with natural energy and sweetness that will keep you going all day. While we enjoy this, tell me what you're most looking forward to today!"
         },
         "afternoon": {
-            "greeting": "Good afternoon! 🍯 I'll make you afternoon honey tea! Midday energy boost!",
-            "mood": "Afternoon is the middle of the day! 🐝 Let's keep going!",
-            "activity": "Let's recharge our energy with delicious honey tea!"
+            "greeting": "Good afternoon! 🍯 How's your day going so far? I've been busy preparing a special afternoon honey tea blend to give you that perfect midday energy boost! You must be getting hungry by now!",
+            "mood": "Afternoon is such a busy time! 🐝 I can see you've been working hard, and I'm so proud of you! The day is halfway through, but there's still so much potential for wonderful things to happen. How are you holding up?",
+            "activity": "Time for a delicious energy recharge! This honey tea will give you the perfect boost to tackle the rest of your day. While we enjoy this sweet treat, tell me about all the exciting things you've been up to!"
         },
         "evening": {
-            "greeting": "Good evening! 🍯 I'll make you evening honey tea! You worked hard today!",
-            "mood": "Evening is time to wrap up the day! 🐝 Great job today!",
-            "activity": "Let's end the day with delicious honey tea!"
+            "greeting": "Good evening! 🍯 You've worked so hard today! I can see the tiredness in your eyes, but also the satisfaction of a day well spent. Let me make you a soothing evening honey tea to help you unwind!",
+            "mood": "Evening is such a peaceful time! 🐝 The day is winding down, and I can feel the gentle energy of accomplishment in the air. You've done great today! What was the best part of your day?",
+            "activity": "Let's end this wonderful day with a warm, comforting honey tea! It's the perfect way to relax and reflect on all the good things that happened today. Tell me, what made you smile today?"
         },
         "night": {
-            "greeting": "Good night! 🍯 I'll make you night honey tea! Have a peaceful night!",
-            "mood": "Night is time for rest! 🐝 Rest well!",
-            "activity": "Let's rest peacefully with delicious honey tea!"
+            "greeting": "Good night! 🍯 The day is coming to a close, and it's time to rest those tired wings! I've prepared a special calming honey tea to help you drift off to sweet dreams. Are you ready to rest?",
+            "mood": "Night brings such a peaceful energy! 🐝 Even the bees are settling down in their hive. It's time to let go of the day's worries and embrace the quiet comfort of the night. How are you feeling as you prepare for sleep?",
+            "activity": "Let's enjoy this final honey tea together before you rest! It's infused with calming herbs to help you sleep peacefully. While we sip this gentle brew, tell me what you're most grateful for from today!"
         }
     },
     "Elysia": {
         "morning": {
-            "greeting": "Nya! Good morning! ✨ Morning makes me feel good! Nya nya!",
-            "mood": "Morning is a new beginning! Nya! Let's have fun today!",
-            "activity": "Morning is time to stretch in the sunlight! Nya!"
+            "greeting": "Nya! Good morning! ✨ *stretches and yawns* The morning sun feels so warm and cozy! I've been up early playing with the sunbeams, and now I'm ready for a fun day! How are you feeling this morning? Nya nya!",
+            "mood": "Morning is such an exciting time! Nya! Everything feels fresh and new, like the whole world is waking up just for us! I can already hear the birds chirping and feel the gentle breeze. What adventures are we going to have today? Nya!",
+            "activity": "Morning is the perfect time for stretching and playing! Nya! I love how the sunlight makes everything sparkle and dance. Let's start the day with some fun activities! What would you like to do first? Maybe we can chase some butterflies or play hide and seek! Nya nya!"
         },
         "afternoon": {
-            "greeting": "Nya! Good afternoon! ✨ Afternoon is nap time! Nya nya!",
-            "mood": "Afternoon is the middle of the day! Nya! Let's play a bit more!",
-            "activity": "Afternoon is time for napping in trees! Nya!"
+            "greeting": "Nya! Good afternoon! ✨ *stretches lazily* The afternoon sun is so warm and inviting! I was just taking a little nap in the sunbeam, but now I'm ready for more fun! How has your day been so far? Nya nya!",
+            "mood": "Afternoon is such a cozy time! Nya! The day is halfway through, and I can feel the gentle energy of all the fun we've had and all the fun still to come! Are you getting a bit sleepy too, or are you ready for more adventures? Nya!",
+            "activity": "Afternoon is perfect for napping in warm, sunny spots! Nya! But I also love playing games and exploring during this time. The light is so beautiful, and everything feels magical! What would you like to do? We could play together or just enjoy the peaceful afternoon! Nya nya!"
         },
         "evening": {
-            "greeting": "Nya! Good evening! ✨ Evening is great for playing! Nya nya!",
-            "mood": "Evening is time to wrap up the day! Nya! Great job!",
-            "activity": "Evening is great for playing together! Nya!"
+            "greeting": "Nya! Good evening! ✨ *purrs contentedly* The evening light is so soft and golden! I've been playing all day and now I'm feeling happy and satisfied. How was your day? Did you have lots of fun too? Nya nya!",
+            "mood": "Evening brings such a peaceful feeling! Nya! The day is winding down, and I can feel the gentle satisfaction of a day well spent. All the playing and exploring has made me feel so content! What was the best part of your day? Nya!",
+            "activity": "Evening is the perfect time for gentle play and cozy cuddles! Nya! The soft light makes everything feel warm and safe. Let's enjoy this peaceful time together! Maybe we can play a quiet game or just curl up and chat about our day! Nya nya!"
         },
         "night": {
-            "greeting": "Nya! Good night! ✨ Night is cat time! Nya nya!",
-            "mood": "Night is time for rest! Nya! Rest well!",
-            "activity": "Night is time to rest quietly like a cat! Nya!"
+            "greeting": "Nya! Good night! ✨ *stretches and settles down* The night is so quiet and peaceful! I can see the stars starting to twinkle, and it makes me feel so cozy and safe. Are you ready to rest after our fun day together? Nya nya!",
+            "mood": "Night brings such a gentle, sleepy energy! Nya! Even the moon seems to be smiling down at us. It's time to let go of all the day's excitement and embrace the quiet comfort of the night. How are you feeling as we prepare for sleep? Nya!",
+            "activity": "Night is the perfect time for quiet cuddles and soft purring! Nya! The darkness feels so safe and warm, like a big, cozy blanket. Let's enjoy this peaceful time together before we drift off to dreamland! What sweet dreams are you hoping to have tonight? Nya nya!"
         }
     }
 }

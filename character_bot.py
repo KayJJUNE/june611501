@@ -916,7 +916,7 @@ class CharacterBot(commands.Bot):
                 {messages_text}
                 """
 
-                response = await openai.ChatCompletion.create(
+                response = await openai.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "system", "content": prompt}],
                     max_tokens=200,
@@ -1196,20 +1196,47 @@ class CharacterBot(commands.Bot):
         
         return "general"
     
-    async def get_time_period(self) -> str:
-        """현재 시간대를 반환합니다."""
+    async def get_time_period(self, user_id: int = None) -> str:
+        """사용자의 시간대를 반환합니다."""
         import datetime
+        import pytz
         
-        current_hour = datetime.datetime.now().hour
-        
-        if 5 <= current_hour < 12:
-            return "morning"
-        elif 12 <= current_hour < 17:
-            return "afternoon"
-        elif 17 <= current_hour < 21:
-            return "evening"
-        else:
-            return "night"
+        try:
+            # 사용자별 시간대가 저장되어 있다면 사용, 없으면 서버 시간대 사용
+            if user_id and hasattr(self, 'db'):
+                user_timezone = await self.db.get_user_timezone(user_id)
+                if user_timezone:
+                    user_tz = pytz.timezone(user_timezone)
+                    current_time = datetime.datetime.now(user_tz)
+                else:
+                    # 기본값으로 UTC 사용
+                    current_time = datetime.datetime.now(pytz.UTC)
+            else:
+                # 데이터베이스가 없거나 user_id가 없으면 서버 시간대 사용
+                current_time = datetime.datetime.now()
+            
+            current_hour = current_time.hour
+            
+            if 5 <= current_hour < 12:
+                return "morning"
+            elif 12 <= current_hour < 17:
+                return "afternoon"
+            elif 17 <= current_hour < 21:
+                return "evening"
+            else:
+                return "night"
+        except Exception as e:
+            print(f"Error getting time period: {e}")
+            # 오류 발생 시 서버 시간대 사용
+            current_hour = datetime.datetime.now().hour
+            if 5 <= current_hour < 12:
+                return "morning"
+            elif 12 <= current_hour < 17:
+                return "afternoon"
+            elif 17 <= current_hour < 21:
+                return "evening"
+            else:
+                return "night"
     
     async def build_conversation_context(self, user_id: int, character: str, current_message: str, call_nickname: bool = False) -> list:
         """대화 컨텍스트를 구성합니다."""
@@ -1229,7 +1256,7 @@ class CharacterBot(commands.Bot):
         # 감정 및 주제 분석
         user_emotion = await self.analyze_user_emotion(current_message)
         detected_topic = await self.detect_topic(current_message)
-        time_period = await self.get_time_period()
+        time_period = await self.get_time_period(user_id)
         
         # 캐릭터 개성 정보 추출
         core_traits = character_personality.get("core_traits", [])
