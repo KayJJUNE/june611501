@@ -4806,20 +4806,30 @@ import psycopg2
 from psycopg2 import pool
 from config import DATABASE_CONFIG
 
-# PostgreSQL 연결 풀 생성
-connection_pool = psycopg2.pool.SimpleConnectionPool(
-    1,  # 최소 연결 수
-    10, # 최대 연결 수
-    host=DATABASE_CONFIG['host'],
-    database=DATABASE_CONFIG['database'],
-    user=DATABASE_CONFIG['user'],
-    password=DATABASE_CONFIG['password'],
-    port=DATABASE_CONFIG['port'],
-    sslmode=DATABASE_CONFIG['sslmode']
-)
+# PostgreSQL 연결 풀 생성 (연결 실패 시에도 봇 실행)
+try:
+    connection_pool = psycopg2.pool.SimpleConnectionPool(
+        1,  # 최소 연결 수
+        10, # 최대 연결 수
+        host=DATABASE_CONFIG['host'],
+        database=DATABASE_CONFIG['database'],
+        user=DATABASE_CONFIG['user'],
+        password=DATABASE_CONFIG['password'],
+        port=DATABASE_CONFIG['port'],
+        sslmode=DATABASE_CONFIG['sslmode']
+    )
+    print("✅ 데이터베이스 연결 풀이 생성되었습니다.")
+except Exception as e:
+    print(f"⚠️ 데이터베이스 연결 실패: {e}")
+    print("데이터베이스 없이 봇을 실행합니다.")
+    connection_pool = None
 
 def get_user_cards(user_id: str) -> list:
     """PostgreSQL에서 사용자의 모든 카드 정보를 가져오며, 중복된 카드는 제거합니다. (대소문자 구분 없음)"""
+    if connection_pool is None:
+        print("⚠️ 데이터베이스 연결이 없습니다. 빈 카드 목록을 반환합니다.")
+        return []
+    
     try:
         conn = connection_pool.getconn()
         cursor = conn.cursor()
