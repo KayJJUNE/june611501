@@ -1306,11 +1306,24 @@ def get_card_info_by_id(character_name: str, card_id: str) -> dict:
     card_id = card_id.lower()
     for cid, info in CHARACTER_CARD_INFO[character_name].items():
         if cid.lower() == card_id:
-
             # 새로운 이미지 URL 형식으로 변환
             updated_info = info.copy()
-            if 'image_url' not in updated_info or not updated_info['image_url']:
+            
+            # image_path를 image_url로 변환
+            if 'image_path' in updated_info and updated_info['image_path']:
+                updated_info['image_url'] = updated_info['image_path']
+                # image_url_small도 추가 (같은 URL 사용)
+                updated_info['image_url_small'] = updated_info['image_path']
+            elif 'image_url' not in updated_info or not updated_info['image_url']:
                 updated_info['image_url'] = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{cid}/public"
+                updated_info['image_url_small'] = updated_info['image_url']
+            
+            # 기본값 설정
+            if 'ability' not in updated_info:
+                updated_info['ability'] = 'Unknown Ability'
+            if 'name' not in updated_info:
+                updated_info['name'] = f"{character_name} {updated_info.get('tier', 'Unknown')} Card"
+            
             return updated_info
     return {}
 
