@@ -5636,7 +5636,7 @@ class CardSliderView(discord.ui.View):
         
         embed = discord.Embed(
             title=f"{self.character_name} Card Collection",
-            description=f"**{len(self.cards)} / {len(self.cards)} Cards Collected**",
+            description=f"**{len(self.cards)} / 65 Cards Collected**",
             color=discord.Color.purple()
         )
         
