@@ -1238,6 +1238,100 @@ class CharacterBot(commands.Bot):
             else:
                 return "night"
     
+    async def get_current_time_info(self, user_id: int = None) -> dict:
+        """사용자의 현재 시간 정보를 반환합니다."""
+        import datetime
+        import pytz
+        
+        try:
+            # 사용자별 시간대가 저장되어 있다면 사용, 없으면 서버 시간대 사용
+            if user_id and hasattr(self, 'db'):
+                user_timezone = await self.db.get_user_timezone(user_id)
+                if user_timezone:
+                    user_tz = pytz.timezone(user_timezone)
+                    current_time = datetime.datetime.now(user_tz)
+                    timezone_name = user_timezone
+                else:
+                    # 기본값으로 UTC 사용
+                    current_time = datetime.datetime.now(pytz.UTC)
+                    timezone_name = "UTC"
+            else:
+                # 데이터베이스가 없거나 user_id가 없으면 서버 시간대 사용
+                current_time = datetime.datetime.now()
+                timezone_name = "서버 시간대"
+            
+            # 시간 구간 판단
+            current_hour = current_time.hour
+            if 5 <= current_hour < 12:
+                period = "morning"
+                period_kr = "아침"
+            elif 12 <= current_hour < 17:
+                period = "afternoon"
+                period_kr = "오후"
+            elif 17 <= current_hour < 21:
+                period = "evening"
+                period_kr = "저녁"
+            else:
+                period = "night"
+                period_kr = "밤"
+            
+            # 시간 포맷팅
+            time_str = current_time.strftime("%H:%M")
+            date_str = current_time.strftime("%Y년 %m월 %d일")
+            
+            return {
+                "time": time_str,
+                "date": date_str,
+                "period": period,
+                "period_kr": period_kr,
+                "timezone": timezone_name,
+                "full_time": current_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "hour": current_hour,
+                "minute": current_time.minute
+            }
+        except Exception as e:
+            print(f"Error getting current time info: {e}")
+            # 오류 발생 시 서버 시간대 사용
+            current_time = datetime.datetime.now()
+            current_hour = current_time.hour
+            
+            if 5 <= current_hour < 12:
+                period = "morning"
+                period_kr = "아침"
+            elif 12 <= current_hour < 17:
+                period = "afternoon"
+                period_kr = "오후"
+            elif 17 <= current_hour < 21:
+                period = "evening"
+                period_kr = "저녁"
+            else:
+                period = "night"
+                period_kr = "밤"
+            
+            return {
+                "time": current_time.strftime("%H:%M"),
+                "date": current_time.strftime("%Y년 %m월 %d일"),
+                "period": period,
+                "period_kr": period_kr,
+                "timezone": "서버 시간대",
+                "full_time": current_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "hour": current_hour,
+                "minute": current_time.minute
+            }
+    
+    async def detect_time_question(self, message: str) -> bool:
+        """시간 관련 질문인지 감지합니다."""
+        time_keywords = [
+            "what time", "what's the time", "current time", "time now", "지금 몇 시", "몇 시야", "시간이", "시간이야",
+            "time is it", "what time is it", "현재 시간", "지금 시간", "몇시", "몇시야", "시간", "시계"
+        ]
+        
+        message_lower = message.lower()
+        for keyword in time_keywords:
+            if keyword in message_lower:
+                return True
+        return False
+    
     async def build_conversation_context(self, user_id: int, character: str, current_message: str, call_nickname: bool = False) -> list:
         """대화 컨텍스트를 구성합니다."""
         context = []
@@ -1257,6 +1351,12 @@ class CharacterBot(commands.Bot):
         user_emotion = await self.analyze_user_emotion(current_message)
         detected_topic = await self.detect_topic(current_message)
         time_period = await self.get_time_period(user_id)
+        
+        # 시간 관련 질문 감지
+        time_question = await self.detect_time_question(current_message)
+        time_info = None
+        if time_question:
+            time_info = await self.get_current_time_info(user_id)
         
         # 캐릭터 개성 정보 추출
         core_traits = character_personality.get("core_traits", [])
@@ -1303,6 +1403,9 @@ Context Analysis:
 - User's detected emotion: {user_emotion}
 - Detected topic: {detected_topic}
 - Current time period: {time_period}
+{f"- Current time: {time_info['time']} ({time_info['period_kr']})" if time_info else ""}
+{f"- Date: {time_info['date']}" if time_info else ""}
+{f"- Timezone: {time_info['timezone']}" if time_info else ""}
 
 Emotion-based Response:
 {emotion_reaction if emotion_reaction else "Respond naturally to the user's emotional state"}
@@ -1333,6 +1436,7 @@ Time-based Response:
 13. Follow the character's response style and incorporate their quirks naturally
 14. Pay attention to the user's message context and respond appropriately
 15. Make the conversation feel personal and engaging
+{f"16. TIME QUESTION DETECTED: The user is asking about the current time. Provide the specific time information naturally in your response: {time_info['time']} ({time_info['period_kr']}) on {time_info['date']}" if time_question and time_info else ""}
 """
         context.append({"role": "system", "content": system_message})
         # Silver, Gold, Platinum 등급에서만 최대 3개 메모리 요약
