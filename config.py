@@ -23,17 +23,17 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 # Cloudflare 이미지 기본 URL
 CLOUDFLARE_IMAGE_BASE_URL = "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw"
 
-# 친밀도 레벨 정의
+# 친밀도 레벨 정의 (새로운 시스템)
 AFFINITY_LEVELS = {
     "Rookie": 0,
-    "Iron": 10,
-    "Bronze": 30,
-    "Silver": 50,
-    "Gold": 100
+    "Iron": 20,
+    "Bronze": 50,
+    "Silver": 100,
+    "Gold": 150
 }
 
 # 친밀도 레벨 임계값
-AFFINITY_THRESHOLDS = [0, 10, 30, 50, 100]
+AFFINITY_THRESHOLDS = [0, 20, 50, 100, 150]
 
 # 레벨업 시 지급되는 카드 정의
 LEVEL_UP_CARDS = {
@@ -841,61 +841,61 @@ LANGUAGE_RESPONSE_CONFIG = {}
 # ====================================================
 CHARACTER_CARD_INFO = {
     "Kagari": {
-        "kagaris1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5940ffbd-d997-4311-83b8-fd4bf3c1c100/public", "description": "Kagari's S1 Card", "tier": "S"},
-        "kagaris2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/115ed3b4-f446-41bd-f138-b0609293b700/public", "description": "Kagari's S2 Card", "tier": "S"},
-        "kagaris3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3454ed77-8d86-497f-4b31-62b27df7fd00/public", "description": "Kagari's S3 Card", "tier": "S"},
-        "kagaris4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/a9154c85-cb19-4d3d-0d06-a27147ae5500/public", "description": "Kagari's S4 Card", "tier": "S"},
-        "kagaria1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/28e2a611-17b7-4c96-7bc9-5ce40bd4b800/public", "description": "Kagari's A1 Card", "tier": "A"},
-        "kagaria2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/abd9352d-7c7e-46e9-5a3c-d68b58d4b400/public", "description": "Kagari's A2 Card", "tier": "A"},
-        "kagaria3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/ec09920a-0649-4145-94ae-e14c76e74700/public", "description": "Kagari's A3 Card", "tier": "A"},
-        "kagaria4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/1caef695-82a1-4ca7-a46b-c97f66240100/public", "description": "Kagari's A4 Card", "tier": "A"},
-        "kagaria5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/bdc1bc8d-42cf-4710-472c-886904c35a00/public", "description": "Kagari's A5 Card", "tier": "A"},
-        "kagarib1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/59fa7fbb-2c78-4127-4d39-2217e1944200/public", "description": "Kagari's B1 Card", "tier": "B"},
-        "kagarib2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5d892428-ff85-4c27-4ff8-98ebf31f7c00/public", "description": "Kagari's B2 Card", "tier": "B"},
-        "kagarib3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8b40f8d3-b0cc-4141-2084-b76b1b47a600/public", "description": "Kagari's B3 Card", "tier": "B"},
-        "kagarib4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3cefa9d4-fdde-4c16-7ebd-2c1e02d8c500/public", "description": "Kagari's B4 Card", "tier": "B"},
-        "kagarib5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8a01f890-69da-4574-50f3-97c1ea965b00/public", "description": "Kagari's B5 Card", "tier": "B"},
-        "kagarib6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/52d99276-3eb8-492a-c855-bc2807530200/public", "description": "Kagari's B6 Card", "tier": "B"},
-        "kagarib7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/15d6fea8-b0a7-4590-f291-15815f440300/public", "description": "Kagari's B7 Card", "tier": "B"},
-        "kagaric1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/dc454d83-51b5-4cfd-fb7f-a98c9f5c7d00/public", "description": "Kagari's C1 Card", "tier": "C"},
-        "kagaric2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/fa9136a2-515e-4fa9-9b37-23d944bad400/public", "description": "Kagari's C2 Card", "tier": "C"},
-        "kagaric3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/99252b44-68f7-41ab-b81e-7f9331322f00/public", "description": "Kagari's C3 Card", "tier": "C"},
-        "kagaric4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/690c6a67-17f7-4624-f252-5a6571a41700/public", "description": "Kagari's C4 Card", "tier": "C"},
-        "kagaric5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/aabfdacd-7a1b-4687-ff9a-3b32a7867400/public", "description": "Kagari's C5 Card", "tier": "C"},
-        "kagaric6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/925850cc-9c67-4908-f17c-4c7f39e8aa00/public", "description": "Kagari's C6 Card", "tier": "C"},
-        "kagaric7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7f2c6d57-eeb4-4eb0-02aa-b4b42ec8fc00/public", "description": "Kagari's C7 Card", "tier": "C"},
-        "kagaric8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/f96f8c43-b6b1-4881-7c41-5881a0490a00/public", "description": "Kagari's C8 Card", "tier": "C"},
-        "kagaric9": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/b7e8a977-f2db-484a-5680-16876fe69e00/public", "description": "Kagari's C9 Card", "tier": "C"},
-        "kagaric10": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/b4a991c7-083a-4508-1859-952ad7312b00/public", "description": "Kagari's C10 Card", "tier": "C"},
+        "kagaris1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaris1/public", "description": "Kagari's S1 Card", "tier": "S"},
+        "kagaris2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaris2/public", "description": "Kagari's S2 Card", "tier": "S"},
+        "kagaris3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaris3/public", "description": "Kagari's S3 Card", "tier": "S"},
+        "kagaris4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaris4/public", "description": "Kagari's S4 Card", "tier": "S"},
+        "kagaria1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaria1/public", "description": "Kagari's A1 Card", "tier": "A"},
+        "kagaria2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaria2/public", "description": "Kagari's A2 Card", "tier": "A"},
+        "kagaria3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaria3/public", "description": "Kagari's A3 Card", "tier": "A"},
+        "kagaria4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaria4/public", "description": "Kagari's A4 Card", "tier": "A"},
+        "kagaria5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaria5/public", "description": "Kagari's A5 Card", "tier": "A"},
+        "kagarib1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagarib1/public", "description": "Kagari's B1 Card", "tier": "B"},
+        "kagarib2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagarib2/public", "description": "Kagari's B2 Card", "tier": "B"},
+        "kagarib3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagarib3/public", "description": "Kagari's B3 Card", "tier": "B"},
+        "kagarib4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagarib4/public", "description": "Kagari's B4 Card", "tier": "B"},
+        "kagarib5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagarib5/public", "description": "Kagari's B5 Card", "tier": "B"},
+        "kagarib6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagarib6/public", "description": "Kagari's B6 Card", "tier": "B"},
+        "kagarib7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagarib7/public", "description": "Kagari's B7 Card", "tier": "B"},
+        "kagaric1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric1/public", "description": "Kagari's C1 Card", "tier": "C"},
+        "kagaric2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric2/public", "description": "Kagari's C2 Card", "tier": "C"},
+        "kagaric3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric3/public", "description": "Kagari's C3 Card", "tier": "C"},
+        "kagaric4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric4/public", "description": "Kagari's C4 Card", "tier": "C"},
+        "kagaric5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric5/public", "description": "Kagari's C5 Card", "tier": "C"},
+        "kagaric6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric6/public", "description": "Kagari's C6 Card", "tier": "C"},
+        "kagaric7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric7/public", "description": "Kagari's C7 Card", "tier": "C"},
+        "kagaric8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric8/public", "description": "Kagari's C8 Card", "tier": "C"},
+        "kagaric9": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric9/public", "description": "Kagari's C9 Card", "tier": "C"},
+        "kagaric10": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/kagaric10/public", "description": "Kagari's C10 Card", "tier": "C"},
         "banner_image": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/0d187630-34a6-4c27-751c-285188349700/public"
     },
     "Eros": {
-        "eross1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8e90e55f-81b0-423a-3030-8225127a5b00/public", "description": "Eros's S1 Card", "tier": "S"},
-        "eross2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/9a99fa31-5193-46ae-1a77-e5dd658a8d00/public", "description": "Eros's S2 Card", "tier": "S"},
-        "eross3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/d1f5f30e-40b9-4e41-418c-9faec392f200/public", "description": "Eros's S3 Card", "tier": "S"},
-        "eross4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/6b6172a5-cea1-4eab-14dd-76eacb402d00/public", "description": "Eros's S4 Card", "tier": "S"},
-        "erosa1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/04303410-b101-4521-2fb5-c45bc3ea6a00/public", "description": "Eros's A1 Card", "tier": "A"},
-        "erosa2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/93f95810-7430-4c53-90ae-50c22c108300/public", "description": "Eros's A2 Card", "tier": "A"},
-        "erosa3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/eea6e4a4-073e-4f4f-1187-e707daa72b00/public", "description": "Eros's A3 Card", "tier": "A"},
-        "erosa4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3b5c94d0-5843-45fe-33d8-4968c7804000/public", "description": "Eros's A4 Card", "tier": "A"},
-        "erosa5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/68752a8f-c408-4d98-c123-90198e2be000/public", "description": "Eros's A5 Card", "tier": "A"},
-        "erosb1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4ae6627a-a67b-40f0-83dc-ff0ac610da00/public", "description": "Eros's B1 Card", "tier": "B"},
-        "erosb2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/d46e07dd-36e0-4c69-6fde-16c0f0e7b300/public", "description": "Eros's B2 Card", "tier": "B"},
-        "erosb3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/67e7ac44-2d60-4984-8d0a-df19fca32100/public", "description": "Eros's B3 Card", "tier": "B"},
-        "erosb4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/26e92659-124a-41a2-9f1f-238ef4084400/public", "description": "Eros's B4 Card", "tier": "B"},
-        "erosb5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/88b78ed0-52b4-452e-cd00-fefabdc9e000/public", "description": "Eros's B5 Card", "tier": "B"},
-        "erosb6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/539ea91c-f739-4e50-9b27-9fda85ccec00/public", "description": "Eros's B6 Card", "tier": "B"},
-        "erosb7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/51b88fa7-a929-4d3b-5222-93a33367a600/public", "description": "Eros's B7 Card", "tier": "B"},
-        "erosc1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/bb836f63-1bb2-4c8a-8592-dc309dd8c500/public", "description": "Eros's C1 Card", "tier": "C"},
-        "erosc2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/814786b0-0c1c-4c5c-f00a-065b39352000/public", "description": "Eros's C2 Card", "tier": "C"},
-        "erosc3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/ba3a0f78-4551-4234-95b6-acc49da19800/public", "description": "Eros's C3 Card", "tier": "C"},
-        "erosc4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/d7a1ab2c-df53-444f-7811-b415904a6400/public", "description": "Eros's C4 Card", "tier": "C"},
-        "erosc5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/a4fadb58-4ca4-4a43-4fa6-de5257ed9000/public", "description": "Eros's C5 Card", "tier": "C"},
-        "erosc6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5e4f4d72-09b2-415b-5d6c-e90eaa37b400/public", "description": "Eros's C6 Card", "tier": "C"},
-        "erosc7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/c860828f-1b7b-43b4-33b6-ed9ce8d31b00/public", "description": "Eros's C7 Card", "tier": "C"},
-        "erosc8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7d45b783-1ea3-4273-43f1-6a7e69ccd900/public", "description": "Eros's C8 Card", "tier": "C"},
-        "erosc9": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/f2ab032b-27d1-4fbd-5101-583a3f32aa00/public", "description": "Eros's C9 Card", "tier": "C"},
-        "erosc10": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/cd506d94-d636-4712-b08f-5f3569958000/public", "description": "Eros's C10 Card", "tier": "C"},
+        "eross1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/eross1/public", "description": "Eros's S1 Card", "tier": "S"},
+        "eross2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/eross2/public", "description": "Eros's S2 Card", "tier": "S"},
+        "eross3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/eross3/public", "description": "Eros's S3 Card", "tier": "S"},
+        "eross4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/eross4/public", "description": "Eros's S4 Card", "tier": "S"},
+        "erosa1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosa1/public", "description": "Eros's A1 Card", "tier": "A"},
+        "erosa2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosa2/public", "description": "Eros's A2 Card", "tier": "A"},
+        "erosa3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosa3/public", "description": "Eros's A3 Card", "tier": "A"},
+        "erosa4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosa4/public", "description": "Eros's A4 Card", "tier": "A"},
+        "erosa5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosa5/public", "description": "Eros's A5 Card", "tier": "A"},
+        "erosb1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosb1/public", "description": "Eros's B1 Card", "tier": "B"},
+        "erosb2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosb2/public", "description": "Eros's B2 Card", "tier": "B"},
+        "erosb3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosb3/public", "description": "Eros's B3 Card", "tier": "B"},
+        "erosb4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosb4/public", "description": "Eros's B4 Card", "tier": "B"},
+        "erosb5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosb5/public", "description": "Eros's B5 Card", "tier": "B"},
+        "erosb6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosb6/public", "description": "Eros's B6 Card", "tier": "B"},
+        "erosb7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosb7/public", "description": "Eros's B7 Card", "tier": "B"},
+        "erosc1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc1/public", "description": "Eros's C1 Card", "tier": "C"},
+        "erosc2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc2/public", "description": "Eros's C2 Card", "tier": "C"},
+        "erosc3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc3/public", "description": "Eros's C3 Card", "tier": "C"},
+        "erosc4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc4/public", "description": "Eros's C4 Card", "tier": "C"},
+        "erosc5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc5/public", "description": "Eros's C5 Card", "tier": "C"},
+        "erosc6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc6/public", "description": "Eros's C6 Card", "tier": "C"},
+        "erosc7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc7/public", "description": "Eros's C7 Card", "tier": "C"},
+        "erosc8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc8/public", "description": "Eros's C8 Card", "tier": "C"},
+        "erosc9": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc9/public", "description": "Eros's C9 Card", "tier": "C"},
+        "erosc10": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/erosc10/public", "description": "Eros's C10 Card", "tier": "C"},
         "banner_image": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/deddb343-023f-430a-2987-aaafd8985c00/public"
     },
     "Elysia": {
@@ -1333,17 +1333,17 @@ CARD_PROBABILITIES = {
 }
 
 def get_card_tier_by_affinity(affinity: int) -> list[tuple[str, float]]:
-    """호감도에 따른 카드 티어 확률 반환"""
-    if affinity < 10:  # Rookie
-        return [('C', 1.0)]
-    elif affinity < 30:  # Iron
-        return [('C', 0.8), ('B', 0.2)]
-    elif affinity < 50:  # Bronze
-        return [('B', 0.3), ('C', 0.7)]
-    elif affinity < 100:  # Silver
-        return [('A', 0.2), ('B', 0.3), ('C', 0.5)]
-    else:  # Gold+
-        return [('S', 0.1), ('A', 0.2), ('B', 0.3), ('C', 0.4)]
+    """호감도에 따른 카드 티어 확률 반환 (새로운 시스템)"""
+    if affinity < 20:  # Rookie (0-19)
+        return [('C', 0.80), ('B', 0.15), ('A', 0.05), ('S', 0.0)]
+    elif affinity < 50:  # Iron (20-49)
+        return [('C', 0.60), ('B', 0.25), ('A', 0.12), ('S', 0.03)]
+    elif affinity < 100:  # Bronze (50-99)
+        return [('C', 0.45), ('B', 0.30), ('A', 0.20), ('S', 0.05)]
+    elif affinity < 150:  # Silver (100-149)
+        return [('C', 0.30), ('B', 0.35), ('A', 0.25), ('S', 0.10)]
+    else:  # Gold (150+)
+        return [('C', 0.20), ('B', 0.30), ('A', 0.30), ('S', 0.20)]
 
 def choose_card_tier(affinity: int) -> str:
     """호감도에 따라 카드 티어 선택"""
@@ -1366,7 +1366,7 @@ def get_available_cards(character_name: str, tier: str, user_cards: list) -> lis
 # 마일스톤 관련 설정 및 함수
 # ====================================================
 
-MILESTONE_THRESHOLDS = [10, 50, 100, 200]  # 마일스톤 임계값
+MILESTONE_THRESHOLDS = [3, 8, 15, 25, 40, 65]  # 새로운 마일스톤 임계값 (각 캐릭터별)
 
 def get_milestone_embed(user_id: int, character_name: str, db) -> discord.Embed:
     """마일스톤 카드 임베드 생성"""
