@@ -1036,7 +1036,7 @@ class DatabaseManager:
                 total_count = cursor.fetchone()[0]
                 print(f"[DEBUG] get_total_daily_messages - total messages for user: {total_count}")
                 
-                # 오늘 날짜의 메시지 수 확인 (타임존 변환 없이)
+                # 오늘 날짜의 메시지 수 확인 (단순 날짜 비교)
                 cursor.execute(
                     "SELECT COUNT(*) FROM conversations WHERE user_id = %s AND DATE(timestamp) = %s AND message_role = 'user'",
                     (user_id, today_cst)
@@ -1044,15 +1044,24 @@ class DatabaseManager:
                 count_simple = cursor.fetchone()[0]
                 print(f"[DEBUG] get_total_daily_messages - count (simple date): {count_simple}")
                 
-                # 기존 방식 (타임존 변환)
-                cursor.execute(
-                    "SELECT COUNT(*) FROM conversations WHERE user_id = %s AND DATE(timestamp AT TIME ZONE 'Asia/Shanghai') = %s AND message_role = 'user'",
-                    (user_id, today_cst)
-                )
-                count = cursor.fetchone()[0]
-                print(f"[DEBUG] get_total_daily_messages - count (with timezone): {count}")
+                # CST 시간대 변환을 사용한 정확한 계산
+                try:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM conversations WHERE user_id = %s AND DATE(timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai') = %s AND message_role = 'user'",
+                        (user_id, today_cst)
+                    )
+                    count = cursor.fetchone()[0]
+                    print(f"[DEBUG] get_total_daily_messages - count (with timezone): {count}")
+                    
+                    # 시간대 변환이 성공하고 결과가 있으면 사용
+                    if count > 0:
+                        return count
+                except Exception as timezone_error:
+                    print(f"[DEBUG] get_total_daily_messages - timezone conversion failed: {timezone_error}")
                 
-                return count
+                # 시간대 변환이 실패하거나 결과가 없으면 단순 날짜 비교 사용
+                print(f"[DEBUG] get_total_daily_messages - using simple date count as fallback")
+                return count_simple
         except Exception as e:
             print(f"Error getting total daily messages: {e}")
             return 0
