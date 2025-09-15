@@ -1419,15 +1419,32 @@ class BotSelector(commands.Bot):
                 }
 
                 # Get card collection info
-                all_user_cards = get_user_cards(user_id)
-                user_cards = [card for card in all_user_cards if card['character_name'] == character_name] if character_name else all_user_cards
+                user_cards = self.db.get_user_cards(user_id, character_name)
                 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                total_cards = {'C': 10, 'B': 7, 'A': 5, 'S': 4}
+                # 캐릭터별 실제 카드 총 개수 (config.py에서 가져오기)
+                character_cards = CHARACTER_CARD_INFO.get(character_name, {})
+                total_cards = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
                 
+                # 캐릭터의 실제 카드 개수 계산
+                for card_id, card_info in character_cards.items():
+                    tier = card_info.get('tier', 'C')
+                    if tier in total_cards:
+                        total_cards[tier] += 1
+                
+                # 사용자가 보유한 카드 개수 계산
                 for card in user_cards:
-                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
+                    if isinstance(card, tuple):
+                        # 튜플 형태인 경우 (card_id, acquired_at)
+                        card_id = card[0]
+                    elif isinstance(card, dict):
+                        # 딕셔너리 형태인 경우
+                        card_id = card.get('card_id')
+                    else:
+                        continue
+                        
+                    card_info = get_card_info_by_id(character_name, card_id)
                     if card_info and 'tier' in card_info:
                         tier = card_info['tier']
                         if tier in tier_counts:
@@ -1520,9 +1537,18 @@ class BotSelector(commands.Bot):
                 if user_cards:
                     card_info_dict = {}
                     for card in user_cards:
-                        card_info = get_card_info_by_id(card['character_name'], card['card_id'])
+                        if isinstance(card, tuple):
+                            # 튜플 형태인 경우 (card_id, acquired_at)
+                            card_id = card[0]
+                        elif isinstance(card, dict):
+                            # 딕셔너리 형태인 경우
+                            card_id = card.get('card_id')
+                        else:
+                            continue
+                            
+                        card_info = get_card_info_by_id(character_name, card_id)
                         if card_info:
-                            card_info_dict[card['card_id']] = card_info
+                            card_info_dict[card_id] = card_info
 
                     def get_tier_order(card_id):
                         tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
@@ -1655,7 +1681,7 @@ class BotSelector(commands.Bot):
                         break
 
                 # 전체 카드 목록 조회 (중복 제거된 버전)
-                all_user_cards = get_user_cards(user_id)
+                all_user_cards = self.db.get_user_cards(user_id)
                 
                 if not all_user_cards:
                     await interaction.response.send_message("You don't have any cards yet.", ephemeral=True)
@@ -1673,10 +1699,43 @@ class BotSelector(commands.Bot):
 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                total_cards = {'C': 10, 'B': 7, 'A': 5, 'S': 4}
+                total_cards = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
                 
+                # 캐릭터별 실제 카드 개수 계산
+                if character_name:
+                    character_cards = CHARACTER_CARD_INFO.get(character_name, {})
+                    for card_id, card_info in character_cards.items():
+                        tier = card_info.get('tier', 'C')
+                        if tier in total_cards:
+                            total_cards[tier] += 1
+                else:
+                    # 전체 캐릭터의 카드 개수 계산
+                    for char_name, character_cards in CHARACTER_CARD_INFO.items():
+                        for card_id, card_info in character_cards.items():
+                            tier = card_info.get('tier', 'C')
+                            if tier in total_cards:
+                                total_cards[tier] += 1
+                
+                # 사용자가 보유한 카드 개수 계산
                 for card in user_cards:
-                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
+                    if isinstance(card, tuple):
+                        if len(card) == 2:
+                            # (card_id, acquired_at) 형태
+                            card_id = card[0]
+                            card_character_name = character_name
+                        elif len(card) == 3:
+                            # (character_name, card_id, acquired_at) 형태
+                            card_character_name = card[0]
+                            card_id = card[1]
+                        else:
+                            continue
+                    elif isinstance(card, dict):
+                        card_id = card.get('card_id')
+                        card_character_name = card.get('character_name', character_name)
+                    else:
+                        continue
+                        
+                    card_info = get_card_info_by_id(card_character_name, card_id)
                     if card_info and 'tier' in card_info:
                         tier = card_info['tier']
                         if tier in tier_counts:
@@ -1725,9 +1784,26 @@ class BotSelector(commands.Bot):
                 # 카드 슬라이더 뷰
                 card_info_dict = {}
                 for card in user_cards:
-                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
+                    if isinstance(card, tuple):
+                        if len(card) == 2:
+                            # (card_id, acquired_at) 형태
+                            card_id = card[0]
+                            card_character_name = character_name
+                        elif len(card) == 3:
+                            # (character_name, card_id, acquired_at) 형태
+                            card_character_name = card[0]
+                            card_id = card[1]
+                        else:
+                            continue
+                    elif isinstance(card, dict):
+                        card_id = card.get('card_id')
+                        card_character_name = card.get('character_name', character_name)
+                    else:
+                        continue
+                        
+                    card_info = get_card_info_by_id(card_character_name, card_id)
                     if card_info:
-                        card_info_dict[card['card_id']] = card_info
+                        card_info_dict[card_id] = card_info
 
                 def get_tier_order(card_id):
                     tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
@@ -2807,15 +2883,32 @@ class BotSelector(commands.Bot):
                     }
 
                     # Get card collection info
-                    all_user_cards = get_user_cards(user_id)
-                    user_cards = [card for card in all_user_cards if card['character_name'] == character_name] if character_name else all_user_cards
+                    user_cards = self.db.get_user_cards(user_id, character_name)
                     
-                    # 티어별 카드 분류 (새로운 시스템: C 30장, B 20장, A 10장, S 5장)
+                    # 티어별 카드 분류
                     tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                    total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
+                    # 캐릭터별 실제 카드 총 개수 (config.py에서 가져오기)
+                    character_cards = CHARACTER_CARD_INFO.get(character_name, {})
+                    total_cards = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
                     
+                    # 캐릭터의 실제 카드 개수 계산
+                    for card_id, card_info in character_cards.items():
+                        tier = card_info.get('tier', 'C')
+                        if tier in total_cards:
+                            total_cards[tier] += 1
+                    
+                    # 사용자가 보유한 카드 개수 계산
                     for card in user_cards:
-                        card_info = get_card_info_by_id(card['character_name'], card['card_id'])
+                        if isinstance(card, tuple):
+                            # 튜플 형태인 경우 (card_id, acquired_at)
+                            card_id = card[0]
+                        elif isinstance(card, dict):
+                            # 딕셔너리 형태인 경우
+                            card_id = card.get('card_id')
+                        else:
+                            continue
+                            
+                        card_info = get_card_info_by_id(character_name, card_id)
                         if card_info and 'tier' in card_info:
                             tier = card_info['tier']
                             if tier in tier_counts:
@@ -5651,9 +5744,20 @@ class CardSliderView(discord.ui.View):
                 inline=False
             )
             
-            # Add card image if available
+            # Add card image if available (신규 이미지 시스템 적용)
             if card_info.get('image_url'):
-                embed.set_image(url=card_info['image_url'])
+                # 기존 URL이 이미 완전한 URL인지 확인
+                image_url = card_info['image_url']
+                if not image_url.startswith('http'):
+                    # 상대 경로인 경우 CLOUDFLARE_IMAGE_BASE_URL과 결합
+                    image_url = f"{CLOUDFLARE_IMAGE_BASE_URL}/{image_url}"
+                embed.set_image(url=image_url)
+            elif card_info.get('image_url_small'):
+                # image_url_small이 있는 경우 사용
+                image_url = card_info['image_url_small']
+                if not image_url.startswith('http'):
+                    image_url = f"{CLOUDFLARE_IMAGE_BASE_URL}/{image_url}"
+                embed.set_image(url=image_url)
         
         embed.set_footer(text=f"{self.character_name} Card Collection • Use ⬅️➡️ to navigate")
         return embed
