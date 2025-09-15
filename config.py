@@ -1306,6 +1306,7 @@ def get_card_info_by_id(character_name: str, card_id: str) -> dict:
     card_id = card_id.lower()
     for cid, info in CHARACTER_CARD_INFO[character_name].items():
         if cid.lower() == card_id:
+
             # 새로운 이미지 URL 형식으로 변환
             updated_info = info.copy()
             if 'image_url' not in updated_info or not updated_info['image_url']:

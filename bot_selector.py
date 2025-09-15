@@ -2743,200 +2743,202 @@ class BotSelector(commands.Bot):
                 except Exception as e:
                     await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
-        @self.tree.command(
-            name="info",
-            description="Check your affinity and card collection information"
-        )
-        async def info_command(interaction: discord.Interaction):
-            try:
-                print("\n[Info command started]")
-                user_id = interaction.user.id
-                character_name = None
-                
-                # DM에서 사용하는 경우
-                if isinstance(interaction.channel, discord.DMChannel):
-                    if user_id not in self.dm_sessions or 'character_name' not in self.dm_sessions[user_id]:
-                        await interaction.response.send_message("❌ 먼저 `/bot` 명령어로 캐릭터를 선택해주세요.", ephemeral=True)
-                        return
-                    character_name = self.dm_sessions[user_id]['character_name']
-                else:
-                    # 서버 채널에서 사용하는 경우
-                    if not isinstance(interaction.channel, discord.TextChannel):
-                        await interaction.response.send_message("This command can only be used in server channels or DM.", ephemeral=True)
-                        return
+        # info 명령어가 이미 등록되어 있는지 확인
+        if not any(cmd.name == "info" for cmd in self.tree.get_commands()):
+            @self.tree.command(
+                name="info",
+                description="Check your affinity and card collection information"
+            )
+            async def info_command(interaction: discord.Interaction):
+                try:
+                    print("\n[Info command started]")
+                    user_id = interaction.user.id
+                    character_name = None
                     
-                    # Find the character bot for the current channel
-                    current_bot = None
-                    for char_name, bot in self.character_bots.items():
-                        if interaction.channel.id in bot.active_channels:
-                            current_bot = bot
-                            break
+                    # DM에서 사용하는 경우
+                    if isinstance(interaction.channel, discord.DMChannel):
+                        if user_id not in self.dm_sessions or 'character_name' not in self.dm_sessions[user_id]:
+                            await interaction.response.send_message("❌ 먼저 `/bot` 명령어로 캐릭터를 선택해주세요.", ephemeral=True)
+                            return
+                        character_name = self.dm_sessions[user_id]['character_name']
+                    else:
+                        # 서버 채널에서 사용하는 경우
+                        if not isinstance(interaction.channel, discord.TextChannel):
+                            await interaction.response.send_message("This command can only be used in server channels or DM.", ephemeral=True)
+                            return
+                        
+                        # Find the character bot for the current channel
+                        current_bot = None
+                        for char_name, bot in self.character_bots.items():
+                            if interaction.channel.id in bot.active_channels:
+                                current_bot = bot
+                                break
 
-                    if not current_bot:
-                        await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
-                        return
+                        if not current_bot:
+                            await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
+                            return
+                        
+                        character_name = current_bot.character_name
+
+                    print(f"Character name: {character_name}")
+
+                    # Get affinity info
+                    affinity_info = self.db.get_affinity(interaction.user.id, character_name)
+                    print(f"Affinity info: {affinity_info}")
+
+                    if not affinity_info:
+                        current_affinity = 0
+                        affinity_grade = get_affinity_grade(0)
+                        daily_message_count = 0
+                        last_message_time = "N/A"
+                    else:
+                        current_affinity = affinity_info['emotion_score']
+                        affinity_grade = get_affinity_grade(current_affinity)
+                        daily_message_count = affinity_info['daily_message_count']
+                        last_message_time = affinity_info.get('last_message_time', "N/A")
+
+                    # Grade emoji mapping
+                    grade_emoji = {
+                        "Rookie": "🌱",
+                        "Iron": "⚔️",
+                        "Bronze": "🥉",
+                        "Silver": "🥈",
+                        "Gold": "🏆"
+                    }
+
+                    # Get card collection info
+                    all_user_cards = get_user_cards(user_id)
+                    user_cards = [card for card in all_user_cards if card['character_name'] == character_name] if character_name else all_user_cards
                     
-                    character_name = current_bot.character_name
-
-                print(f"Character name: {character_name}")
-
-                # Get affinity info
-                affinity_info = self.db.get_affinity(interaction.user.id, character_name)
-                print(f"Affinity info: {affinity_info}")
-
-                if not affinity_info:
-                    current_affinity = 0
-                    affinity_grade = get_affinity_grade(0)
-                    daily_message_count = 0
-                    last_message_time = "N/A"
-                else:
-                    current_affinity = affinity_info['emotion_score']
-                    affinity_grade = get_affinity_grade(current_affinity)
-                    daily_message_count = affinity_info['daily_message_count']
-                    last_message_time = affinity_info.get('last_message_time', "N/A")
-
-                # Grade emoji mapping
-                grade_emoji = {
-                    "Rookie": "🌱",
-                    "Iron": "⚔️",
-                    "Bronze": "🥉",
-                    "Silver": "🥈",
-                    "Gold": "🏆"
-                }
-
-                # Get card collection info
-                all_user_cards = get_user_cards(user_id)
-                user_cards = [card for card in all_user_cards if card['character_name'] == character_name] if character_name else all_user_cards
-                
-                # 티어별 카드 분류 (새로운 시스템: C 30장, B 20장, A 10장, S 5장)
-                tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
-                
-                for card in user_cards:
-                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
-                    if card_info and 'tier' in card_info:
-                        tier = card_info['tier']
-                        if tier in tier_counts:
-                            tier_counts[tier] += 1
-
-                # Main info embed
-                char_info = CHARACTER_INFO.get(character_name, {})
-                char_color = char_info.get('color', discord.Color.purple())
-
-                embed = discord.Embed(
-                    title=f"{char_info.get('emoji', '💝')} {interaction.user.display_name}'s Information",
-                    description=f"Complete information for {char_info.get('name', character_name)}",
-                    color=char_color
-                )
-
-                # Affinity Section
-                embed.add_field(
-                    name="💝 Affinity Information",
-                    value=f"**Score:** {current_affinity} points\n**Grade:** {grade_emoji.get(affinity_grade, '❓')} {affinity_grade}\n**Today's Conversations:** {daily_message_count} times",
-                    inline=False
-                )
-
-                # Card Collection Section
-                total_collected = sum(tier_counts.values())
-                total_possible = sum(total_cards.values())
-                total_percent = (total_collected / total_possible) * 100 if total_possible > 0 else 0
-                
-                tier_emojis = {'C': '🥉', 'B': '🥈', 'A': '🥇', 'S': '🏆'}
-                bar_emojis = {'C': '🟩', 'B': '🟦', 'A': '🟨', 'S': '🟪'}
-                
-                def get_progress_bar(count, total, color_emoji, empty_emoji='⬜'):
-                    filled = count
-                    empty = total - count
-                    return color_emoji * filled + empty_emoji * empty
-                
-                card_progress = ""
-                for tier in ['C', 'B', 'A', 'S']:
-                    count = tier_counts[tier]
-                    total = total_cards[tier]
-                    emoji = tier_emojis.get(tier, '')
-                    color = bar_emojis.get(tier, '⬜')
-                    progress_bar = get_progress_bar(count, total, color)
-                    card_progress += f"{tier} Tier {emoji}: {progress_bar} ({count}/{total})\n"
-                
-                card_progress += f"\n**Total:** {total_collected}/{total_possible} ({total_percent:.1f}%)"
-                
-                embed.add_field(
-                    name="🎴 Card Collection",
-                    value=card_progress,
-                    inline=False
-                )
-
-                # Last conversation time
-                if last_message_time and last_message_time != "N/A":
-                    try:
-                        if isinstance(last_message_time, datetime):
-                            formatted_time = last_message_time.strftime('%Y-%m-%d %H:%M')
-                        else:
-                            last_time_str = last_message_time.split('.')[0]
-                            last_time = datetime.strptime(last_time_str, '%Y-%m-%d %H:%M:%S')
-                            formatted_time = last_time.strftime('%Y-%m-%d %H:%M')
-                        embed.add_field(
-                            name="💬 Last Conversation",
-                            value=f"```{formatted_time}```",
-                            inline=True
-                        )
-                    except Exception as e:
-                        print(f"Date parsing error: {e}")
-                        embed.add_field(
-                            name="💬 Last Conversation",
-                            value=f"```{last_message_time}```",
-                            inline=True
-                        )
-                else:
-                    embed.add_field(
-                        name="💬 Last Conversation",
-                        value=f"```N/A```",
-                        inline=True
-                    )
-
-                # Get the correct image URL from config.py
-                char_image_url = CHARACTER_IMAGES.get(character_name)
-                if char_image_url:
-                    embed.set_thumbnail(url=char_image_url)
-
-                # Send the main info embed
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-
-                # If user has cards, show card slider
-                if user_cards:
-                    card_info_dict = {}
+                    # 티어별 카드 분류 (새로운 시스템: C 30장, B 20장, A 10장, S 5장)
+                    tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
+                    total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
+                    
                     for card in user_cards:
                         card_info = get_card_info_by_id(card['character_name'], card['card_id'])
-                        if card_info:
-                            card_info_dict[card['card_id']] = card_info
+                        if card_info and 'tier' in card_info:
+                            tier = card_info['tier']
+                            if tier in tier_counts:
+                                tier_counts[tier] += 1
 
-                    def get_tier_order(card_id):
-                        tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
-                        tier_order = {'C': 0, 'B': 1, 'A': 2, 'S': 3}
-                        return tier_order.get(tier, 4)
+                    # Main info embed
+                    char_info = CHARACTER_INFO.get(character_name, {})
+                    char_color = char_info.get('color', discord.Color.purple())
 
-                    sorted_cards = sorted(list(card_info_dict.keys()), key=get_tier_order)
+                    embed = discord.Embed(
+                        title=f"{char_info.get('emoji', '💝')} {interaction.user.display_name}'s Information",
+                        description=f"Complete information for {char_info.get('name', character_name)}",
+                        color=char_color
+                    )
 
-                    if sorted_cards:
-                        slider_view = CardSliderView(
-                            user_id=user_id,
-                            cards=sorted_cards,
-                            character_name=character_name or "All",
-                            card_info_dict=card_info_dict,
-                            db=self.db
+                    # Affinity Section
+                    embed.add_field(
+                        name="💝 Affinity Information",
+                        value=f"**Score:** {current_affinity} points\n**Grade:** {grade_emoji.get(affinity_grade, '❓')} {affinity_grade}\n**Today's Conversations:** {daily_message_count} times",
+                        inline=False
+                    )
+
+                    # Card Collection Section
+                    total_collected = sum(tier_counts.values())
+                    total_possible = sum(total_cards.values())
+                    total_percent = (total_collected / total_possible) * 100 if total_possible > 0 else 0
+                    
+                    tier_emojis = {'C': '🥉', 'B': '🥈', 'A': '🥇', 'S': '🏆'}
+                    bar_emojis = {'C': '🟩', 'B': '🟦', 'A': '🟨', 'S': '🟪'}
+                    
+                    def get_progress_bar(count, total, color_emoji, empty_emoji='⬜'):
+                        filled = count
+                        empty = total - count
+                        return color_emoji * filled + empty_emoji * empty
+                    
+                    card_progress = ""
+                    for tier in ['C', 'B', 'A', 'S']:
+                        count = tier_counts[tier]
+                        total = total_cards[tier]
+                        emoji = tier_emojis.get(tier, '')
+                        color = bar_emojis.get(tier, '⬜')
+                        progress_bar = get_progress_bar(count, total, color)
+                        card_progress += f"{tier} Tier {emoji}: {progress_bar} ({count}/{total})\n"
+                    
+                    card_progress += f"\n**Total:** {total_collected}/{total_possible} ({total_percent:.1f}%)"
+                    
+                    embed.add_field(
+                        name="🎴 Card Collection",
+                        value=card_progress,
+                        inline=False
+                    )
+
+                    # Last conversation time
+                    if last_message_time and last_message_time != "N/A":
+                        try:
+                            if isinstance(last_message_time, datetime):
+                                formatted_time = last_message_time.strftime('%Y-%m-%d %H:%M')
+                            else:
+                                last_time_str = last_message_time.split('.')[0]
+                                last_time = datetime.strptime(last_time_str, '%Y-%m-%d %H:%M:%S')
+                                formatted_time = last_time.strftime('%Y-%m-%d %H:%M')
+                            embed.add_field(
+                                name="💬 Last Conversation",
+                                value=f"```{formatted_time}```",
+                                inline=True
+                            )
+                        except Exception as e:
+                            print(f"Date parsing error: {e}")
+                            embed.add_field(
+                                name="💬 Last Conversation",
+                                value=f"```{last_message_time}```",
+                                inline=True
+                            )
+                    else:
+                        embed.add_field(
+                            name="💬 Last Conversation",
+                            value=f"```N/A```",
+                            inline=True
                         )
-                        await slider_view.initial_message(interaction)
 
-                print("[Info command complete]")
+                    # Get the correct image URL from config.py
+                    char_image_url = CHARACTER_IMAGES.get(character_name)
+                    if char_image_url:
+                        embed.set_thumbnail(url=char_image_url)
 
-            except Exception as e:
-                print(f"Error during info command: {e}")
-                import traceback
-                print(traceback.format_exc())
-                try:
-                    await interaction.response.send_message("An error occurred while loading your information.", ephemeral=True)
-                except:
-                    await interaction.followup.send("An error occurred while loading your information.", ephemeral=True)
+                    # Send the main info embed
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+                    # If user has cards, show card slider
+                    if user_cards:
+                        card_info_dict = {}
+                        for card in user_cards:
+                            card_info = get_card_info_by_id(card['character_name'], card['card_id'])
+                            if card_info:
+                                card_info_dict[card['card_id']] = card_info
+
+                        def get_tier_order(card_id):
+                            tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
+                            tier_order = {'C': 0, 'B': 1, 'A': 2, 'S': 3}
+                            return tier_order.get(tier, 4)
+
+                        sorted_cards = sorted(list(card_info_dict.keys()), key=get_tier_order)
+
+                        if sorted_cards:
+                            slider_view = CardSliderView(
+                                user_id=user_id,
+                                cards=sorted_cards,
+                                character_name=character_name or "All",
+                                card_info_dict=card_info_dict,
+                                db=self.db
+                            )
+                            await slider_view.initial_message(interaction)
+
+                    print("[Info command complete]")
+
+                except Exception as e:
+                    print(f"Error during info command: {e}")
+                    import traceback
+                    print(traceback.format_exc())
+                    try:
+                        await interaction.response.send_message("An error occurred while loading your information.", ephemeral=True)
+                    except:
+                        await interaction.followup.send("An error occurred while loading your information.", ephemeral=True)
 
         @self.tree.command(
             name="pop",
@@ -5784,3 +5786,7 @@ async def main():
     intents = discord.Intents.all()
     bot = BotSelector()
     await bot.start(TOKEN)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
