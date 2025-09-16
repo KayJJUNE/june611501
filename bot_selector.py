@@ -5730,38 +5730,39 @@ class CardSliderView(discord.ui.View):
         )
         
         if card_info:
+            # 기본 카드 정보만 표시
             embed.add_field(
                 name="Current Card",
                 value=f"**Tier:** {card_info.get('tier', 'Unknown')} {self.get_tier_emoji(card_info.get('tier', ''))}\n"
                       f"**Card ID:** {card_id}\n"
-                      f"**Card Number:** #{self.current_index + 1}\n"
-                      f"**Ability:** `{card_info.get('ability', '????')}`\n"
-                      f"**Description:** {card_info.get('description', 'No description available')}",
+                      f"**Card Number:** #{self.current_index + 1}",
                 inline=False
             )
             
-            # 이미지 URL 설정 (이전 방식으로 복원)
+            # 이미지 URL 설정 (Discord에서 바로 표시되도록)
             if card_info.get('image_url'):
                 image_url = card_info['image_url']
                 print(f"[DEBUG] Setting image URL: {image_url}")
                 
-                # Discord에서 이미지가 표시되도록 설정 (set_image만 사용)
+                # Discord 임베드에 이미지 바로 표시
                 embed.set_image(url=image_url)
                 print(f"[DEBUG] Image URL set successfully")
                 
+                # Cloudflare 이미지가 작동하지 않을 경우를 대비한 대안
+                # 다른 variant 시도
+                alt_url = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id}/thumbnail"
+                if alt_url != image_url:
+                    try:
+                        print(f"[DEBUG] Trying thumbnail variant: {alt_url}")
+                        embed.set_thumbnail(url=alt_url)
+                        print(f"[DEBUG] Thumbnail variant set successfully")
+                    except Exception as e:
+                        print(f"[DEBUG] Failed with thumbnail variant: {e}")
+                        # 원본 URL을 썸네일로도 설정
+                        embed.set_thumbnail(url=image_url)
+                        print(f"[DEBUG] Original URL set as thumbnail")
+                
             
-            # 카드 정보 표시 (이전 방식으로 복원)
-            tier = card_info.get('tier', 'Unknown')
-            tier_emoji = self.get_tier_emoji(tier)
-            
-            # 카드 정보 필드 추가
-            embed.add_field(
-                name="Card Information",
-                value=f"**Tier:** {tier} {tier_emoji}\n"
-                      f"**Card Name:** {card_info.get('name', 'Unknown Card')}\n"
-                      f"**Card Number:** `{card_id}`",
-                inline=True
-            )
         
         embed.set_footer(text=f"{self.character_name} Card Collection • Use ⬅️➡️ to navigate")
         return embed
