@@ -5740,110 +5740,26 @@ class CardSliderView(discord.ui.View):
                 inline=False
             )
             
-            # 이미지 URL 시도 (다양한 형식)
+            # 이미지 URL 설정 (이전 방식으로 복원)
             if card_info.get('image_url'):
                 image_url = card_info['image_url']
-                print(f"[DEBUG] Trying to set image: {image_url}")
+                print(f"[DEBUG] Setting image URL: {image_url}")
                 
-                # 1. 원본 URL 시도
-                try:
-                    embed.set_image(url=image_url)
-                    print(f"[DEBUG] Set image with original URL")
-                except Exception as e:
-                    print(f"[DEBUG] Failed to set image with original URL: {e}")
+                # Discord에서 이미지가 표시되도록 설정 (set_image만 사용)
+                embed.set_image(url=image_url)
+                print(f"[DEBUG] Image URL set successfully")
                 
-                # 2. 썸네일로도 시도
-                try:
-                    embed.set_thumbnail(url=image_url)
-                    print(f"[DEBUG] Set thumbnail with original URL")
-                except Exception as e:
-                    print(f"[DEBUG] Failed to set thumbnail with original URL: {e}")
-                
-                # 3. 다른 variant들도 시도
-                variant_urls = [
-                    card_info.get('image_url_small'),
-                    card_info.get('image_url_medium'), 
-                    card_info.get('image_url_large')
-                ]
-                
-                for variant_url in variant_urls:
-                    if variant_url and variant_url != image_url:
-                        try:
-                            print(f"[DEBUG] Trying variant URL: {variant_url}")
-                            embed.set_image(url=variant_url)
-                            print(f"[DEBUG] Set image with variant URL")
-                            break  # 성공하면 중단
-                        except Exception as e:
-                            print(f"[DEBUG] Failed with variant URL {variant_url}: {e}")
-                
-                # 3. 다양한 Cloudflare variant 시도
-                variants = ['public', 'thumbnail', 'small', 'medium', 'large', 'original']
-                alternative_urls = []
-                
-                # 각 variant에 대해 다양한 case 시도
-                for variant in variants:
-                    alternative_urls.extend([
-                        f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id}/{variant}",
-                        f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id.lower()}/{variant}",
-                        f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id.upper()}/{variant}"
-                    ])
-                
-                # 임시로 다른 이미지 URL 시도
-                alternative_urls.extend([
-                    "https://via.placeholder.com/300x400/FF6B6B/FFFFFF?text=Card+Image",
-                    "https://picsum.photos/300/400"
-                ])
-                
-                for alt_url in alternative_urls:
-                    if alt_url != image_url:
-                        try:
-                            print(f"[DEBUG] Trying alternative URL: {alt_url}")
-                            # 임베드에 추가 필드로 URL 표시
-                            embed.add_field(
-                                name="Image URL (Test)",
-                                value=f"[Click to test]({alt_url})",
-                                inline=False
-                            )
-                        except Exception as e:
-                            print(f"[DEBUG] Failed with alternative URL {alt_url}: {e}")
             
-            # 카드 세부 정보 추가 (이미지 대신 텍스트 기반)
+            # 카드 정보 표시 (이전 방식으로 복원)
             tier = card_info.get('tier', 'Unknown')
             tier_emoji = self.get_tier_emoji(tier)
             
-            # 티어별 색상 설정
-            tier_colors = {
-                'S': '🟪',  # 보라색
-                'A': '🟨',  # 노란색  
-                'B': '🟦',  # 파란색
-                'C': '🟩'   # 초록색
-            }
-            
-            # 카드 프레임 생성 (텍스트 기반)
-            card_frame = f"""
-┌─────────────────┐
-│ {tier_colors.get(tier, '⬜')} {tier} TIER CARD {tier_emoji} │
-├─────────────────┤
-│ {card_info.get('name', 'Unknown Card'):<15} │
-│ {card_id:<15} │
-│                 │
-│ Ability:         │
-│ {card_info.get('ability', 'Unknown'):<15} │
-└─────────────────┘
-            """.strip()
-            
+            # 카드 정보 필드 추가
             embed.add_field(
-                name="Card Display",
-                value=f"```{card_frame}```",
-                inline=False
-            )
-            
-            # 추가 정보
-            embed.add_field(
-                name="Card Details",
+                name="Card Information",
                 value=f"**Tier:** {tier} {tier_emoji}\n"
-                      f"**Card ID:** `{card_id}`\n"
-                      f"**Description:** {card_info.get('description', 'No description')}",
+                      f"**Card Name:** {card_info.get('name', 'Unknown Card')}\n"
+                      f"**Card Number:** `{card_id}`",
                 inline=True
             )
         
