@@ -5755,32 +5755,8 @@ class CardSliderView(discord.ui.View):
                     inline=False
                 )
                 
-                # Cloudflare가 작동하지 않을 경우를 대비한 대안 이미지
-                # 실제 카드 이미지와 유사한 placeholder 생성
-                card_name = card_info.get('name', 'Unknown Card')
-                tier = card_info.get('tier', 'Unknown')
-                card_number = card_id.replace('kagari', '').replace('eros', '').replace('elysia', '')
-                
-                # 티어별 색상 설정
-                tier_colors = {
-                    'S': 'FFD700',  # 금색
-                    'A': 'C0C0C0',  # 은색
-                    'B': 'CD7F32',  # 청동색
-                    'C': '90EE90'   # 연두색
-                }
-                
-                # placeholder 이미지 URL 생성
-                placeholder_url = f"https://via.placeholder.com/300x400/{tier_colors.get(tier, 'FF6B6B')}/FFFFFF?text={tier}+{card_number}"
-                
-                try:
-                    print(f"[DEBUG] Setting placeholder thumbnail: {placeholder_url}")
-                    embed.set_thumbnail(url=placeholder_url)
-                    print(f"[DEBUG] Placeholder thumbnail set successfully")
-                except Exception as e:
-                    print(f"[DEBUG] Failed to set placeholder thumbnail: {e}")
-                    # 원본 URL을 썸네일로도 설정
-                    embed.set_thumbnail(url=image_url)
-                    print(f"[DEBUG] Original URL set as thumbnail")
+                # Cloudflare 이미지가 이제 올바른 Image ID로 설정되었으므로 정상 작동할 것입니다
+                print(f"[DEBUG] Cloudflare image should now work with correct Image ID")
                 
             
         
