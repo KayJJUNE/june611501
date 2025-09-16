@@ -5748,19 +5748,39 @@ class CardSliderView(discord.ui.View):
                 embed.set_image(url=image_url)
                 print(f"[DEBUG] Image URL set successfully")
                 
-                # Cloudflare 이미지가 작동하지 않을 경우를 대비한 대안
-                # 다른 variant 시도
-                alt_url = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id}/thumbnail"
-                if alt_url != image_url:
-                    try:
-                        print(f"[DEBUG] Trying thumbnail variant: {alt_url}")
-                        embed.set_thumbnail(url=alt_url)
-                        print(f"[DEBUG] Thumbnail variant set successfully")
-                    except Exception as e:
-                        print(f"[DEBUG] Failed with thumbnail variant: {e}")
-                        # 원본 URL을 썸네일로도 설정
-                        embed.set_thumbnail(url=image_url)
-                        print(f"[DEBUG] Original URL set as thumbnail")
+                # 이미지 URL을 클릭 가능한 링크로도 표시 (테스트용)
+                embed.add_field(
+                    name="Image URL (Test)",
+                    value=f"[Click to test image]({image_url})",
+                    inline=False
+                )
+                
+                # Cloudflare가 작동하지 않을 경우를 대비한 대안 이미지
+                # 실제 카드 이미지와 유사한 placeholder 생성
+                card_name = card_info.get('name', 'Unknown Card')
+                tier = card_info.get('tier', 'Unknown')
+                card_number = card_id.replace('kagari', '').replace('eros', '').replace('elysia', '')
+                
+                # 티어별 색상 설정
+                tier_colors = {
+                    'S': 'FFD700',  # 금색
+                    'A': 'C0C0C0',  # 은색
+                    'B': 'CD7F32',  # 청동색
+                    'C': '90EE90'   # 연두색
+                }
+                
+                # placeholder 이미지 URL 생성
+                placeholder_url = f"https://via.placeholder.com/300x400/{tier_colors.get(tier, 'FF6B6B')}/FFFFFF?text={tier}+{card_number}"
+                
+                try:
+                    print(f"[DEBUG] Setting placeholder thumbnail: {placeholder_url}")
+                    embed.set_thumbnail(url=placeholder_url)
+                    print(f"[DEBUG] Placeholder thumbnail set successfully")
+                except Exception as e:
+                    print(f"[DEBUG] Failed to set placeholder thumbnail: {e}")
+                    # 원본 URL을 썸네일로도 설정
+                    embed.set_thumbnail(url=image_url)
+                    print(f"[DEBUG] Original URL set as thumbnail")
                 
             
         
