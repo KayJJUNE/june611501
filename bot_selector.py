@@ -724,6 +724,11 @@ class BotSelector(commands.Bot):
         self.admin_channels.add(self.default_admin_channel)
         self.load_admin_channels()  # 데이터베이스에서 관리자 채널 로드
         
+        # 관리자 명령어 그룹 생성
+        self.admin_group = app_commands.Group(name="admin", description="Administrative commands")
+        self.admin_group.default_permissions = discord.Permissions(administrator=True)
+        self.tree.add_command(self.admin_group)
+        
         # 안전장치 초기화
         self.emergency_mode = False
         self.start_time = datetime.now()
@@ -1123,9 +1128,9 @@ class BotSelector(commands.Bot):
                 if not interaction.response.is_done():
                     await interaction.response.send_message("Failed to delete the channel. Please try again.", ephemeral=True)
 
-        @self.tree.command(
-            name="admin_channel",
-            description="[Admin] Set admin-only channel for sensitive commands"
+        @self.admin_group.command(
+            name="channel",
+            description="Set admin-only channel for sensitive commands"
         )
         @app_commands.default_permissions(administrator=True)
         async def admin_channel_command(interaction: discord.Interaction, action: str = "add"):
@@ -1157,7 +1162,7 @@ class BotSelector(commands.Bot):
             else:
                 await interaction.response.send_message("❌ Invalid action. Use 'add', 'remove', or 'list'.", ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="settings",
             description="현재 설정 확인"
         )
@@ -1214,7 +1219,7 @@ class BotSelector(commands.Bot):
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="reset_affinity",
             description="친밀도를 초기화합니다"
         )
@@ -1258,8 +1263,8 @@ class BotSelector(commands.Bot):
                 print(f"Error in reset_affinity command: {e}")
                 await interaction.response.send_message("An error occurred while resetting affinity.", ephemeral=True)
 
-        @self.tree.command(
-            name="add_admin_role",
+        @self.admin_group.command(
+            name="add_role",
             description="Add an admin role"
         )
         @app_commands.default_permissions(administrator=True)
@@ -1651,8 +1656,8 @@ class BotSelector(commands.Bot):
                 except:
                     await interaction.followup.send("An error occurred while loading your information.", ephemeral=True)
 
-        @self.tree.command(
-            name="remove_admin_role",
+        @self.admin_group.command(
+            name="remove_role",
             description="Remove the administrator role"
         )
         @app_commands.default_permissions(administrator=True)
@@ -1667,9 +1672,9 @@ class BotSelector(commands.Bot):
             else:
                 await interaction.response.send_message(f"{role.name} role is not an admin role.", ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="set_daily_limit",
-            description="Setting a daily message limit (admin only)"
+            description="Setting a daily message limit"
         )
         @app_commands.default_permissions(administrator=True)
         async def set_daily_limit(interaction: discord.Interaction, limit: int):
@@ -2025,9 +2030,9 @@ class BotSelector(commands.Bot):
             
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="reset_story",
-            description="Admin: Reset story progress for a user."
+            description="Reset story progress for a user."
         )
         @app_commands.default_permissions(administrator=True)
         @app_commands.describe(
@@ -2054,9 +2059,9 @@ class BotSelector(commands.Bot):
             # 이 함수는 더 이상 사용되지 않지만, 다른 곳에서 호출될 경우를 대비해 유지합니다.
             await interaction.response.send_message(f"Selected: {selected_char}. This part of story is under construction.", ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="message_add",
-            description="Admin: Manually add a user's message count."
+            description="Manually add a user's message count."
         )
         @app_commands.default_permissions(administrator=True)
         async def message_add_command(interaction: discord.Interaction, target: discord.Member, count: int, character: str):
@@ -3049,9 +3054,9 @@ class BotSelector(commands.Bot):
                     except:
                         await interaction.followup.send("An error occurred while loading your information.", ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="pop",
-            description="[Admin] Manually distribute items to users (Messages, Cards, Gifts, Affinity)"
+            description="Manually distribute items to users (Messages, Cards, Gifts, Affinity)"
         )
         @app_commands.default_permissions(administrator=True)
         async def pop_command(interaction: discord.Interaction):
@@ -3584,9 +3589,9 @@ class BotSelector(commands.Bot):
                 print(f"Error in log_command: {e}")
                 await interaction.response.send_message("Error occurred while checking your log.", ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="reset_quest",
-            description="[Admin] Reset all quest claim records for a user."
+            description="Reset all quest claim records for a user."
         )
         @app_commands.default_permissions(administrator=True)
         async def reset_quest_command(interaction: discord.Interaction, target: discord.Member):
@@ -3602,9 +3607,9 @@ class BotSelector(commands.Bot):
             except Exception as e:
                 await interaction.response.send_message(f"에러 발생: {e}", ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="cleanup_cards",
-            description="[Admin] Clean up duplicate cards for a user or all users."
+            description="Clean up duplicate cards for a user or all users."
         )
         @app_commands.default_permissions(administrator=True)
         async def cleanup_cards_command(interaction: discord.Interaction, target: discord.Member = None):
@@ -3626,9 +3631,9 @@ class BotSelector(commands.Bot):
                 print(f"Error in cleanup_cards_command: {e}")
                 await interaction.response.send_message("❌ An error occurred while cleaning up duplicate cards.", ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="status",
-            description="[Admin] Check bot status and health"
+            description="Check bot status and health"
         )
         @app_commands.default_permissions(administrator=True)
         async def status_command(interaction: discord.Interaction):
@@ -3761,9 +3766,9 @@ class BotSelector(commands.Bot):
                 print(f"Error in status_command: {e}")
                 await interaction.response.send_message("Error occurred while checking status.", ephemeral=True)
 
-        @self.tree.command(
+        @self.admin_group.command(
             name="emergency_stop",
-            description="[Admin] Emergency stop for critical issues"
+            description="Emergency stop for critical issues"
         )
         @app_commands.default_permissions(administrator=True)
         async def emergency_stop_command(interaction: discord.Interaction):
