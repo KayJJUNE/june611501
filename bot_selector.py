@@ -5720,6 +5720,14 @@ class CardSliderView(discord.ui.View):
         self.card_info_dict = card_info_dict
         self.db = db
         self.current_index = 0
+        
+        # 실제 카드 총 개수 계산
+        self.total_cards = 0
+        if character_name in CHARACTER_CARD_INFO:
+            character_cards = CHARACTER_CARD_INFO[character_name]
+            for card_id, card_info in character_cards.items():
+                if isinstance(card_info, dict) and 'tier' in card_info:
+                    self.total_cards += 1
 
     async def initial_message(self, interaction: discord.Interaction):
         """Send the initial card slider message"""
@@ -5741,7 +5749,7 @@ class CardSliderView(discord.ui.View):
         
         embed = discord.Embed(
             title=f"{self.character_name} Card Collection",
-            description=f"**{len(self.cards)} / 65 Cards Collected**",
+            description=f"**{len(self.cards)} / {self.total_cards} Cards Collected**",
             color=discord.Color.purple()
         )
         
@@ -5757,19 +5765,26 @@ class CardSliderView(discord.ui.View):
             )
             
             # Add card image if available (신규 이미지 시스템 적용)
+            print(f"[DEBUG] Card info for {card_id}: {card_info}")
             if card_info.get('image_url'):
                 # 기존 URL이 이미 완전한 URL인지 확인
                 image_url = card_info['image_url']
+                print(f"[DEBUG] Found image_url: {image_url}")
                 if not image_url.startswith('http'):
                     # 상대 경로인 경우 CLOUDFLARE_IMAGE_BASE_URL과 결합
                     image_url = f"{CLOUDFLARE_IMAGE_BASE_URL}/{image_url}"
+                print(f"[DEBUG] Final image_url: {image_url}")
                 embed.set_image(url=image_url)
             elif card_info.get('image_url_small'):
                 # image_url_small이 있는 경우 사용
                 image_url = card_info['image_url_small']
+                print(f"[DEBUG] Found image_url_small: {image_url}")
                 if not image_url.startswith('http'):
                     image_url = f"{CLOUDFLARE_IMAGE_BASE_URL}/{image_url}"
+                print(f"[DEBUG] Final image_url_small: {image_url}")
                 embed.set_image(url=image_url)
+            else:
+                print(f"[DEBUG] No image URL found for card {card_id}")
         
         embed.set_footer(text=f"{self.character_name} Card Collection • Use ⬅️➡️ to navigate")
         return embed
