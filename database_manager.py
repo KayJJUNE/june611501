@@ -2075,6 +2075,19 @@ class DatabaseManager:
                 """)
                 return cursor.fetchone()[0]
     
+    def get_user_daily_card_count(self, user_id: int) -> int:
+        """특정 사용자의 오늘(CST 기준) 카드 획득 수를 반환합니다."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # CST 시간대 기준으로 오늘 카드 획득 수 계산 (다른 데일리 퀘스트와 동일한 방식)
+                today_cst = get_today_cst()
+                cursor.execute("""
+                    SELECT COUNT(*) FROM user_cards 
+                    WHERE user_id = %s 
+                    AND DATE(acquired_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai') = %s
+                """, (user_id, today_cst))
+                return cursor.fetchone()[0]
+    
     def get_abnormal_activity_detection(self) -> dict:
         """이상 상황을 감지합니다."""
         with self.get_connection() as conn:

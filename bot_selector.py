@@ -1419,25 +1419,15 @@ class BotSelector(commands.Bot):
                 }
 
                 # Get card collection info
-                user_cards = self.db.get_user_cards(user_id, character_name)
+                all_user_cards = get_user_cards(user_id)
+                user_cards = [card for card in all_user_cards if card['character_name'] == character_name] if character_name else all_user_cards
                 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                # 하드코딩된 티어별 카드 총 개수
-                total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
+                total_cards = {'C': 10, 'B': 7, 'A': 5, 'S': 4}
                 
-                # 사용자가 보유한 카드 개수 계산
                 for card in user_cards:
-                    if isinstance(card, tuple):
-                        # 튜플 형태인 경우 (card_id, acquired_at)
-                        card_id = card[0]
-                    elif isinstance(card, dict):
-                        # 딕셔너리 형태인 경우
-                        card_id = card.get('card_id')
-                    else:
-                        continue
-                        
-                    card_info = get_card_info_by_id(character_name, card_id)
+                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
                     if card_info and 'tier' in card_info:
                         tier = card_info['tier']
                         if tier in tier_counts:
@@ -1530,18 +1520,9 @@ class BotSelector(commands.Bot):
                 if user_cards:
                     card_info_dict = {}
                     for card in user_cards:
-                        if isinstance(card, tuple):
-                            # 튜플 형태인 경우 (card_id, acquired_at)
-                            card_id = card[0]
-                        elif isinstance(card, dict):
-                            # 딕셔너리 형태인 경우
-                            card_id = card.get('card_id')
-                        else:
-                            continue
-                            
-                        card_info = get_card_info_by_id(character_name, card_id)
+                        card_info = get_card_info_by_id(card['character_name'], card['card_id'])
                         if card_info:
-                            card_info_dict[card_id] = card_info
+                            card_info_dict[card['card_id']] = card_info
 
                     def get_tier_order(card_id):
                         tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
@@ -1674,7 +1655,7 @@ class BotSelector(commands.Bot):
                         break
 
                 # 전체 카드 목록 조회 (중복 제거된 버전)
-                all_user_cards = self.db.get_user_cards(user_id)
+                all_user_cards = get_user_cards(user_id)
                 
                 if not all_user_cards:
                     await interaction.response.send_message("You don't have any cards yet.", ephemeral=True)
@@ -1692,34 +1673,10 @@ class BotSelector(commands.Bot):
 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                # 하드코딩된 티어별 카드 총 개수
-                if character_name:
-                    # 특정 캐릭터의 경우
-                    total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
-                else:
-                    # 전체 캐릭터의 경우 (3개 캐릭터)
-                    total_cards = {'C': 90, 'B': 60, 'A': 30, 'S': 15}
+                total_cards = {'C': 10, 'B': 7, 'A': 5, 'S': 4}
                 
-                # 사용자가 보유한 카드 개수 계산
                 for card in user_cards:
-                    if isinstance(card, tuple):
-                        if len(card) == 2:
-                            # (card_id, acquired_at) 형태
-                            card_id = card[0]
-                            card_character_name = character_name
-                        elif len(card) == 3:
-                            # (character_name, card_id, acquired_at) 형태
-                            card_character_name = card[0]
-                            card_id = card[1]
-                        else:
-                            continue
-                    elif isinstance(card, dict):
-                        card_id = card.get('card_id')
-                        card_character_name = card.get('character_name', character_name)
-                    else:
-                        continue
-                        
-                    card_info = get_card_info_by_id(card_character_name, card_id)
+                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
                     if card_info and 'tier' in card_info:
                         tier = card_info['tier']
                         if tier in tier_counts:
@@ -1768,26 +1725,9 @@ class BotSelector(commands.Bot):
                 # 카드 슬라이더 뷰
                 card_info_dict = {}
                 for card in user_cards:
-                    if isinstance(card, tuple):
-                        if len(card) == 2:
-                            # (card_id, acquired_at) 형태
-                            card_id = card[0]
-                            card_character_name = character_name
-                        elif len(card) == 3:
-                            # (character_name, card_id, acquired_at) 형태
-                            card_character_name = card[0]
-                            card_id = card[1]
-                        else:
-                            continue
-                    elif isinstance(card, dict):
-                        card_id = card.get('card_id')
-                        card_character_name = card.get('character_name', character_name)
-                    else:
-                        continue
-                        
-                    card_info = get_card_info_by_id(card_character_name, card_id)
+                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
                     if card_info:
-                        card_info_dict[card_id] = card_info
+                        card_info_dict[card['card_id']] = card_info
 
                 def get_tier_order(card_id):
                     tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
@@ -2867,25 +2807,15 @@ class BotSelector(commands.Bot):
                     }
 
                     # Get card collection info
-                    user_cards = self.db.get_user_cards(user_id, character_name)
+                    all_user_cards = get_user_cards(user_id)
+                    user_cards = [card for card in all_user_cards if card['character_name'] == character_name] if character_name else all_user_cards
                     
-                    # 티어별 카드 분류
+                    # 티어별 카드 분류 (새로운 시스템: C 30장, B 20장, A 10장, S 5장)
                     tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                    # 하드코딩된 티어별 카드 총 개수
                     total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
                     
-                    # 사용자가 보유한 카드 개수 계산
                     for card in user_cards:
-                        if isinstance(card, tuple):
-                            # 튜플 형태인 경우 (card_id, acquired_at)
-                            card_id = card[0]
-                        elif isinstance(card, dict):
-                            # 딕셔너리 형태인 경우
-                            card_id = card.get('card_id')
-                        else:
-                            continue
-                            
-                        card_info = get_card_info_by_id(character_name, card_id)
+                        card_info = get_card_info_by_id(card['character_name'], card['card_id'])
                         if card_info and 'tier' in card_info:
                             tier = card_info['tier']
                             if tier in tier_counts:
@@ -3881,6 +3811,25 @@ class BotSelector(commands.Bot):
             'claimed': claimed
         })
 
+        # 3. 신규 카드 1장 획득 퀘스트
+        daily_cards = self.db.get_user_daily_card_count(user_id)
+        quest_id = 'daily_card_obtain'
+        claimed = self.db.is_quest_claimed(user_id, quest_id)
+        reward_name = None
+        if claimed:
+            user_gifts = self.db.get_user_gifts(user_id)
+            reward_name = user_gifts[0][0] if user_gifts else None
+        quests.append({
+            'id': quest_id,
+            'name': '🃏 Get New Card',
+            'description': f'Obtain 1 new card today ({daily_cards}/1)',
+            'progress': min(daily_cards, 1),
+            'max_progress': 1,
+            'completed': daily_cards >= 1,
+            'reward': f'Random Common Item x1' + (f'\nGifts received: {reward_name}' if reward_name else ''),
+            'claimed': claimed
+        })
+
         return quests
 
     async def check_weekly_quests(self, user_id: int) -> list:
@@ -4141,6 +4090,7 @@ class BotSelector(commands.Bot):
         daily_rewards = {
             'daily_conversation': {'name': 'Random Common Item', 'rarity': 'COMMON', 'quantity': 1},
             'daily_affinity_gain': {'name': 'Random Common Item', 'rarity': 'COMMON', 'quantity': 1},
+            'daily_card_obtain': {'name': 'Random Common Item', 'rarity': 'COMMON', 'quantity': 1},
         }
         reward_info = daily_rewards.get(quest_id)
         print(f"[DEBUG] Available daily rewards keys: {list(daily_rewards.keys())}")
@@ -5685,17 +5635,6 @@ class CardSliderView(discord.ui.View):
         self.card_info_dict = card_info_dict
         self.db = db
         self.current_index = 0
-        
-        # 실제 카드 총 개수 계산 (하드코딩된 값 사용)
-        self.total_cards = 65  # 각 캐릭터마다 65개
-        
-        # 디버깅 로그
-        print(f"[DEBUG] CardSliderView 초기화:")
-        print(f"  - user_id: {user_id}")
-        print(f"  - cards: {cards}")
-        print(f"  - character_name: {character_name}")
-        print(f"  - card_info_dict: {card_info_dict}")
-        print(f"  - cards 길이: {len(cards) if cards else 0}")
 
     async def initial_message(self, interaction: discord.Interaction):
         """Send the initial card slider message"""
@@ -5704,11 +5643,6 @@ class CardSliderView(discord.ui.View):
 
     async def create_card_embed(self):
         """Create embed for current card"""
-        print(f"[DEBUG] create_card_embed called:")
-        print(f"  - cards: {self.cards}")
-        print(f"  - current_index: {self.current_index}")
-        print(f"  - card_info_dict: {self.card_info_dict}")
-        
         if not self.cards:
             embed = discord.Embed(
                 title="🎴 No Cards Found",
@@ -5720,45 +5654,26 @@ class CardSliderView(discord.ui.View):
         card_id = self.cards[self.current_index]
         card_info = self.card_info_dict.get(card_id, {})
         
-        print(f"[DEBUG] Current card_id: {card_id}")
-        print(f"[DEBUG] Current card_info: {card_info}")
-        
         embed = discord.Embed(
             title=f"{self.character_name} Card Collection",
-            description=f"**{len(self.cards)} / {self.total_cards} Cards Collected**",
+            description=f"**{len(self.cards)} / 65 Cards Collected**",
             color=discord.Color.purple()
         )
         
         if card_info:
-            # 기본 카드 정보만 표시
             embed.add_field(
                 name="Current Card",
                 value=f"**Tier:** {card_info.get('tier', 'Unknown')} {self.get_tier_emoji(card_info.get('tier', ''))}\n"
                       f"**Card ID:** {card_id}\n"
-                      f"**Card Number:** #{self.current_index + 1}",
+                      f"**Card Number:** #{self.current_index + 1}\n"
+                      f"**Ability:** `{card_info.get('ability', '????')}`\n"
+                      f"**Description:** {card_info.get('description', 'No description available')}",
                 inline=False
             )
             
-            # 이미지 URL 설정 (Discord에서 바로 표시되도록)
+            # Add card image if available
             if card_info.get('image_url'):
-                image_url = card_info['image_url']
-                print(f"[DEBUG] Setting image URL: {image_url}")
-                
-                # Discord 임베드에 이미지 바로 표시
-                embed.set_image(url=image_url)
-                print(f"[DEBUG] Image URL set successfully")
-                
-                # 이미지 URL을 클릭 가능한 링크로도 표시 (테스트용)
-                embed.add_field(
-                    name="Image URL (Test)",
-                    value=f"[Click to test image]({image_url})",
-                    inline=False
-                )
-                
-                # Cloudflare 이미지가 이제 올바른 Image ID로 설정되었으므로 정상 작동할 것입니다
-                print(f"[DEBUG] Cloudflare image should now work with correct Image ID")
-                
-            
+                embed.set_image(url=card_info['image_url'])
         
         embed.set_footer(text=f"{self.character_name} Card Collection • Use ⬅️➡️ to navigate")
         return embed
@@ -5775,39 +5690,21 @@ class CardSliderView(discord.ui.View):
 
     @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.secondary)
     async def previous_card(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"[DEBUG] Previous button clicked by user {interaction.user.id}, expected {self.user_id}")
-        print(f"[DEBUG] Current cards: {self.cards}")
-        print(f"[DEBUG] Current index: {self.current_index}")
-        
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ This is not your card collection!", ephemeral=True)
             return
             
-        if not self.cards:
-            await interaction.response.send_message("❌ No cards available!", ephemeral=True)
-            return
-            
         self.current_index = (self.current_index - 1) % len(self.cards)
-        print(f"[DEBUG] New index: {self.current_index}")
         embed = await self.create_card_embed()
         await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="➡️ Next", style=discord.ButtonStyle.secondary)
     async def next_card(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"[DEBUG] Next button clicked by user {interaction.user.id}, expected {self.user_id}")
-        print(f"[DEBUG] Current cards: {self.cards}")
-        print(f"[DEBUG] Current index: {self.current_index}")
-        
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ This is not your card collection!", ephemeral=True)
             return
             
-        if not self.cards:
-            await interaction.response.send_message("❌ No cards available!", ephemeral=True)
-            return
-            
         self.current_index = (self.current_index + 1) % len(self.cards)
-        print(f"[DEBUG] New index: {self.current_index}")
         embed = await self.create_card_embed()
         await interaction.response.edit_message(embed=embed, view=self)
 
