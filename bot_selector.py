@@ -715,9 +715,64 @@ class BotSelector(commands.Bot):
         self.story_sessions = {}
         self.dm_sessions = {}  # DM 세션 관리
         
+        # 관리자 전용 채널 설정
+        self.admin_channels = set()  # 관리자 명령어가 허용된 채널 ID들
+        self.admin_user_id = 534941503345262613  # 지정된 관리자 ID
+        self.default_admin_channel = 1417465862910246922  # 지정된 관리자 채널 ID
+        
+        # 기본 관리자 채널 설정
+        self.admin_channels.add(self.default_admin_channel)
+        self.load_admin_channels()  # 데이터베이스에서 관리자 채널 로드
+        
         # 안전장치 초기화
         self.emergency_mode = False
         self.start_time = datetime.now()
+    
+    def is_admin_channel_allowed(self, channel_id: int) -> bool:
+        """관리자 명령어가 허용된 채널인지 확인"""
+        # 지정된 관리자 채널에만 허용
+        return channel_id in self.admin_channels
+    
+    def is_admin_user(self, user_id: int) -> bool:
+        """지정된 관리자 사용자인지 확인"""
+        return user_id == self.admin_user_id
+    
+    def load_admin_channels(self):
+        """데이터베이스에서 관리자 채널 설정을 로드합니다."""
+        try:
+            # 기본 관리자 채널은 항상 포함
+            self.admin_channels.add(self.default_admin_channel)
+            
+            # 파일에서 추가 채널 로드
+            import json
+            import os
+            admin_file = "admin_channels.json"
+            if os.path.exists(admin_file):
+                with open(admin_file, 'r') as f:
+                    data = json.load(f)
+                    additional_channels = set(data.get('channels', []))
+                    self.admin_channels.update(additional_channels)
+                    print(f"✅ Loaded {len(self.admin_channels)} admin channels (including default)")
+            else:
+                print(f"✅ Using default admin channel: {self.default_admin_channel}")
+        except Exception as e:
+            print(f"⚠️ Failed to load admin channels: {e}")
+            # 기본 채널은 유지
+            self.admin_channels = {self.default_admin_channel}
+    
+    def save_admin_channels(self):
+        """관리자 채널 설정을 저장합니다."""
+        try:
+            import json
+            admin_file = "admin_channels.json"
+            # 기본 채널을 제외하고 추가 채널만 저장
+            additional_channels = self.admin_channels - {self.default_admin_channel}
+            data = {'channels': list(additional_channels)}
+            with open(admin_file, 'w') as f:
+                json.dump(data, f)
+            print(f"✅ Saved {len(additional_channels)} additional admin channels")
+        except Exception as e:
+            print(f"⚠️ Failed to save admin channels: {e}")
         
         # 안전장치 모듈 임포트 및 초기화
         try:
@@ -1069,6 +1124,40 @@ class BotSelector(commands.Bot):
                     await interaction.response.send_message("Failed to delete the channel. Please try again.", ephemeral=True)
 
         @self.tree.command(
+            name="admin_channel",
+            description="[Admin] Set admin-only channel for sensitive commands"
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def admin_channel_command(interaction: discord.Interaction, action: str = "add"):
+            """관리자 전용 채널 설정"""
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not isinstance(interaction.channel, discord.TextChannel):
+                await interaction.response.send_message("❌ This command can only be used in server channels.", ephemeral=True)
+                return
+            
+            channel_id = interaction.channel.id
+            
+            if action.lower() == "add":
+                self.admin_channels.add(channel_id)
+                self.save_admin_channels()
+                await interaction.response.send_message(f"✅ Channel {interaction.channel.mention} has been added to admin channels.", ephemeral=True)
+            elif action.lower() == "remove":
+                self.admin_channels.discard(channel_id)
+                self.save_admin_channels()
+                await interaction.response.send_message(f"✅ Channel {interaction.channel.mention} has been removed from admin channels.", ephemeral=True)
+            elif action.lower() == "list":
+                if self.admin_channels:
+                    channel_mentions = [f"<#{cid}>" for cid in self.admin_channels]
+                    await interaction.response.send_message(f"📋 Admin channels: {', '.join(channel_mentions)}", ephemeral=True)
+                else:
+                    await interaction.response.send_message("📋 No admin channels set. All channels allow admin commands.", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Invalid action. Use 'add', 'remove', or 'list'.", ephemeral=True)
+
+        @self.tree.command(
             name="settings",
             description="현재 설정 확인"
         )
@@ -1076,6 +1165,16 @@ class BotSelector(commands.Bot):
         async def settings_command(interaction: discord.Interaction):
             if not isinstance(interaction.channel, discord.TextChannel):
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
+                return
+            
+            # 지정된 관리자 사용자 확인
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            # 관리자 채널 제한 확인
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
                 return
 
             embed = discord.Embed(
@@ -2023,6 +2122,12 @@ class BotSelector(commands.Bot):
                             emoji="🏆"
                         ),
                         discord.SelectOption(
+                            label="DM Usage",
+                            value="dm",
+                            description="How to use the bot in DMs",
+                            emoji="💬"
+                        ),
+                        discord.SelectOption(
                             label="FAQ",
                             value="faq",
                             description="Frequently asked questions",
@@ -2049,6 +2154,10 @@ class BotSelector(commands.Bot):
                     elif topic == "ranking":
                         embed.title = "🏆 Ranking System"
                         embed.add_field(name="How Rankings Work", value="Rankings are based on:\n1. Total affinity across all characters\n2. Daily conversation count\n3. Story mode completion\n\nCheck your rank with /ranking", inline=False)
+                    elif topic == "dm":
+                        embed.title = "💬 DM Usage Guide"
+                        embed.add_field(name="How to Use in DMs", value="1. **Start a DM**: Send any message to the bot in DMs\n2. **Select Character**: Use `/bot` command to choose a character\n3. **Start Chatting**: Talk freely with your chosen character\n4. **Session Timeout**: 30 minutes of inactivity will end the session\n\n**Available Commands in DM:**\n• `/bot` - Select character\n• `/affinity` - Check affinity\n• `/mycard` - View cards\n• `/quest` - Check quests\n• `/help` - Show this help", inline=False)
+                        embed.add_field(name="💡 Tips", value="• DM allows more private conversations\n• All features work the same as in servers\n• Characters remember your conversation context\n• You can switch characters anytime with `/bot`", inline=False)
                     elif topic == "faq":
                         embed.title = "❓ FAQ"
                         embed.add_field(name="Q1: How can I get higher grade cards?", value="A: Card grades depend on your affinity level:\n- Iron: Mainly C cards (80%), small chance for B (20%)\n- Bronze: Better chance for B cards (30%)\n- Silver: Can get A cards (20%)\n- Gold: Can get S cards (10%)\nHigher affinity = better card chances!", inline=False)
@@ -2947,8 +3056,13 @@ class BotSelector(commands.Bot):
         @app_commands.default_permissions(administrator=True)
         async def pop_command(interaction: discord.Interaction):
             """관리자용 물리적 상품 지급 명령어"""
-            if not self.db.is_user_admin(interaction.user.id):
-                await interaction.response.send_message("❌ This command is for administrators only.", ephemeral=True)
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            # 관리자 채널 제한 확인
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
                 return
             
             embed = discord.Embed(
@@ -4294,8 +4408,36 @@ class BotSelector(commands.Bot):
                 await self.process_roleplay_message(message, session)
             return
 
-        # 1:1 채널은 캐릭터 봇이 처리하므로 여기서는 처리하지 않음
-        # (캐릭터 봇의 on_message에서 처리됨)
+        # 일반 채널에서의 기본 채팅 처리
+        if message.content.startswith('!'):
+            # 명령어는 commands.Bot이 처리
+            await self.process_commands(message)
+        else:
+            # 일반 메시지에 대한 기본 응답
+            await self.handle_general_message(message)
+
+    async def handle_general_message(self, message: discord.Message):
+        """일반 채널에서의 메시지를 처리합니다."""
+        # 봇 멘션이나 특정 키워드가 있을 때만 응답
+        if self.user in message.mentions or any(keyword in message.content.lower() for keyword in ['봇', 'bot', '챗봇', 'chatbot']):
+            # 관리자 채널인지 확인
+            is_admin_channel = self.is_admin_channel_allowed(message.channel.id)
+            
+            embed = discord.Embed(
+                title="🤖 ZeroLink 챗봇",
+                description="안녕하세요! 저는 ZeroLink 챗봇입니다.\n\n**사용 방법:**\n• `/bot` - 캐릭터를 선택하여 1:1 대화\n• `/help` - 모든 명령어 보기\n• DM으로 보내면 더 자세한 대화 가능\n\n**💡 팁:** DM으로 보내시면 선택한 캐릭터와 자유롭게 대화할 수 있습니다!",
+                color=0x00ff00
+            )
+            
+            if is_admin_channel:
+                embed.add_field(
+                    name="🔧 관리자 기능",
+                    value="이 채널에서는 관리자 명령어를 사용할 수 있습니다.",
+                    inline=False
+                )
+            
+            embed.set_footer(text="ZeroLink 챗봇 • 서버와 DM 모두 지원")
+            await message.channel.send(embed=embed)
 
     # 롤플레잉 모드 전용 답장 함수
     async def process_roleplay_message(self, message, session):
@@ -4518,10 +4660,10 @@ class BotSelector(commands.Bot):
         # 환영 메시지 전송
         embed = discord.Embed(
             title="🌸 ZeroLink 챗봇에 오신 것을 환영합니다!",
-            description="DM에서도 챗봇과 대화할 수 있습니다.\n\n**사용 방법:**\n1. `/bot` 명령어로 캐릭터를 선택하세요\n2. 선택한 캐릭터와 자유롭게 대화하세요\n3. 30분간 활동이 없으면 세션이 자동으로 종료됩니다\n\n**사용 가능한 명령어:**\n• `/bot` - 캐릭터 선택\n• `/affinity` - 호감도 확인\n• `/mycard` - 보유 카드 확인\n• `/quest` - 퀘스트 확인\n• `/help` - 도움말",
+            description="DM에서도 챗봇과 대화할 수 있습니다.\n\n**사용 방법:**\n1. `/bot` 명령어로 캐릭터를 선택하세요\n2. 선택한 캐릭터와 자유롭게 대화하세요\n3. 30분간 활동이 없으면 세션이 자동으로 종료됩니다\n\n**사용 가능한 명령어:**\n• `/bot` - 캐릭터 선택\n• `/affinity` - 호감도 확인\n• `/mycard` - 보유 카드 확인\n• `/quest` - 퀘스트 확인\n• `/help` - 도움말\n\n**💡 팁:** 서버에서도 동일한 명령어를 사용할 수 있습니다!",
             color=0xff69b4
         )
-        embed.set_footer(text="ZeroLink 챗봇 DM 모드")
+        embed.set_footer(text="ZeroLink 챗봇 DM 모드 • 서버와 DM 모두 지원")
         
         await message.channel.send(embed=embed)
 
