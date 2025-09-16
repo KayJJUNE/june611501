@@ -710,7 +710,6 @@ class BotSelector(commands.Bot):
         self.settings_manager = SettingsManager()
         self.active_channels: Dict[int, str] = {}
         self.user_languages: Dict[int, str] = {}
-        self.setup_commands()
         self.roleplay_sessions = {}
         self.story_sessions = {}
         self.dm_sessions = {}  # DM 세션 관리
@@ -724,10 +723,11 @@ class BotSelector(commands.Bot):
         self.admin_channels.add(self.default_admin_channel)
         self.load_admin_channels()  # 데이터베이스에서 관리자 채널 로드
         
-        # 관리자 명령어 그룹 생성
-        self.admin_group = app_commands.Group(name="admin", description="Administrative commands")
-        self.admin_group.default_permissions = discord.Permissions(administrator=True)
-        self.tree.add_command(self.admin_group)
+        # 관리자 명령어 그룹 초기화 (나중에 설정됨)
+        self.admin_group = None
+        
+        # 명령어 설정 (admin_group 초기화 후)
+        self.setup_commands()
         
         # 안전장치 초기화
         self.emergency_mode = False
@@ -878,6 +878,188 @@ class BotSelector(commands.Bot):
         print(f'{self.user} has connected to Discord!')
         # self.tree.sync()는 setup_hook으로 이동했습니다.
         self.load_active_channels()
+        
+        # 관리자 명령어 그룹 생성 및 등록
+        self.setup_admin_commands()
+
+    def setup_admin_commands(self):
+        """관리자 명령어들을 설정합니다."""
+        # 관리자 명령어 그룹 생성
+        self.admin_group = app_commands.Group(name="admin", description="Administrative commands")
+        self.admin_group.default_permissions = discord.Permissions(administrator=True)
+        
+        # 관리자 명령어들을 그룹에 추가
+        self.add_admin_commands()
+        
+        # 그룹을 트리에 추가
+        self.tree.add_command(self.admin_group)
+        print("✅ 관리자 명령어 그룹이 설정되었습니다.")
+
+    def add_admin_commands(self):
+        """관리자 명령어들을 그룹에 추가합니다."""
+        
+        @self.admin_group.command(
+            name="channel",
+            description="Set admin-only channel for sensitive commands"
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def admin_channel_command(interaction: discord.Interaction, action: str = "add"):
+            """관리자 전용 채널 설정"""
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not isinstance(interaction.channel, discord.TextChannel):
+                await interaction.response.send_message("❌ This command can only be used in server channels.", ephemeral=True)
+                return
+            
+            channel_id = interaction.channel.id
+            
+            if action.lower() == "add":
+                self.admin_channels.add(channel_id)
+                self.save_admin_channels()
+                await interaction.response.send_message(f"✅ Channel {interaction.channel.mention} has been added to admin channels.", ephemeral=True)
+            elif action.lower() == "remove":
+                self.admin_channels.discard(channel_id)
+                self.save_admin_channels()
+                await interaction.response.send_message(f"✅ Channel {interaction.channel.mention} has been removed from admin channels.", ephemeral=True)
+            elif action.lower() == "list":
+                if self.admin_channels:
+                    channel_mentions = [f"<#{cid}>" for cid in self.admin_channels]
+                    await interaction.response.send_message(f"📋 Admin channels: {', '.join(channel_mentions)}", ephemeral=True)
+                else:
+                    await interaction.response.send_message("📋 No admin channels set. All channels allow admin commands.", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Invalid action. Use 'add', 'remove', or 'list'.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="settings",
+            description="현재 설정 확인"
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def settings_command(interaction: discord.Interaction):
+            if not isinstance(interaction.channel, discord.TextChannel):
+                await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
+                return
+            
+            # 지정된 관리자 사용자 확인
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            embed = discord.Embed(
+                title="⚙️ Bot Settings",
+                color=discord.Color.blue()
+            )
+            
+            embed.add_field(
+                name="Daily Message Limit",
+                value=f"{self.settings_manager.daily_limit} messages",
+                inline=False
+            )
+            
+            if self.settings_manager.admin_roles:
+                role_mentions = [f"<@&{role_id}>" for role_id in self.settings_manager.admin_roles]
+                embed.add_field(
+                    name="Admin Roles",
+                    value=", ".join(role_mentions),
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="Admin Roles",
+                    value="No admin roles set",
+                    inline=False
+                )
+            
+            if interaction.user.guild_permissions.administrator:
+                embed.add_field(
+                    name="Admin Commands",
+                    value="""
+                    `/set_daily_limit [number]` - Set daily message limit
+                    `/add_admin_role [@role]` - Add admin role
+                    `/remove_admin_role [@role]` - Remove admin role
+                    """,
+                    inline=False
+                )
+
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        @self.admin_group.command(
+            name="status",
+            description="Check bot status and health"
+        )
+        @app_commands.default_permissions(administrator=True)
+        async def status_command(interaction: discord.Interaction):
+            """봇 상태를 확인합니다."""
+            try:
+                if not self.db.is_user_admin(interaction.user.id):
+                    await interaction.response.send_message("This command is for administrators only.", ephemeral=True)
+                    return
+                
+                uptime = datetime.now() - self.start_time
+                uptime_str = str(uptime).split('.')[0]  # 마이크로초 제거
+                
+                embed = discord.Embed(
+                    title="🤖 Bot Status",
+                    color=discord.Color.green()
+                )
+                
+                embed.add_field(
+                    name="🕐 Uptime",
+                    value=uptime_str,
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="💾 Memory Usage",
+                    value=f"{self.get_memory_usage():.2f} MB",
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="🔗 Database",
+                    value="✅ Connected" if self.db else "❌ Disconnected",
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="🚨 Emergency Mode",
+                    value="🔴 Active" if self.emergency_mode else "🟢 Normal",
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="📊 Active Channels",
+                    value=len(self.active_channels),
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="👥 Total Users",
+                    value=self.get_total_users(),
+                    inline=True
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            except Exception as e:
+                print(f"Error in status_command: {e}")
+                await interaction.response.send_message("Error occurred while checking status.", ephemeral=True)
+
+    def get_memory_usage(self):
+        """메모리 사용량을 반환합니다."""
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss / 1024 / 1024  # MB 단위
+
+    def get_total_users(self):
+        """총 사용자 수를 반환합니다."""
+        try:
+            return len(set(self.db.get_all_user_ids()))
+        except:
+            return 0
 
     async def get_ai_response(self, messages: list, emotion_score: int = 0) -> str:
         if not OPENAI_API_KEY:
@@ -956,6 +1138,10 @@ class BotSelector(commands.Bot):
         return "There was a temporary issue with the AI server. Please try again in a moment."
 
     def setup_commands(self):
+        # 관리자 명령어들은 setup_admin_commands에서 처리하므로 여기서는 일반 명령어만 정의
+        # admin_group이 None인 경우를 처리하기 위해 임시로 생성
+        if self.admin_group is None:
+            self.admin_group = app_commands.Group(name="admin", description="Administrative commands")
         @self.tree.command(
             name="bot",
             description="Open character selection menu"
