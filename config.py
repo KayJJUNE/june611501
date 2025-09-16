@@ -927,8 +927,10 @@ CHARACTER_CARD_INFO = {
         "erosb1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/f8f5bff2-bc37-49c4-fec2-f03e678a1f00/public", "description": "Eros's B1 Card", "tier": "B"},
         "erosb2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3e8e1f8d-677d-4b64-3bf9-968939220400/public", "description": "Eros's B2 Card", "tier": "B"},
         "erosb3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/906fc850-13b1-44e4-7e23-a836d4335300/public", "description": "Eros's B3 Card", "tier": "B"},
-        "erosb4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/0423f93c-8dd1-4b72-f051-a063b18af800/public", "description": "Eros's B4 Card", "tier": "B"},
+        "erosb4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/0423f93c-8d1d-4b72-f051-a063b18af800/public", "description": "Eros's B4 Card", "tier": "B"},
         "erosb5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/0f05b872-b704-4ad9-1112-9b79ea594300/public", "description": "Eros's B5 Card", "tier": "B"},
+        "erosb6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/af2902a8-9ab4-42fa-5dff-cf7e2d015500/public", "description": "Eros's B6 Card", "tier": "B"},
+        "erosb7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4bce0021-983b-411c-3b6b-f4412c80d600/public", "description": "Eros's B7 Card", "tier": "B"},
         "erosb6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/af2902a8-9ab4-42fa-5dff-cf7e2d015500/public", "description": "Eros's B6 Card", "tier": "B"},
         "erosb7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4bce0021-983b-411c-3b6b-f4412c80d600/public", "description": "Eros's B7 Card", "tier": "B"},
         "erosb8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/6f804217-0986-4111-8267-992a71106300/public", "description": "Eros's B8 Card", "tier": "B"},
@@ -977,8 +979,8 @@ CHARACTER_CARD_INFO = {
         "banner_image": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/deddb343-023f-430a-2987-aaafd8985c00/public"
     },
     "Elysia": {
-        "elysiac1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/d4b03b1a-4ac3-46df-5f3c-b7d4ced50200/public", "description": "Elysia's C1 Card", "tier": "C"},
-        "elysiac2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7cb7e137-3322-4ec6-4399-73fbdcb49000/public", "description": "Elysia's C2 Card", "tier": "C"},
+        "elysiac1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/a06d472e-e813-475b-0d0d-3c2c27ef4200/public", "description": "Elysia's C1 Card", "tier": "C"},
+        "elysiac2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/78eae705-b2ff-4455-c030-fd2396949400/public", "description": "Elysia's C2 Card", "tier": "C"},
         "elysiac3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5f7abb72-292b-4261-e7b8-58df41322900/public", "description": "Elysia's C3 Card", "tier": "C"},
         "elysiac4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7b0961e2-7397-4837-d22e-a239cdb3ff00/public", "description": "Elysia's C4 Card", "tier": "C"},
         "elysiac5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/cde4569d-f70a-4fbb-f79f-d50deb375800/public", "description": "Elysia's C5 Card", "tier": "C"},
@@ -1007,8 +1009,16 @@ CHARACTER_CARD_INFO = {
         "elysiac28": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/41a0ab48-9db6-4ac9-d5d3-f2ee2b6d7600/public", "description": "Elysia's C28 Card", "tier": "C"},
         "elysiac29": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/358dbf1c-2658-4c52-e100-65a13cca5600/public", "description": "Elysia's C29 Card", "tier": "C"},
         "elysiac30": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/ec3cb33f-29e6-4920-e53e-ae7e08bd2a00/public", "description": "Elysia's C30 Card", "tier": "C"},
-        "elysiab1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/99017755-e657-4343-51d6-551240b40d00/public", "description": "Elysia's B1 Card", "tier": "B"},
-        "elysiab2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5490f272-a360-410f-a17b-d5f9e91ce700/public", "description": "Elysia's B2 Card", "tier": "B"},
+        "elysiac3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3157a0c6-2e02-4294-8ac3-9575b59d0000/public", "description": "Elysia's C3 Card", "tier": "C"},
+        "elysiac4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/c788be89-5d39-4d60-6190-6b4583701600/public", "description": "Elysia's C4 Card", "tier": "C"},
+        "elysiac5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/1251f630-ca06-4af0-b366-66be9d249f00/public", "description": "Elysia's C5 Card", "tier": "C"},
+        "elysiac6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8e240175-2f85-4c6d-f16e-3a4aa632b000/public", "description": "Elysia's C6 Card", "tier": "C"},
+        "elysiac7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7d734cb4-9a93-4942-a800-717675931100/public", "description": "Elysia's C7 Card", "tier": "C"},
+        "elysiac8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/6958cb13-a49c-44ed-ba25-cc9b1082b900/public", "description": "Elysia's C8 Card", "tier": "C"},
+        "elysiac9": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/9a1a6fdc-8585-46ae-208c-19295fdf1600/public", "description": "Elysia's C9 Card", "tier": "C"},
+        "elysiac10": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/1d9be087-f70b-44da-b730-0ec061e48800/public", "description": "Elysia's C10 Card", "tier": "C"},
+        "elysiab1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/e3369258-7be0-4af3-0d80-2150fbcb2600/public", "description": "Elysia's B1 Card", "tier": "B"},
+        "elysiab2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/05266398-07e3-42cc-edb3-8b2e8b890b00/public", "description": "Elysia's B2 Card", "tier": "B"},
         "elysiab3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/d341ad72-92cb-4cbd-602d-e913024c4c00/public", "description": "Elysia's B3 Card", "tier": "B"},
         "elysiab4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/39a8af6b-5b10-4484-81e8-406ce7551a00/public", "description": "Elysia's B4 Card", "tier": "B"},
         "elysiab5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/13236bce-53e1-48a7-93a9-aa2bcfc57800/public", "description": "Elysia's B5 Card", "tier": "B"},
@@ -1027,8 +1037,13 @@ CHARACTER_CARD_INFO = {
         "elysiab18": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3ca952c8-a28d-423f-080a-601e0a857600/public", "description": "Elysia's B18 Card", "tier": "B"},
         "elysiab19": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/222ded3c-760e-42df-b5a6-f881b4af6200/public", "description": "Elysia's B19 Card", "tier": "B"},
         "elysiab20": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/37987811-4b51-41ba-2ed8-e2e4f1ac0a00/public", "description": "Elysia's B20 Card", "tier": "B"},
-        "elysiaa1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/25f3c864-1242-4f0f-6541-b8303973b200/public", "description": "Elysia's A1 Card", "tier": "A"},
-        "elysiaa2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4950ee20-eaf7-48c2-bb7f-e708c7ea2f00/public", "description": "Elysia's A2 Card", "tier": "A"},
+        "elysiab3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/25aa67e2-91e5-4fdb-1ca6-207ef4707b00/public", "description": "Elysia's B3 Card", "tier": "B"},
+        "elysiab4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/cae2269a-3db1-43f9-50ee-466de5469500/public", "description": "Elysia's B4 Card", "tier": "B"},
+        "elysiab5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/f65884cb-a812-4cad-992d-4c65b5013100/public", "description": "Elysia's B5 Card", "tier": "B"},
+        "elysiab6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/18f01e43-13a9-464b-8418-beec477e9100/public", "description": "Elysia's B6 Card", "tier": "B"},
+        "elysiab7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/64f5ff09-072e-47c3-e8c6-23c4c58b4500/public", "description": "Elysia's B7 Card", "tier": "B"},
+        "elysiaa1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/a3282b4b-5c87-4f81-6ebc-d20ee55ecd00/public", "description": "Elysia's A1 Card", "tier": "A"},
+        "elysiaa2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/f6195c5f-6d72-47c4-e5a3-a8dfb2dd4900/public", "description": "Elysia's A2 Card", "tier": "A"},
         "elysiaa3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/887ba384-0810-47b5-ea5e-9eacaaaad300/public", "description": "Elysia's A3 Card", "tier": "A"},
         "elysiaa4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/835e2435-11af-4371-a80e-956b870f5700/public", "description": "Elysia's A4 Card", "tier": "A"},
         "elysiaa5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/67fcbb78-9ada-44e8-9b29-ddcd24a2f300/public", "description": "Elysia's A5 Card", "tier": "A"},
@@ -1037,11 +1052,16 @@ CHARACTER_CARD_INFO = {
         "elysiaa8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/44155f0c-f5f1-400d-a1a8-c3791a222c00/public", "description": "Elysia's A8 Card", "tier": "A"},
         "elysiaa9": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/91fd0a13-8743-436c-064d-0e4ae0de3000/public", "description": "Elysia's A9 Card", "tier": "A"},
         "elysiaa10": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/b65ad0b7-d737-4737-d78d-f2eaff257a00/public", "description": "Elysia's A10 Card", "tier": "A"},
-        "elysias1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/e1e56761-2861-4911-6625-83259af1f600/public", "description": "Elysia's S1 Card", "tier": "S"},
-        "elysias2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/e1e56761-2861-4911-6625-83259af1f600/public", "description": "Elysia's S2 Card", "tier": "S"},
+        "elysiaa3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5625ab09-e198-4ca5-4c6b-b690c4c86b00/public", "description": "Elysia's A3 Card", "tier": "A"},
+        "elysiaa4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/bbaba4d8-3ff1-4da3-b9c9-6b1d45012600/public", "description": "Elysia's A4 Card", "tier": "A"},
+        "elysiaa5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3389383a-0408-45df-7666-3e9bc33fb600/public", "description": "Elysia's A5 Card", "tier": "A"},
+        "elysias1": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/e1079aef-8bfc-4c7c-588c-f48aa481ee00/public", "description": "Elysia's S1 Card", "tier": "S"},
+        "elysias2": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3b1834ca-413f-4ceb-b62a-cd7257b7d400/public", "description": "Elysia's S2 Card", "tier": "S"},
         "elysias3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/11594dde-3533-42e2-3861-9d61677ef500/public", "description": "Elysia's S3 Card", "tier": "S"},
         "elysias4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/26c7a025-bb04-41d0-3b24-f4e135263c00/public", "description": "Elysia's S4 Card", "tier": "S"},
         "elysias5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/53dd7440-ee4c-4237-2747-dc9850c98d00/public", "description": "Elysia's S5 Card", "tier": "S"},
+        "elysias3": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/c8349a96-25fd-476a-c17d-3b2d58c4da00/public", "description": "Elysia's S3 Card", "tier": "S"},
+        "elysias4": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/12081df7-1c22-4961-465b-da1a70a4e500/public", "description": "Elysia's S4 Card", "tier": "S"},
         "banner_image": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/fc411b48-19f9-455b-4fbe-0fb48eb39b00/public",
         "description": "Elysia's mysterious favorite thing."
     }
@@ -1383,7 +1403,17 @@ STORY_CHAPTERS = {
                     "Nope! Try thinking again~"
                 ]
             }
-ㅋ        ]
+        ],
+        "elysiac6": {
+            "image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/8e240175-2f85-4c6d-f16e-3a4aa632b000/public",
+            "description": "Elysia's C6 Card",
+            "tier": "C"
+        },
+        "elysiac7": {
+            "image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/7d734cb4-9a93-4942-a800-717675931100/public",
+            "description": "Elysia's C7 Card",
+            "tier": "C"
+        }
     }
 }
 
