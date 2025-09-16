@@ -5764,6 +5764,14 @@ class CardSliderView(discord.ui.View):
                 inline=False
             )
             
+            # 이미지 URL을 필드에 표시 (디버깅용)
+            if card_info.get('image_url'):
+                embed.add_field(
+                    name="Image URL",
+                    value=f"[View Image]({card_info['image_url']})",
+                    inline=False
+                )
+            
             # Add card image if available (신규 이미지 시스템 적용)
             print(f"[DEBUG] Card info for {card_id}: {card_info}")
             if card_info.get('image_url'):
@@ -5774,7 +5782,18 @@ class CardSliderView(discord.ui.View):
                     # 상대 경로인 경우 CLOUDFLARE_IMAGE_BASE_URL과 결합
                     image_url = f"{CLOUDFLARE_IMAGE_BASE_URL}/{image_url}"
                 print(f"[DEBUG] Final image_url: {image_url}")
+                
+                # 다양한 이미지 URL 형식 시도
+                # 1. 원본 URL
+                embed.set_thumbnail(url=image_url)
                 embed.set_image(url=image_url)
+                
+                # 2. 다른 형식의 URL도 시도
+                alternative_url = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id}/public"
+                print(f"[DEBUG] Alternative URL: {alternative_url}")
+                if alternative_url != image_url:
+                    # embed.set_thumbnail(url=alternative_url)
+                    pass
             elif card_info.get('image_url_small'):
                 # image_url_small이 있는 경우 사용
                 image_url = card_info['image_url_small']
@@ -5782,6 +5801,7 @@ class CardSliderView(discord.ui.View):
                 if not image_url.startswith('http'):
                     image_url = f"{CLOUDFLARE_IMAGE_BASE_URL}/{image_url}"
                 print(f"[DEBUG] Final image_url_small: {image_url}")
+                embed.set_thumbnail(url=image_url)
                 embed.set_image(url=image_url)
             else:
                 print(f"[DEBUG] No image URL found for card {card_id}")
