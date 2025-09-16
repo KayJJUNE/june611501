@@ -5759,15 +5759,40 @@ class CardSliderView(discord.ui.View):
                 except Exception as e:
                     print(f"[DEBUG] Failed to set thumbnail with original URL: {e}")
                 
-                # 3. 다른 형식의 URL 시도
-                alternative_urls = [
-                    f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id}/public",
-                    f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id.lower()}/public",
-                    f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id.upper()}/public",
-                    # 임시로 다른 이미지 URL 시도
+                # 3. 다른 variant들도 시도
+                variant_urls = [
+                    card_info.get('image_url_small'),
+                    card_info.get('image_url_medium'), 
+                    card_info.get('image_url_large')
+                ]
+                
+                for variant_url in variant_urls:
+                    if variant_url and variant_url != image_url:
+                        try:
+                            print(f"[DEBUG] Trying variant URL: {variant_url}")
+                            embed.set_image(url=variant_url)
+                            print(f"[DEBUG] Set image with variant URL")
+                            break  # 성공하면 중단
+                        except Exception as e:
+                            print(f"[DEBUG] Failed with variant URL {variant_url}: {e}")
+                
+                # 3. 다양한 Cloudflare variant 시도
+                variants = ['public', 'thumbnail', 'small', 'medium', 'large', 'original']
+                alternative_urls = []
+                
+                # 각 variant에 대해 다양한 case 시도
+                for variant in variants:
+                    alternative_urls.extend([
+                        f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id}/{variant}",
+                        f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id.lower()}/{variant}",
+                        f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id.upper()}/{variant}"
+                    ])
+                
+                # 임시로 다른 이미지 URL 시도
+                alternative_urls.extend([
                     "https://via.placeholder.com/300x400/FF6B6B/FFFFFF?text=Card+Image",
                     "https://picsum.photos/300/400"
-                ]
+                ])
                 
                 for alt_url in alternative_urls:
                     if alt_url != image_url:

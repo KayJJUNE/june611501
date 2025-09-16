@@ -1315,8 +1315,11 @@ def get_card_info_by_id(character_name: str, card_id: str) -> dict:
                 # image_url_small도 추가 (같은 URL 사용)
                 updated_info['image_url_small'] = updated_info['image_path']
             elif 'image_url' not in updated_info or not updated_info['image_url']:
+                # 다양한 variant 시도
                 updated_info['image_url'] = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{cid}/public"
-                updated_info['image_url_small'] = updated_info['image_url']
+                updated_info['image_url_small'] = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{cid}/thumbnail"
+                updated_info['image_url_medium'] = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{cid}/medium"
+                updated_info['image_url_large'] = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{cid}/large"
             
             # 기본값 설정
             if 'ability' not in updated_info:
