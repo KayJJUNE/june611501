@@ -5688,6 +5688,14 @@ class CardSliderView(discord.ui.View):
         
         # 실제 카드 총 개수 계산 (하드코딩된 값 사용)
         self.total_cards = 65  # 각 캐릭터마다 65개
+        
+        # 디버깅 로그
+        print(f"[DEBUG] CardSliderView 초기화:")
+        print(f"  - user_id: {user_id}")
+        print(f"  - cards: {cards}")
+        print(f"  - character_name: {character_name}")
+        print(f"  - card_info_dict: {card_info_dict}")
+        print(f"  - cards 길이: {len(cards) if cards else 0}")
 
     async def initial_message(self, interaction: discord.Interaction):
         """Send the initial card slider message"""
@@ -5696,6 +5704,11 @@ class CardSliderView(discord.ui.View):
 
     async def create_card_embed(self):
         """Create embed for current card"""
+        print(f"[DEBUG] create_card_embed called:")
+        print(f"  - cards: {self.cards}")
+        print(f"  - current_index: {self.current_index}")
+        print(f"  - card_info_dict: {self.card_info_dict}")
+        
         if not self.cards:
             embed = discord.Embed(
                 title="🎴 No Cards Found",
@@ -5706,6 +5719,9 @@ class CardSliderView(discord.ui.View):
 
         card_id = self.cards[self.current_index]
         card_info = self.card_info_dict.get(card_id, {})
+        
+        print(f"[DEBUG] Current card_id: {card_id}")
+        print(f"[DEBUG] Current card_info: {card_info}")
         
         embed = discord.Embed(
             title=f"{self.character_name} Card Collection",
@@ -5749,21 +5765,39 @@ class CardSliderView(discord.ui.View):
 
     @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.secondary)
     async def previous_card(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"[DEBUG] Previous button clicked by user {interaction.user.id}, expected {self.user_id}")
+        print(f"[DEBUG] Current cards: {self.cards}")
+        print(f"[DEBUG] Current index: {self.current_index}")
+        
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ This is not your card collection!", ephemeral=True)
             return
             
+        if not self.cards:
+            await interaction.response.send_message("❌ No cards available!", ephemeral=True)
+            return
+            
         self.current_index = (self.current_index - 1) % len(self.cards)
+        print(f"[DEBUG] New index: {self.current_index}")
         embed = await self.create_card_embed()
         await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="➡️ Next", style=discord.ButtonStyle.secondary)
     async def next_card(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"[DEBUG] Next button clicked by user {interaction.user.id}, expected {self.user_id}")
+        print(f"[DEBUG] Current cards: {self.cards}")
+        print(f"[DEBUG] Current index: {self.current_index}")
+        
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ This is not your card collection!", ephemeral=True)
             return
             
+        if not self.cards:
+            await interaction.response.send_message("❌ No cards available!", ephemeral=True)
+            return
+            
         self.current_index = (self.current_index + 1) % len(self.cards)
+        print(f"[DEBUG] New index: {self.current_index}")
         embed = await self.create_card_embed()
         await interaction.response.edit_message(embed=embed, view=self)
 
