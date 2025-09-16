@@ -1429,6 +1429,9 @@ class BotSelector(commands.Bot):
                 
                 # 캐릭터의 실제 카드 개수 계산
                 for card_id, card_info in character_cards.items():
+                    # card_info가 딕셔너리가 아닌 경우 건너뛰기 (예: banner_image)
+                    if not isinstance(card_info, dict):
+                        continue
                     tier = card_info.get('tier', 'C')
                     if tier in total_cards:
                         total_cards[tier] += 1
@@ -1705,6 +1708,9 @@ class BotSelector(commands.Bot):
                 if character_name:
                     character_cards = CHARACTER_CARD_INFO.get(character_name, {})
                     for card_id, card_info in character_cards.items():
+                        # card_info가 딕셔너리가 아닌 경우 건너뛰기 (예: banner_image)
+                        if not isinstance(card_info, dict):
+                            continue
                         tier = card_info.get('tier', 'C')
                         if tier in total_cards:
                             total_cards[tier] += 1
@@ -1712,6 +1718,9 @@ class BotSelector(commands.Bot):
                     # 전체 캐릭터의 카드 개수 계산
                     for char_name, character_cards in CHARACTER_CARD_INFO.items():
                         for card_id, card_info in character_cards.items():
+                            # card_info가 딕셔너리가 아닌 경우 건너뛰기 (예: banner_image)
+                            if not isinstance(card_info, dict):
+                                continue
                             tier = card_info.get('tier', 'C')
                             if tier in total_cards:
                                 total_cards[tier] += 1
@@ -2893,6 +2902,9 @@ class BotSelector(commands.Bot):
                     
                     # 캐릭터의 실제 카드 개수 계산
                     for card_id, card_info in character_cards.items():
+                        # card_info가 딕셔너리가 아닌 경우 건너뛰기 (예: banner_image)
+                        if not isinstance(card_info, dict):
+                            continue
                         tier = card_info.get('tier', 'C')
                         if tier in total_cards:
                             total_cards[tier] += 1
