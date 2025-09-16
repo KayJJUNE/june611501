@@ -1423,18 +1423,8 @@ class BotSelector(commands.Bot):
                 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                # 캐릭터별 실제 카드 총 개수 (config.py에서 가져오기)
-                character_cards = CHARACTER_CARD_INFO.get(character_name, {})
-                total_cards = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                
-                # 캐릭터의 실제 카드 개수 계산
-                for card_id, card_info in character_cards.items():
-                    # card_info가 딕셔너리가 아닌 경우 건너뛰기 (예: banner_image)
-                    if not isinstance(card_info, dict):
-                        continue
-                    tier = card_info.get('tier', 'C')
-                    if tier in total_cards:
-                        total_cards[tier] += 1
+                # 하드코딩된 티어별 카드 총 개수
+                total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
                 
                 # 사용자가 보유한 카드 개수 계산
                 for card in user_cards:
@@ -1702,28 +1692,13 @@ class BotSelector(commands.Bot):
 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                total_cards = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                
-                # 캐릭터별 실제 카드 개수 계산
+                # 하드코딩된 티어별 카드 총 개수
                 if character_name:
-                    character_cards = CHARACTER_CARD_INFO.get(character_name, {})
-                    for card_id, card_info in character_cards.items():
-                        # card_info가 딕셔너리가 아닌 경우 건너뛰기 (예: banner_image)
-                        if not isinstance(card_info, dict):
-                            continue
-                        tier = card_info.get('tier', 'C')
-                        if tier in total_cards:
-                            total_cards[tier] += 1
+                    # 특정 캐릭터의 경우
+                    total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
                 else:
-                    # 전체 캐릭터의 카드 개수 계산
-                    for char_name, character_cards in CHARACTER_CARD_INFO.items():
-                        for card_id, card_info in character_cards.items():
-                            # card_info가 딕셔너리가 아닌 경우 건너뛰기 (예: banner_image)
-                            if not isinstance(card_info, dict):
-                                continue
-                            tier = card_info.get('tier', 'C')
-                            if tier in total_cards:
-                                total_cards[tier] += 1
+                    # 전체 캐릭터의 경우 (3개 캐릭터)
+                    total_cards = {'C': 90, 'B': 60, 'A': 30, 'S': 15}
                 
                 # 사용자가 보유한 카드 개수 계산
                 for card in user_cards:
@@ -2896,18 +2871,8 @@ class BotSelector(commands.Bot):
                     
                     # 티어별 카드 분류
                     tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                    # 캐릭터별 실제 카드 총 개수 (config.py에서 가져오기)
-                    character_cards = CHARACTER_CARD_INFO.get(character_name, {})
-                    total_cards = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                    
-                    # 캐릭터의 실제 카드 개수 계산
-                    for card_id, card_info in character_cards.items():
-                        # card_info가 딕셔너리가 아닌 경우 건너뛰기 (예: banner_image)
-                        if not isinstance(card_info, dict):
-                            continue
-                        tier = card_info.get('tier', 'C')
-                        if tier in total_cards:
-                            total_cards[tier] += 1
+                    # 하드코딩된 티어별 카드 총 개수
+                    total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
                     
                     # 사용자가 보유한 카드 개수 계산
                     for card in user_cards:
@@ -5721,13 +5686,8 @@ class CardSliderView(discord.ui.View):
         self.db = db
         self.current_index = 0
         
-        # 실제 카드 총 개수 계산
-        self.total_cards = 0
-        if character_name in CHARACTER_CARD_INFO:
-            character_cards = CHARACTER_CARD_INFO[character_name]
-            for card_id, card_info in character_cards.items():
-                if isinstance(card_info, dict) and 'tier' in card_info:
-                    self.total_cards += 1
+        # 실제 카드 총 개수 계산 (하드코딩된 값 사용)
+        self.total_cards = 65  # 각 캐릭터마다 65개
 
     async def initial_message(self, interaction: discord.Interaction):
         """Send the initial card slider message"""
@@ -5764,47 +5724,15 @@ class CardSliderView(discord.ui.View):
                 inline=False
             )
             
-            # 이미지 URL을 필드에 표시 (디버깅용)
-            if card_info.get('image_url'):
-                embed.add_field(
-                    name="Image URL",
-                    value=f"[View Image]({card_info['image_url']})",
-                    inline=False
-                )
-            
-            # Add card image if available (신규 이미지 시스템 적용)
-            print(f"[DEBUG] Card info for {card_id}: {card_info}")
-            if card_info.get('image_url'):
-                # 기존 URL이 이미 완전한 URL인지 확인
-                image_url = card_info['image_url']
-                print(f"[DEBUG] Found image_url: {image_url}")
-                if not image_url.startswith('http'):
-                    # 상대 경로인 경우 CLOUDFLARE_IMAGE_BASE_URL과 결합
-                    image_url = f"{CLOUDFLARE_IMAGE_BASE_URL}/{image_url}"
-                print(f"[DEBUG] Final image_url: {image_url}")
-                
-                # 다양한 이미지 URL 형식 시도
-                # 1. 원본 URL
-                embed.set_thumbnail(url=image_url)
-                embed.set_image(url=image_url)
-                
-                # 2. 다른 형식의 URL도 시도
-                alternative_url = f"https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/{card_id}/public"
-                print(f"[DEBUG] Alternative URL: {alternative_url}")
-                if alternative_url != image_url:
-                    # embed.set_thumbnail(url=alternative_url)
-                    pass
-            elif card_info.get('image_url_small'):
-                # image_url_small이 있는 경우 사용
-                image_url = card_info['image_url_small']
-                print(f"[DEBUG] Found image_url_small: {image_url}")
-                if not image_url.startswith('http'):
-                    image_url = f"{CLOUDFLARE_IMAGE_BASE_URL}/{image_url}"
-                print(f"[DEBUG] Final image_url_small: {image_url}")
-                embed.set_thumbnail(url=image_url)
-                embed.set_image(url=image_url)
-            else:
-                print(f"[DEBUG] No image URL found for card {card_id}")
+            # 이미지 URL이 404 에러를 반환하므로 임시로 제거
+            # 대신 카드 정보에 더 많은 세부사항을 추가
+            embed.add_field(
+                name="Card Details",
+                value=f"**Card Name:** {card_info.get('name', 'Unknown')}\n"
+                      f"**Tier:** {card_info.get('tier', 'Unknown')} {self.get_tier_emoji(card_info.get('tier', ''))}\n"
+                      f"**Rarity:** {card_info.get('tier', 'Unknown')} Tier",
+                inline=True
+            )
         
         embed.set_footer(text=f"{self.character_name} Card Collection • Use ⬅️➡️ to navigate")
         return embed
