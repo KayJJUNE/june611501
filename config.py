@@ -937,8 +937,6 @@ CHARACTER_CARD_INFO = {
         "erosb5": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/0f05b872-b704-4ad9-1112-9b79ea594300/public", "description": "Eros's B5 Card", "tier": "B"},
         "erosb6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/af2902a8-9ab4-42fa-5dff-cf7e2d015500/public", "description": "Eros's B6 Card", "tier": "B"},
         "erosb7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4bce0021-983b-411c-3b6b-f4412c80d600/public", "description": "Eros's B7 Card", "tier": "B"},
-        "erosb6": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/af2902a8-9ab4-42fa-5dff-cf7e2d015500/public", "description": "Eros's B6 Card", "tier": "B"},
-        "erosb7": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4bce0021-983b-411c-3b6b-f4412c80d600/public", "description": "Eros's B7 Card", "tier": "B"},
         "erosb8": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/6f804217-0986-4111-8267-992a71106300/public", "description": "Eros's B8 Card", "tier": "B"},
         "erosb9": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/aebc616d-41d3-4a29-93ee-09f2c6912b00/public", "description": "Eros's B9 Card", "tier": "B"},
         "erosb10": {"image_path": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/edfdc5ff-6136-473d-f7f2-3175cc2b2e00/public", "description": "Eros's B10 Card", "tier": "B"},
@@ -1091,26 +1089,47 @@ CARD_TIER_MAPPING = {
     # Kagari 카드 티어 매핑
     "kagaric1": "C", "kagaric2": "C", "kagaric3": "C", "kagaric4": "C", "kagaric5": "C",
     "kagaric6": "C", "kagaric7": "C", "kagaric8": "C", "kagaric9": "C", "kagaric10": "C",
+    "kagaric11": "C", "kagaric12": "C", "kagaric13": "C", "kagaric14": "C", "kagaric15": "C",
+    "kagaric16": "C", "kagaric17": "C", "kagaric18": "C", "kagaric19": "C", "kagaric20": "C",
+    "kagaric21": "C", "kagaric22": "C", "kagaric23": "C", "kagaric24": "C", "kagaric25": "C",
+    "kagaric26": "C", "kagaric27": "C", "kagaric28": "C", "kagaric29": "C", "kagaric30": "C",
     "kagarib1": "B", "kagarib2": "B", "kagarib3": "B", "kagarib4": "B", "kagarib5": "B",
-    "kagarib6": "B", "kagarib7": "B",
+    "kagarib6": "B", "kagarib7": "B", "kagarib8": "B", "kagarib9": "B", "kagarib10": "B",
+    "kagarib11": "B", "kagarib12": "B", "kagarib13": "B", "kagarib14": "B", "kagarib15": "B",
+    "kagarib16": "B", "kagarib17": "B", "kagarib18": "B", "kagarib19": "B", "kagarib20": "B",
     "kagaria1": "A", "kagaria2": "A", "kagaria3": "A", "kagaria4": "A", "kagaria5": "A",
-    "kagaris1": "S", "kagaris2": "S", "kagaris3": "S", "kagaris4": "S",
+    "kagaria6": "A", "kagaria7": "A", "kagaria8": "A", "kagaria9": "A", "kagaria10": "A",
+    "kagaris1": "S", "kagaris2": "S", "kagaris3": "S", "kagaris4": "S", "kagaris5": "S",
 
     # Eros 카드 티어 매핑
     "erosc1": "C", "erosc2": "C", "erosc3": "C", "erosc4": "C", "erosc5": "C",
     "erosc6": "C", "erosc7": "C", "erosc8": "C", "erosc9": "C", "erosc10": "C",
+    "erosc11": "C", "erosc12": "C", "erosc13": "C", "erosc14": "C", "erosc15": "C",
+    "erosc16": "C", "erosc17": "C", "erosc18": "C", "erosc19": "C", "erosc20": "C",
+    "erosc21": "C", "erosc22": "C", "erosc23": "C", "erosc24": "C", "erosc25": "C",
+    "erosc26": "C", "erosc27": "C", "erosc28": "C", "erosc29": "C", "erosc30": "C",
     "erosb1": "B", "erosb2": "B", "erosb3": "B", "erosb4": "B", "erosb5": "B",
-    "erosb6": "B", "erosb7": "B",
+    "erosb6": "B", "erosb7": "B", "erosb8": "B", "erosb9": "B", "erosb10": "B",
+    "erosb11": "B", "erosb12": "B", "erosb13": "B", "erosb14": "B", "erosb15": "B",
+    "erosb16": "B", "erosb17": "B", "erosb18": "B", "erosb19": "B", "erosb20": "B",
     "erosa1": "A", "erosa2": "A", "erosa3": "A", "erosa4": "A", "erosa5": "A",
-    "eross1": "S", "eross2": "S", "eross3": "S", "eross4": "S",
+    "erosa6": "A", "erosa7": "A", "erosa8": "A", "erosa9": "A", "erosa10": "A",
+    "eross1": "S", "eross2": "S", "eross3": "S", "eross4": "S", "eross5": "S",
 
     # Elysia 카드 티어 매핑
     "elysiac1": "C", "elysiac2": "C", "elysiac3": "C", "elysiac4": "C", "elysiac5": "C",
     "elysiac6": "C", "elysiac7": "C", "elysiac8": "C", "elysiac9": "C", "elysiac10": "C",
+    "elysiac11": "C", "elysiac12": "C", "elysiac13": "C", "elysiac14": "C", "elysiac15": "C",
+    "elysiac16": "C", "elysiac17": "C", "elysiac18": "C", "elysiac19": "C", "elysiac20": "C",
+    "elysiac21": "C", "elysiac22": "C", "elysiac23": "C", "elysiac24": "C", "elysiac25": "C",
+    "elysiac26": "C", "elysiac27": "C", "elysiac28": "C", "elysiac29": "C", "elysiac30": "C",
     "elysiab1": "B", "elysiab2": "B", "elysiab3": "B", "elysiab4": "B", "elysiab5": "B",
-    "elysiab6": "B", "elysiab7": "B",
+    "elysiab6": "B", "elysiab7": "B", "elysiab8": "B", "elysiab9": "B", "elysiab10": "B",
+    "elysiab11": "B", "elysiab12": "B", "elysiab13": "B", "elysiab14": "B", "elysiab15": "B",
+    "elysiab16": "B", "elysiab17": "B", "elysiab18": "B", "elysiab19": "B", "elysiab20": "B",
     "elysiaa1": "A", "elysiaa2": "A", "elysiaa3": "A", "elysiaa4": "A", "elysiaa5": "A",
-    "elysias1": "S", "elysias2": "S", "elysias3": "S", "elysias4": "S"
+    "elysiaa6": "A", "elysiaa7": "A", "elysiaa8": "A", "elysiaa9": "A", "elysiaa10": "A",
+    "elysias1": "S", "elysias2": "S", "elysias3": "S", "elysias4": "S", "elysias5": "S"
 }
 
 def get_card_tier(card_id: str) -> str:
