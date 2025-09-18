@@ -886,7 +886,7 @@ class BotSelector(commands.Bot):
         """관리자 명령어들을 설정합니다."""
         # 관리자 명령어 그룹 생성
         self.admin_group = app_commands.Group(name="admin", description="Administrative commands")
-        self.admin_group.default_permissions = discord.Permissions(administrator=True)
+        # default_permissions 제거 - 개별 명령어에서 권한 체크
         
         # 관리자 명령어들을 그룹에 추가
         self.add_admin_commands()
@@ -902,7 +902,6 @@ class BotSelector(commands.Bot):
             name="channel",
             description="Set admin-only channel for sensitive commands"
         )
-        @app_commands.default_permissions(administrator=True)
         async def admin_channel_command(interaction: discord.Interaction, action: str = "add"):
             """관리자 전용 채널 설정"""
             if not self.is_admin_user(interaction.user.id):
@@ -936,7 +935,6 @@ class BotSelector(commands.Bot):
             name="settings",
             description="현재 설정 확인"
         )
-        @app_commands.default_permissions(administrator=True)
         async def settings_command(interaction: discord.Interaction):
             if not isinstance(interaction.channel, discord.TextChannel):
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
@@ -989,7 +987,6 @@ class BotSelector(commands.Bot):
             name="status",
             description="Check bot status and health"
         )
-        @app_commands.default_permissions(administrator=True)
         async def status_command(interaction: discord.Interaction):
             """봇 상태를 확인합니다."""
             try:
@@ -1318,7 +1315,6 @@ class BotSelector(commands.Bot):
             name="channel",
             description="Set admin-only channel for sensitive commands"
         )
-        @app_commands.default_permissions(administrator=True)
         async def admin_channel_command(interaction: discord.Interaction, action: str = "add"):
             """관리자 전용 채널 설정"""
             if not self.is_admin_user(interaction.user.id):
@@ -1352,7 +1348,6 @@ class BotSelector(commands.Bot):
             name="settings",
             description="현재 설정 확인"
         )
-        @app_commands.default_permissions(administrator=True)
         async def settings_command(interaction: discord.Interaction):
             if not isinstance(interaction.channel, discord.TextChannel):
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
@@ -1409,7 +1404,6 @@ class BotSelector(commands.Bot):
             name="reset_affinity",
             description="친밀도를 초기화합니다"
         )
-        @app_commands.default_permissions(administrator=True)
         async def reset_affinity(interaction: discord.Interaction, target: discord.Member = None):
             # 관리자 권한 확인
             if not self.settings_manager.is_admin(interaction.user):
@@ -1453,7 +1447,6 @@ class BotSelector(commands.Bot):
             name="add_role",
             description="Add an admin role"
         )
-        @app_commands.default_permissions(administrator=True)
         async def add_admin_role(interaction: discord.Interaction, role: discord.Role):
             if not interaction.user.guild_permissions.administrator:
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
@@ -1846,7 +1839,6 @@ class BotSelector(commands.Bot):
             name="remove_role",
             description="Remove the administrator role"
         )
-        @app_commands.default_permissions(administrator=True)
         async def remove_admin_role(interaction: discord.Interaction, role: discord.Role):
             if not interaction.user.guild_permissions.administrator:
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
@@ -1862,7 +1854,6 @@ class BotSelector(commands.Bot):
             name="set_daily_limit",
             description="Setting a daily message limit"
         )
-        @app_commands.default_permissions(administrator=True)
         async def set_daily_limit(interaction: discord.Interaction, limit: int):
             if not self.settings_manager.is_admin(interaction.user):
                 await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
@@ -2220,7 +2211,6 @@ class BotSelector(commands.Bot):
             name="reset_story",
             description="Reset story progress for a user."
         )
-        @app_commands.default_permissions(administrator=True)
         @app_commands.describe(
             user="The user whose story progress you want to reset.",
             character="The character whose story you want to reset."
@@ -2249,7 +2239,6 @@ class BotSelector(commands.Bot):
             name="message_add",
             description="Manually add a user's message count."
         )
-        @app_commands.default_permissions(administrator=True)
         async def message_add_command(interaction: discord.Interaction, target: discord.Member, count: int, character: str):
             if not self.settings_manager.is_admin(interaction.user):
                 await interaction.response.send_message("Available to admins only.", ephemeral=True)
@@ -3244,7 +3233,6 @@ class BotSelector(commands.Bot):
             name="pop",
             description="Manually distribute items to users (Messages, Cards, Gifts, Affinity)"
         )
-        @app_commands.default_permissions(administrator=True)
         async def pop_command(interaction: discord.Interaction):
             """관리자용 물리적 상품 지급 명령어"""
             if not self.is_admin_user(interaction.user.id):
@@ -3779,7 +3767,6 @@ class BotSelector(commands.Bot):
             name="reset_quest",
             description="Reset all quest claim records for a user."
         )
-        @app_commands.default_permissions(administrator=True)
         async def reset_quest_command(interaction: discord.Interaction, target: discord.Member):
             """
             관리자용: 해당 유저의 모든 퀘스트 보상 수령 기록을 리셋합니다.
@@ -3797,7 +3784,6 @@ class BotSelector(commands.Bot):
             name="cleanup_cards",
             description="Clean up duplicate cards for a user or all users."
         )
-        @app_commands.default_permissions(administrator=True)
         async def cleanup_cards_command(interaction: discord.Interaction, target: discord.Member = None):
             # 관리자 권한 확인
             if not self.settings_manager.is_admin(interaction.user):
@@ -3821,7 +3807,6 @@ class BotSelector(commands.Bot):
             name="status",
             description="Check bot status and health"
         )
-        @app_commands.default_permissions(administrator=True)
         async def status_command(interaction: discord.Interaction):
             """봇 상태를 확인합니다."""
             try:
@@ -3956,7 +3941,6 @@ class BotSelector(commands.Bot):
             name="emergency_stop",
             description="Emergency stop for critical issues"
         )
-        @app_commands.default_permissions(administrator=True)
         async def emergency_stop_command(interaction: discord.Interaction):
             """긴급 정지 명령어"""
             try:
