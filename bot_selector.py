@@ -846,6 +846,9 @@ class BotSelector(commands.Bot):
     
     async def setup_hook(self) -> None:
         """ 봇이 시작될 때 필요한 비동기 설정을 수행합니다. """
+        # 관리자 명령어 그룹 생성 및 등록
+        self.setup_admin_commands()
+        
         # Cog 로드를 제거하고, 명령어는 setup_commands에서 직접 등록
         await self.tree.sync()
 
@@ -878,9 +881,6 @@ class BotSelector(commands.Bot):
         print(f'{self.user} has connected to Discord!')
         # self.tree.sync()는 setup_hook으로 이동했습니다.
         self.load_active_channels()
-        
-        # 관리자 명령어 그룹 생성 및 등록
-        self.setup_admin_commands()
 
     def setup_admin_commands(self):
         """관리자 명령어들을 설정합니다."""
@@ -1714,7 +1714,7 @@ class BotSelector(commands.Bot):
                 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                total_cards = {'C': 10, 'B': 7, 'A': 5, 'S': 4}
+                total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
                 
                 for card in user_cards:
                     card_info = get_card_info_by_id(card['character_name'], card['card_id'])
@@ -1963,7 +1963,7 @@ class BotSelector(commands.Bot):
 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                total_cards = {'C': 10, 'B': 7, 'A': 5, 'S': 4}
+                total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
                 
                 for card in user_cards:
                     card_info = get_card_info_by_id(card['character_name'], card['card_id'])
