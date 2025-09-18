@@ -284,6 +284,40 @@ class DatabaseManager:
         finally:
             self.return_connection(conn)
 
+    def add_user_affinity(self, user_id: int, character_name: str, points: int) -> bool:
+        """사용자의 호감도를 직접 추가합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                # 기존 호감도 확인
+                cursor.execute("SELECT emotion_score FROM affinity WHERE user_id = %s AND character_name = %s", (user_id, character_name))
+                result = cursor.fetchone()
+                
+                if result:
+                    # 기존 호감도에 추가
+                    new_score = result[0] + points
+                    cursor.execute(
+                        "UPDATE affinity SET emotion_score = %s WHERE user_id = %s AND character_name = %s",
+                        (new_score, user_id, character_name)
+                    )
+                else:
+                    # 새로운 호감도 레코드 생성
+                    cursor.execute(
+                        "INSERT INTO affinity (user_id, character_name, emotion_score, daily_message_count, last_daily_reset) VALUES (%s, %s, %s, 0, %s)",
+                        (user_id, character_name, points, get_today_cst())
+                    )
+                
+                conn.commit()
+                print(f"[DEBUG] add_user_affinity - Successfully added {points} affinity points for {character_name} to user {user_id}")
+                return True
+        except Exception as e:
+            print(f"Error adding user affinity: {e}")
+            if conn: conn.rollback()
+            return False
+        finally:
+            self.return_connection(conn)
+
     def get_character_ranking(self, character_name: str):
         """특정 캐릭터의 랭킹을 반환합니다 (user_id, emotion_score, daily_message_count)"""
         EXCLUDE_BOT_IDS = [1363156675959460061]

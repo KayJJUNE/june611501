@@ -1000,22 +1000,21 @@ class BotSelector(commands.Bot):
                     inline=False
                 )
             
-            if interaction.user.guild_permissions.administrator:
-                embed.add_field(
-                    name="Admin Commands",
-                    value="""
-                    `/admin reset [@user] [type]` - Reset user data (all/affinity/story/quest)
-                    `/admin set_daily_limit [number]` - Set daily message limit
-                    `/admin add_role [@role]` - Add admin role
-                    `/admin remove_role [@role]` - Remove admin role
-                    `/admin status` - Check bot status
-                    `/admin pop` - Distribute items to users
-                    `/admin message_add [@user] [count]` - Add message count
-                    `/admin cleanup_cards [@user]` - Clean up duplicate cards
-                    `/admin emergency_stop` - Emergency stop
-                    """,
-                    inline=False
-                )
+            # Admin Commands 섹션 추가
+            embed.add_field(
+                name="Available Admin Commands",
+                value="""
+                `/admin reset [@user] [type]` - Reset user data
+                `/admin pop` - Distribute items to users
+                `/admin add_role [@role]` - Add admin role
+                `/admin remove_role [@role]` - Remove admin role
+                `/admin channel [action]` - Manage admin channels
+                `/admin cleanup_cards [@user]` - Clean up duplicate cards
+                `/admin emergency_stop` - Emergency stop
+                `/admin status` - Check bot status
+                """,
+                inline=False
+            )
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -1083,7 +1082,7 @@ class BotSelector(commands.Bot):
         # 추가 admin 명령어들
         @self.admin_group.command(
             name="reset",
-            description="Reset user data (affinity, story, quest) - 통합 리셋 명령어"
+            description="Reset user data (affinity, story, quest)"
         )
         async def reset_command(interaction: discord.Interaction, target: discord.Member, reset_type: str = "all"):
             if not self.is_admin_user(interaction.user.id):
@@ -1144,7 +1143,7 @@ class BotSelector(commands.Bot):
 
         @self.admin_group.command(
             name="pop",
-            description="Manually distribute items to users (Messages, Cards, Gifts, Affinity)"
+            description="Manually distribute items to users"
         )
         async def pop_command(interaction: discord.Interaction):
             if not self.is_admin_user(interaction.user.id):
@@ -1204,7 +1203,7 @@ class BotSelector(commands.Bot):
 
         @self.admin_group.command(
             name="remove_role",
-            description="Remove the administrator role"
+            description="Remove admin role"
         )
         async def remove_admin_role(interaction: discord.Interaction, role: discord.Role):
             if not self.is_admin_user(interaction.user.id):
@@ -1218,55 +1217,11 @@ class BotSelector(commands.Bot):
             self.settings_manager.remove_admin_role(role.id)
             await interaction.response.send_message(f"✅ Role {role.mention} has been removed from admin roles.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="set_daily_limit",
-            description="Setting a daily message limit"
-        )
-        async def set_daily_limit(interaction: discord.Interaction, limit: int):
-            if not self.is_admin_user(interaction.user.id):
-                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
-                return
-            
-            if not self.is_admin_channel_allowed(interaction.channel.id):
-                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
-                return
-            
-            if limit < 1:
-                await interaction.response.send_message("❌ Daily limit must be at least 1.", ephemeral=True)
-                return
-            
-            self.settings_manager.set_daily_limit(limit)
-            await interaction.response.send_message(f"✅ Daily message limit has been set to {limit}.", ephemeral=True)
-
-
-        @self.admin_group.command(
-            name="message_add",
-            description="Manually add a user's message count."
-        )
-        async def message_add_command(interaction: discord.Interaction, user: discord.Member, count: int):
-            if not self.is_admin_user(interaction.user.id):
-                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
-                return
-            
-            if not self.is_admin_channel_allowed(interaction.channel.id):
-                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
-                return
-            
-            if count < 1:
-                await interaction.response.send_message("❌ Message count must be at least 1.", ephemeral=True)
-                return
-            
-            try:
-                self.db.add_user_messages(user.id, count)
-                await interaction.response.send_message(f"✅ Added {count} messages to {user.mention}.", ephemeral=True)
-            except Exception as e:
-                print(f"Error in message_add_command: {e}")
-                await interaction.response.send_message("❌ An error occurred while adding messages.", ephemeral=True)
 
 
         @self.admin_group.command(
             name="cleanup_cards",
-            description="Clean up duplicate cards for a user or all users."
+            description="Clean up duplicate cards"
         )
         async def cleanup_cards_command(interaction: discord.Interaction, user: discord.Member = None):
             if not self.is_admin_user(interaction.user.id):
@@ -1290,7 +1245,7 @@ class BotSelector(commands.Bot):
 
         @self.admin_group.command(
             name="emergency_stop",
-            description="Emergency stop for critical issues"
+            description="Emergency stop"
         )
         async def emergency_stop_command(interaction: discord.Interaction):
             if not self.is_admin_user(interaction.user.id):
