@@ -305,9 +305,13 @@ except NameError:
                 
                 # 데이터베이스에 세션 저장
                 bot_selector.db.create_roleplay_session(
-                    session_id, interaction.user.id, self.character_name, 
-                    self.mode.value.lower(), self.user_role.value, 
-                    self.character_role.value, self.story_line.value
+                    user_id=interaction.user.id,
+                    character_name=self.character_name, 
+                    mode=self.mode.value.lower(),
+                    user_role=self.user_role.value, 
+                    character_role=self.character_role.value,
+                    story_line=self.story_line.value,
+                    channel_id=channel.id
                 )
                 
                 # 메모리에도 저장 (기존 호환성 유지)
@@ -7484,26 +7488,64 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                 "history": []
             }
             
-            # 시작 임베드 생성
+            # 멋있는 시작 임베드 생성
             start_embed = discord.Embed(
-                title=f"🎭 {self.mode.title()} Roleplay Started!",
-                description=f"**Character:** {self.character_name}\n**Mode:** {self.mode.title()}\n**Your Role:** {user_role}\n**{self.character_name}'s Role:** {character_role}",
+                title="🎭 Roleplay Session Started!",
+                description=f"**{self.character_name}**과의 **{self.mode.title()}** 모드가 시작되었습니다!",
                 color=discord.Color.purple()
             )
             
+            # 모드별 이미지 설정
+            mode_images = {
+                "romantic": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/c742a172-bdf3-4e97-2a80-1f5b7a100a00/public",
+                "friendship": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/1e48be9b-ecd4-4936-6fb4-955fd444ac00/public",
+                "healing": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5686b751-2d47-4084-6f76-8672282f7e00/public",
+                "fantasy": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/b3aa214f-7736-43ea-64b4-9e749f09b500/public",
+                "custom": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/bf6bb51e-f5fd-4e3b-d5b0-8b04deb3f800/public"
+            }
+            
+            if self.mode in mode_images:
+                start_embed.set_image(url=mode_images[self.mode])
+            
+            # 모드별 이모지 설정
+            mode_emojis = {
+                "romantic": "💕",
+                "friendship": "👥", 
+                "healing": "🌸",
+                "fantasy": "⚔️",
+                "custom": "✨"
+            }
+            
+            mode_emoji = mode_emojis.get(self.mode, "🎭")
+            
             start_embed.add_field(
-                name="📖 Story Setting",
-                value=story_prompt,
+                name=f"{mode_emoji} Your Role",
+                value=f"**{user_role}**",
+                inline=True
+            )
+            
+            start_embed.add_field(
+                name=f"🎭 {self.character_name}'s Role", 
+                value=f"**{character_role}**",
+                inline=True
+            )
+            
+            start_embed.add_field(
+                name="📖 Story Summary",
+                value=f"```{story_prompt[:200]}{'...' if len(story_prompt) > 200 else ''}```",
                 inline=False
             )
             
             start_embed.add_field(
-                name="🎯 How to Play",
-                value="• Simply type your messages to interact\n• The roleplay will last for 100 turns\n• Stay in character and enjoy the story!\n• Type `/end-roleplay` to end the session early",
+                name="📋 Rules",
+                value="• **100회 대화 후 자동으로 롤플레이 모드가 종료됩니다**\n• 캐릭터에 맞는 대화를 해주세요\n• `/end-roleplay`로 언제든 종료 가능",
                 inline=False
             )
             
-            start_embed.set_footer(text="Turn 0/100 • Type your first message to begin!")
+            start_embed.set_footer(
+                text=f"Turn 0/100 • {self.character_name}과의 모험을 시작하세요!",
+                icon_url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-icon/public"
+            )
             
             # 채널에 시작 메시지 전송
             await channel.send(embed=start_embed)
