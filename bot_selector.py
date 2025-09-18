@@ -2843,8 +2843,8 @@ class BotSelector(commands.Bot):
                     embed.add_field(name="Character", value=character, inline=True)
                     embed.add_field(name="Card", value=card_info['description'], inline=True)
                     
-                    if card_info.get('image_path'):
-                        embed.set_image(url=card_info['image_path'])
+                    if card_info.get('image_url'):
+                        embed.set_image(url=card_info['image_url'])
                     
                     await interaction.response.send_message(embed=embed, ephemeral=True)
                     
@@ -5040,7 +5040,7 @@ class CardSliderView(discord.ui.View):
             )
 
         # 카드 이미지 설정
-        image_url = card_info.get("image_path")
+        image_url = card_info.get("image_url")
         if image_url:
             cache_bust_url = f"{image_url}?t={int(time.time())}"
             embed.set_image(url=cache_bust_url)
@@ -5125,9 +5125,9 @@ class ShareCardButton(discord.ui.Button):
             inline=True
         )
 
-        image_path = card_info.get("image_path", "")
-        if image_path:
-            share_embed.set_image(url=image_path)
+        image_url = card_info.get("image_url", "")
+        if image_url:
+            share_embed.set_image(url=image_url)
 
         share_embed.set_footer(text=f"🎮 {self.character_name} Card Collection")
 
