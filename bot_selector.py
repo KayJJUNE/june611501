@@ -1004,9 +1004,15 @@ class BotSelector(commands.Bot):
                 embed.add_field(
                     name="Admin Commands",
                     value="""
-                    `/set_daily_limit [number]` - Set daily message limit
-                    `/add_admin_role [@role]` - Add admin role
-                    `/remove_admin_role [@role]` - Remove admin role
+                    `/admin reset [@user] [type]` - Reset user data (all/affinity/story/quest)
+                    `/admin set_daily_limit [number]` - Set daily message limit
+                    `/admin add_role [@role]` - Add admin role
+                    `/admin remove_role [@role]` - Remove admin role
+                    `/admin status` - Check bot status
+                    `/admin pop` - Distribute items to users
+                    `/admin message_add [@user] [count]` - Add message count
+                    `/admin cleanup_cards [@user]` - Clean up duplicate cards
+                    `/admin emergency_stop` - Emergency stop
                     """,
                     inline=False
                 )
@@ -1076,19 +1082,65 @@ class BotSelector(commands.Bot):
 
         # 추가 admin 명령어들
         @self.admin_group.command(
-            name="reset_affinity",
-            description="친밀도를 초기화합니다"
+            name="reset",
+            description="Reset user data (affinity, story, quest) - 통합 리셋 명령어"
         )
-        async def reset_affinity(interaction: discord.Interaction, target: discord.Member = None):
+        async def reset_command(interaction: discord.Interaction, target: discord.Member, reset_type: str = "all"):
             if not self.is_admin_user(interaction.user.id):
                 await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
                 return
             
-            if target:
-                self.db.reset_user_affinity(target.id)
-                await interaction.response.send_message(f"✅ {target.mention}'s affinity has been reset.", ephemeral=True)
-            else:
-                await interaction.response.send_message("❌ Please specify a target user.", ephemeral=True)
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            try:
+                reset_types = {
+                    "all": ["affinity", "story", "quest"],
+                    "affinity": ["affinity"],
+                    "story": ["story"], 
+                    "quest": ["quest"]
+                }
+                
+                if reset_type not in reset_types:
+                    await interaction.response.send_message(
+                        "❌ Invalid reset type. Available options: `all`, `affinity`, `story`, `quest`", 
+                        ephemeral=True
+                    )
+                    return
+                
+                reset_list = reset_types[reset_type]
+                reset_messages = []
+                
+                if "affinity" in reset_list:
+                    self.db.reset_user_affinity(target.id)
+                    reset_messages.append("✅ Affinity reset")
+                
+                if "story" in reset_list:
+                    self.db.reset_user_story_progress(target.id)
+                    reset_messages.append("✅ Story progress reset")
+                
+                if "quest" in reset_list:
+                    self.db.reset_user_quest_claims(target.id)
+                    reset_messages.append("✅ Quest claims reset")
+                
+                embed = discord.Embed(
+                    title="🔄 User Data Reset Complete",
+                    description=f"Successfully reset data for {target.mention}",
+                    color=discord.Color.green()
+                )
+                
+                embed.add_field(
+                    name="Reset Types",
+                    value="\n".join(reset_messages),
+                    inline=False
+                )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                
+            except Exception as e:
+                print(f"Error in reset_command: {e}")
+                await interaction.response.send_message("❌ An error occurred while resetting user data.", ephemeral=True)
 
         @self.admin_group.command(
             name="pop",
@@ -1103,7 +1155,36 @@ class BotSelector(commands.Bot):
                 await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
                 return
             
-            await interaction.response.send_message("🎁 Admin pop command is available! Use the interface to distribute items.", ephemeral=True)
+            # 선택 임베드 생성
+            embed = discord.Embed(
+                title="🎁 Admin Item Distribution",
+                description="Select what you want to give to users:",
+                color=discord.Color.gold()
+            )
+            
+            embed.add_field(
+                name="💝 Give Gift",
+                value="Give a gift to a user",
+                inline=True
+            )
+            embed.add_field(
+                name="🎴 Give Card", 
+                value="Give a card to a user",
+                inline=True
+            )
+            embed.add_field(
+                name="💬 Add Messages",
+                value="Add message count to a user",
+                inline=True
+            )
+            embed.add_field(
+                name="❤️ Add Affinity",
+                value="Add affinity points to a user",
+                inline=True
+            )
+            
+            view = AdminPopView(self)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         @self.admin_group.command(
             name="add_role",
@@ -1157,25 +1238,6 @@ class BotSelector(commands.Bot):
             self.settings_manager.set_daily_limit(limit)
             await interaction.response.send_message(f"✅ Daily message limit has been set to {limit}.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="reset_story",
-            description="Reset story progress for a user."
-        )
-        async def reset_story_command(interaction: discord.Interaction, user: discord.Member):
-            if not self.is_admin_user(interaction.user.id):
-                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
-                return
-            
-            if not self.is_admin_channel_allowed(interaction.channel.id):
-                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
-                return
-            
-            try:
-                self.db.reset_user_story_progress(user.id)
-                await interaction.response.send_message(f"✅ {user.mention}'s story progress has been reset.", ephemeral=True)
-            except Exception as e:
-                print(f"Error in reset_story_command: {e}")
-                await interaction.response.send_message("❌ An error occurred while resetting story progress.", ephemeral=True)
 
         @self.admin_group.command(
             name="message_add",
@@ -1201,25 +1263,6 @@ class BotSelector(commands.Bot):
                 print(f"Error in message_add_command: {e}")
                 await interaction.response.send_message("❌ An error occurred while adding messages.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="reset_quest",
-            description="Reset all quest claim records for a user."
-        )
-        async def reset_quest_command(interaction: discord.Interaction, user: discord.Member):
-            if not self.is_admin_user(interaction.user.id):
-                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
-                return
-            
-            if not self.is_admin_channel_allowed(interaction.channel.id):
-                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
-                return
-            
-            try:
-                self.db.reset_user_quest_claims(user.id)
-                await interaction.response.send_message(f"✅ {user.mention}'s quest claim records have been reset.", ephemeral=True)
-            except Exception as e:
-                print(f"Error in reset_quest_command: {e}")
-                await interaction.response.send_message("❌ An error occurred while resetting quest claims.", ephemeral=True)
 
         @self.admin_group.command(
             name="cleanup_cards",
@@ -6118,6 +6161,294 @@ class CardSliderView(discord.ui.View):
         share_embed.set_footer(text=f"Shared by {interaction.user.display_name}")
         
         await interaction.response.send_message(embed=share_embed)
+
+class AdminPopView(discord.ui.View):
+    def __init__(self, bot_instance: "BotSelector"):
+        super().__init__(timeout=300)
+        self.bot = bot_instance
+        self.add_item(AdminPopSelect())
+
+class AdminPopSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="💝 Give Gift",
+                value="gift",
+                description="Give a gift to a user"
+            ),
+            discord.SelectOption(
+                label="🎴 Give Card",
+                value="card",
+                description="Give a card to a user"
+            ),
+            discord.SelectOption(
+                label="💬 Add Messages",
+                value="message",
+                description="Add message count to a user"
+            ),
+            discord.SelectOption(
+                label="❤️ Add Affinity",
+                value="affinity",
+                description="Add affinity points to a user"
+            )
+        ]
+        super().__init__(
+            placeholder="Select what to give...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_type = self.values[0]
+        
+        if selected_type == "gift":
+            await self.handle_gift_give(interaction)
+        elif selected_type == "card":
+            await self.handle_card_give(interaction)
+        elif selected_type == "message":
+            await self.handle_message_add(interaction)
+        elif selected_type == "affinity":
+            await self.handle_affinity_add(interaction)
+
+    async def handle_gift_give(self, interaction: discord.Interaction):
+        """선물 지급 처리"""
+        modal = GiftGiveModal(self.bot)
+        await interaction.response.send_modal(modal)
+
+    async def handle_card_give(self, interaction: discord.Interaction):
+        """카드 지급 처리"""
+        modal = CardGiveModal(self.bot)
+        await interaction.response.send_modal(modal)
+
+    async def handle_message_add(self, interaction: discord.Interaction):
+        """메시지 추가 처리"""
+        modal = MessageAddModal(self.bot)
+        await interaction.response.send_modal(modal)
+
+    async def handle_affinity_add(self, interaction: discord.Interaction):
+        """호감도 추가 처리"""
+        modal = AffinityAddModal(self.bot)
+        await interaction.response.send_modal(modal)
+
+class GiftGiveModal(discord.ui.Modal):
+    def __init__(self, bot_instance: "BotSelector"):
+        super().__init__(title="Give Gift to User")
+        self.bot = bot_instance
+        
+        self.user_input = discord.ui.TextInput(
+            label="User ID or @mention",
+            placeholder="Enter user ID or mention the user",
+            required=True
+        )
+        self.add_item(self.user_input)
+        
+        self.gift_input = discord.ui.TextInput(
+            label="Gift ID",
+            placeholder="Enter gift ID to give",
+            required=True
+        )
+        self.add_item(self.gift_input)
+        
+        self.quantity_input = discord.ui.TextInput(
+            label="Quantity",
+            placeholder="Enter quantity (default: 1)",
+            required=False,
+            default="1"
+        )
+        self.add_item(self.quantity_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_id = self.parse_user_id(self.user_input.value)
+            if not user_id:
+                await interaction.response.send_message("❌ Invalid user. Please provide a valid user ID or mention.", ephemeral=True)
+                return
+            
+            gift_id = self.gift_input.value.strip()
+            quantity = int(self.quantity_input.value) if self.quantity_input.value else 1
+            
+            # 선물 지급
+            success = self.bot.db.add_user_gift(user_id, gift_id, quantity)
+            if success:
+                await interaction.response.send_message(f"✅ Successfully gave {quantity}x {gift_id} to user {user_id}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Failed to give gift to user {user_id}", ephemeral=True)
+                
+        except Exception as e:
+            print(f"Error in GiftGiveModal: {e}")
+            await interaction.response.send_message("❌ An error occurred while giving the gift.", ephemeral=True)
+
+    def parse_user_id(self, user_input: str) -> int:
+        """사용자 ID 파싱"""
+        try:
+            # @mention 형태인 경우
+            if user_input.startswith('<@') and user_input.endswith('>'):
+                return int(user_input[2:-1])
+            # 숫자 ID인 경우
+            return int(user_input)
+        except:
+            return None
+
+class CardGiveModal(discord.ui.Modal):
+    def __init__(self, bot_instance: "BotSelector"):
+        super().__init__(title="Give Card to User")
+        self.bot = bot_instance
+        
+        self.user_input = discord.ui.TextInput(
+            label="User ID or @mention",
+            placeholder="Enter user ID or mention the user",
+            required=True
+        )
+        self.add_item(self.user_input)
+        
+        self.character_input = discord.ui.TextInput(
+            label="Character Name",
+            placeholder="Enter character name (Kagari, Eros, Elysia)",
+            required=True
+        )
+        self.add_item(self.character_input)
+        
+        self.card_input = discord.ui.TextInput(
+            label="Card ID",
+            placeholder="Enter card ID to give",
+            required=True
+        )
+        self.add_item(self.card_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_id = self.parse_user_id(self.user_input.value)
+            if not user_id:
+                await interaction.response.send_message("❌ Invalid user. Please provide a valid user ID or mention.", ephemeral=True)
+                return
+            
+            character_name = self.character_input.value.strip()
+            card_id = self.card_input.value.strip()
+            
+            # 카드 지급
+            success = self.bot.db.add_user_card(user_id, character_name, card_id)
+            if success:
+                await interaction.response.send_message(f"✅ Successfully gave {character_name}'s card {card_id} to user {user_id}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Failed to give card to user {user_id}", ephemeral=True)
+                
+        except Exception as e:
+            print(f"Error in CardGiveModal: {e}")
+            await interaction.response.send_message("❌ An error occurred while giving the card.", ephemeral=True)
+
+    def parse_user_id(self, user_input: str) -> int:
+        """사용자 ID 파싱"""
+        try:
+            # @mention 형태인 경우
+            if user_input.startswith('<@') and user_input.endswith('>'):
+                return int(user_input[2:-1])
+            # 숫자 ID인 경우
+            return int(user_input)
+        except:
+            return None
+
+class MessageAddModal(discord.ui.Modal):
+    def __init__(self, bot_instance: "BotSelector"):
+        super().__init__(title="Add Messages to User")
+        self.bot = bot_instance
+        
+        self.user_input = discord.ui.TextInput(
+            label="User ID or @mention",
+            placeholder="Enter user ID or mention the user",
+            required=True
+        )
+        self.add_item(self.user_input)
+        
+        self.count_input = discord.ui.TextInput(
+            label="Message Count",
+            placeholder="Enter number of messages to add",
+            required=True
+        )
+        self.add_item(self.count_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_id = self.parse_user_id(self.user_input.value)
+            if not user_id:
+                await interaction.response.send_message("❌ Invalid user. Please provide a valid user ID or mention.", ephemeral=True)
+                return
+            
+            count = int(self.count_input.value)
+            
+            # 메시지 추가
+            self.bot.db.add_user_messages(user_id, count)
+            await interaction.response.send_message(f"✅ Successfully added {count} messages to user {user_id}", ephemeral=True)
+                
+        except Exception as e:
+            print(f"Error in MessageAddModal: {e}")
+            await interaction.response.send_message("❌ An error occurred while adding messages.", ephemeral=True)
+
+    def parse_user_id(self, user_input: str) -> int:
+        """사용자 ID 파싱"""
+        try:
+            # @mention 형태인 경우
+            if user_input.startswith('<@') and user_input.endswith('>'):
+                return int(user_input[2:-1])
+            # 숫자 ID인 경우
+            return int(user_input)
+        except:
+            return None
+
+class AffinityAddModal(discord.ui.Modal):
+    def __init__(self, bot_instance: "BotSelector"):
+        super().__init__(title="Add Affinity to User")
+        self.bot = bot_instance
+        
+        self.user_input = discord.ui.TextInput(
+            label="User ID or @mention",
+            placeholder="Enter user ID or mention the user",
+            required=True
+        )
+        self.add_item(self.user_input)
+        
+        self.character_input = discord.ui.TextInput(
+            label="Character Name",
+            placeholder="Enter character name (Kagari, Eros, Elysia)",
+            required=True
+        )
+        self.add_item(self.character_input)
+        
+        self.points_input = discord.ui.TextInput(
+            label="Affinity Points",
+            placeholder="Enter affinity points to add",
+            required=True
+        )
+        self.add_item(self.points_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_id = self.parse_user_id(self.user_input.value)
+            if not user_id:
+                await interaction.response.send_message("❌ Invalid user. Please provide a valid user ID or mention.", ephemeral=True)
+                return
+            
+            character_name = self.character_input.value.strip()
+            points = int(self.points_input.value)
+            
+            # 호감도 추가
+            self.bot.db.add_user_affinity(user_id, character_name, points)
+            await interaction.response.send_message(f"✅ Successfully added {points} affinity points for {character_name} to user {user_id}", ephemeral=True)
+                
+        except Exception as e:
+            print(f"Error in AffinityAddModal: {e}")
+            await interaction.response.send_message("❌ An error occurred while adding affinity.", ephemeral=True)
+
+    def parse_user_id(self, user_input: str) -> int:
+        """사용자 ID 파싱"""
+        try:
+            # @mention 형태인 경우
+            if user_input.startswith('<@') and user_input.endswith('>'):
+                return int(user_input[2:-1])
+            # 숫자 ID인 경우
+            return int(user_input)
+        except:
+            return None
 
 class NewStoryView(discord.ui.View):
     def __init__(self, bot_instance: "BotSelector", available_characters: list):
