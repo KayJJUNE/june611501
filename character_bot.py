@@ -387,7 +387,6 @@ class CharacterBot(commands.Bot):
         if message.author == self.user:
             return
 
-        # 1:1 채팅이 아닌 경우 처리하지 않음
         if message.channel.id not in self.active_channels:
             return
 
@@ -437,6 +436,18 @@ class CharacterBot(commands.Bot):
             return
 
         try:
+            # 스토리 모드 채널 체크
+            if "story" in message.channel.name.lower():
+                story_response = await process_story_message(
+                    message.content, 
+                    message.author.id, 
+                    message.author.display_name,
+                    self.character_name
+                )
+                if story_response:
+                    await message.channel.send(story_response)
+                return
+
             # 1:1 대화 모드: 바로 메시지 처리
             user_id = message.author.id
             character = self.character_name
@@ -460,129 +471,18 @@ class CharacterBot(commands.Bot):
         character = self.character_name
         now = datetime.utcnow()
 
-        # 첫 대화 체크 및 호감도 레벨별 인사 메시지
-        await self.check_and_send_greeting(message, user_id, character)
-
-        # 안전장치 확인 (BotSelector에서 가져온 안전장치 사용)
-        if (hasattr(self, 'bot_selector') and 
-            self.bot_selector is not None and 
-            hasattr(self.bot_selector, 'safety_guard') and 
-            self.bot_selector.safety_guard is not None):
-            try:
-                safety_check = await self.bot_selector.safety_guard.is_safe_to_process(
-                    user_id, message.guild.id if message.guild else 0, message.content
-                )
-                
-                if not safety_check['safe']:
-                    # 안전장치에 의해 차단된 경우
-                    blocked_reasons = safety_check['blocked_reasons']
-                    if 'spam_detection' in blocked_reasons:
-                        await message.channel.send("🚫 Spam detected. Please wait before sending another message.")
-                    elif 'user_rate_limit' in blocked_reasons:
-                        await message.channel.send("🚫 Too many requests. Please slow down.")
-                    elif 'daily_limit' in blocked_reasons:
-                        await message.channel.send("🚫 Daily message limit exceeded.")
-                    elif 'guild_rate_limit' in blocked_reasons:
-                        await message.channel.send("🚫 Server rate limit exceeded.")
-                    return
-            except Exception as e:
-                print(f"Error in safety guard check: {e}")
-                # 안전장치 에러가 발생해도 메시지 처리를 계속 진행
-
-        # 메시지 제한 확인
-        daily_used = self.db.get_user_daily_message_count(user_id)
-        paid_used = self.db.get_user_paid_message_count(user_id)
-        paid_balance = self.db.get_user_message_balance(user_id)
-        is_admin = self.db.is_user_admin(user_id)
-        is_subscribed = self.db.is_user_subscribed(user_id)
-        
-        # 메시지 사용 가능 여부 확인
-        can_send = False
-        message_type = None  # 'daily' 또는 'paid'
-        
-        if is_admin:
-            # 관리자는 제한 없음
-            can_send = True
-            message_type = 'daily'
-        elif is_subscribed:
-            # 구독 사용자는 일일 20개 + 구독 추가 메시지 사용 가능
-            subscription_daily_messages = self.db.get_subscription_daily_messages(user_id)
-            max_daily_messages = 20 + subscription_daily_messages
-            if daily_used < max_daily_messages:
-                can_send = True
-                message_type = 'daily'
-            else:
-                can_send = False
-        else:
-            # 일반 사용자: 일일 20개 먼저, 그 다음 유료 메시지
-            if daily_used < 20:
-                # 일일 메시지가 남아있으면 일일 메시지 사용
-                can_send = True
-                message_type = 'daily'
-            elif daily_used >= 20 and paid_balance > 0:
-                # 일일 메시지를 모두 사용했지만 유료 메시지가 있으면 유료 메시지 사용
-                can_send = True
-                message_type = 'paid'
-            else:
-                # 일일 메시지도 모두 사용하고 유료 메시지도 없으면 사용 불가
-                can_send = False
-        
-        # 메시지 사용 불가능한 경우
-        if not can_send:
-            if is_subscribed:
-                # 구독 사용자 제한
-                subscription_daily_messages = self.db.get_subscription_daily_messages(user_id)
-                max_daily_messages = 20 + subscription_daily_messages
-                embed = discord.Embed(
-                    title="🚫 Daily Message Limit",
-                    description=f"You have reached your daily message limit.\n\n**Messages used today:** {daily_used}/{max_daily_messages}\n**Remaining messages:** 0\n\n**Daily breakdown:** 20 (base) + {subscription_daily_messages} (subscription) = {max_daily_messages} total",
-                    color=discord.Color.red()
-                )
-                embed.add_field(
-                    name="💡 Subscription Benefits",
-                    value="Your subscription gives you extra messages daily. Check back tomorrow!",
-                    inline=False
-                )
-            else:
-                # 일반 사용자 제한
-                embed = discord.Embed(
-                    title="🚫 Message Balance Low",
-                    description=f"Your message balance is low.\n\n**Daily messages used:** {daily_used}/20\n**Message balance:** {paid_balance}\n\n**Daily messages reset at UTC+0**\n**Purchased messages have no time limit**",
-                    color=discord.Color.red()
-                )
-                embed.add_field(
-                    name="💡 Purchase a message pack",
-                    value="`/store` You can purchase message packs using commands.",
-                    inline=False
-                )
-            
-            await message.channel.send(embed=embed)
-            return
-
         # 언어 감지
         detected_language = self.detect_language(message.content)
         
         # 유저 메시지 DB 저장 (conversations 테이블)
-        is_daily = (message_type == 'daily')
         self.db.add_message(
             message.channel.id,   # channel_id
             user_id,              # user_id
             character,            # character_name
             "user",              # role
             message.content,      # content
-            detected_language,    # 감지된 언어
-            is_daily             # 일일 메시지 여부
+            detected_language     # 감지된 언어
         )
-
-        # 메시지 사용 처리
-        if not self.db.is_user_admin(user_id):
-            if message_type == 'paid':
-                # 유료 메시지 사용 시 잔액 차감
-                self.db.use_user_message(user_id)
-                print(f"Used paid message for user {user_id}, remaining balance: {self.db.get_user_message_balance(user_id)}")
-            else:
-                # 일일 메시지 사용 시 차감 없음 (자동으로 카운트됨)
-                print(f"Used daily message for user {user_id}, daily used: {self.db.get_user_daily_message_count(user_id)}")
 
         affinity_before = self.db.get_affinity(user_id, character)
         if not affinity_before:
@@ -609,16 +509,6 @@ class CharacterBot(commands.Bot):
             # 새로운 점수 및 마일스톤 계산
             new_score = prev_score + emotion_score
             new_grade = get_affinity_grade(new_score)
-
-            # [추가] 키워드 추출 (Silver, Gold 등급에서만)
-            if new_grade in ['Silver', 'Gold']:
-                try:
-                    keywords = self.keyword_manager.extract_keywords(message.content)
-                    if keywords:
-                        self.keyword_manager.save_keywords(user_id, character, keywords)
-                        print(f"[키워드] {character} - {len(keywords)}개 키워드 추출됨")
-                except Exception as e:
-                    print(f"[키워드 에러] {e}")
             new_milestone = (new_score // 10) * 10
 
             # 갱신할 최고 마일스톤 계산 (이전 값과 새 마일스톤 중 더 큰 값)
@@ -649,34 +539,10 @@ class CharacterBot(commands.Bot):
             if new_milestone > highest_milestone_before:
                 await self.handle_milestone_reward(message, character, user_id, new_milestone)
 
-            # [추가] 서머리 생성 (10개 메시지마다)
-            try:
-                recent_message_count = self.db.get_user_recent_message_count(user_id, character, 10)
-                if recent_message_count >= 10:
-                    # 10개 메시지마다 서머리 생성
-                    await self.create_memory_summary(user_id, character)
-            except Exception as e:
-                print(f"[서머리 에러] {e}")
-
         except Exception as e:
             print(f"Error in process_normal_message: {e}")
             import traceback
             traceback.print_exc()
-            
-            # 에러 핸들러에 에러 기록
-            if (hasattr(self, 'bot_selector') and 
-                self.bot_selector is not None and 
-                hasattr(self.bot_selector, 'error_handler') and 
-                self.bot_selector.error_handler is not None):
-                await self.bot_selector.error_handler.log_error(e, "process_normal_message")
-            
-            # 모니터링에 에러 기록
-            if (hasattr(self, 'bot_selector') and 
-                self.bot_selector is not None and 
-                hasattr(self.bot_selector, 'monitor') and 
-                self.bot_selector.monitor is not None):
-                self.bot_selector.monitor.record_error("process_normal_message")
-            
             await message.channel.send("❌ An error occurred while processing the response.")
 
     async def handle_daily_quest_reward(self, message, character_name: str, user_id: int):
@@ -717,19 +583,11 @@ class CharacterBot(commands.Bot):
             import random
             tiers, probs = zip(*tier_probs)
             chosen_tier = random.choices(tiers, weights=probs, k=1)[0]
-            
-            # 사용자가 보유한 카드 목록 가져오기 (카드 ID만)
             user_cards = self.db.get_user_cards(user_id, character)
-            user_card_ids = [card[0] for card in user_cards] if user_cards else []
-            
-            # 중복되지 않은 카드만 선택
-            available_cards = get_available_cards(character, chosen_tier, user_card_ids)
+            available_cards = get_available_cards(character, chosen_tier, user_cards)
             if not available_cards:
-                print(f"[DEBUG] No available cards for {character} tier {chosen_tier}, user already has all cards")
                 return  # 지급할 카드 없음
-            
             card_id = random.choice(available_cards)
-            print(f"[DEBUG] Selected card {card_id} from {len(available_cards)} available cards for {character} tier {chosen_tier}")
 
             # 카드 지급 (CardClaimView 사용) - 미리 저장하지 않고 버튼 클릭 시 저장
             from config import CHARACTER_CARD_INFO
@@ -916,7 +774,8 @@ class CharacterBot(commands.Bot):
                 {messages_text}
                 """
 
-                response = await openai.chat.completions.create(
+                client = openai.AsyncOpenAI()
+                response = await client.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "system", "content": prompt}],
                     max_tokens=200,
@@ -1150,240 +1009,19 @@ class CharacterBot(commands.Bot):
         except Exception as e:
             print(f"Error creating memory summary: {e}")
 
-    async def analyze_user_emotion(self, message: str) -> str:
-        """사용자 메시지의 감정을 분석합니다."""
-        import re
-        
-        # 감정 키워드 매칭
-        emotion_keywords = {
-            "happy": ["happy", "joy", "glad", "cheerful", "excited", "smile", "laugh", "haha", "hehe", "😊", "😄", "😆", "😁", "😃", "great", "wonderful", "amazing", "fantastic"],
-            "sad": ["sad", "depressed", "cry", "tears", "hurt", "pain", "sorrow", "grief", "😢", "😭", "😔", "😞", "😟", "upset", "down", "blue"],
-            "angry": ["angry", "mad", "furious", "rage", "annoyed", "irritated", "😠", "😡", "🤬", "😤", "frustrated", "pissed"],
-            "excited": ["excited", "thrilled", "pumped", "hyped", "wow", "awesome", "😍", "🤩", "😎", "🔥", "✨", "amazing", "incredible", "fantastic"],
-            "tired": ["tired", "exhausted", "sleepy", "drowsy", "fatigued", "😴", "😪", "😵", "💤", "worn out", "beat"]
-        }
-        
-        message_lower = message.lower()
-        
-        for emotion, keywords in emotion_keywords.items():
-            for keyword in keywords:
-                if keyword in message_lower:
-                    return emotion
-        
-        return "neutral"
-    
-    async def detect_topic(self, message: str) -> str:
-        """메시지의 주제를 감지합니다."""
-        import re
-        
-        topic_keywords = {
-            "food": ["food", "eat", "meal", "cook", "delicious", "hungry", "restaurant", "cafe", "drink", "tea", "coffee", "dinner", "lunch", "breakfast", "snack"],
-            "weather": ["weather", "rain", "snow", "sun", "cloud", "wind", "hot", "cold", "temperature", "sunny", "cloudy", "storm"],
-            "work": ["work", "job", "office", "company", "project", "meeting", "business", "career", "profession", "task"],
-            "hobby": ["hobby", "game", "movie", "drama", "book", "music", "exercise", "drawing", "photo", "sport", "art", "craft"],
-            "travel": ["travel", "trip", "vacation", "destination", "tour", "abroad", "domestic", "journey", "adventure", "explore"],
-            "music": ["music", "song", "singer", "album", "concert", "listen", "melody", "rhythm", "band", "artist", "performance"],
-            "book": ["book", "novel", "comic", "read", "reading", "literature", "author", "publish", "story", "fiction"],
-            "nature": ["nature", "mountain", "sea", "river", "forest", "flower", "tree", "animal", "bird", "sky", "outdoor", "park"]
-        }
-        
-        message_lower = message.lower()
-        
-        for topic, keywords in topic_keywords.items():
-            for keyword in keywords:
-                if keyword in message_lower:
-                    return topic
-        
-        return "general"
-    
-    async def get_time_period(self, user_id: int = None) -> str:
-        """사용자의 시간대를 반환합니다."""
-        import datetime
-        import pytz
-        
-        try:
-            # 사용자별 시간대가 저장되어 있다면 사용, 없으면 서버 시간대 사용
-            if user_id and hasattr(self, 'db'):
-                user_timezone = await self.db.get_user_timezone(user_id)
-                if user_timezone:
-                    user_tz = pytz.timezone(user_timezone)
-                    current_time = datetime.datetime.now(user_tz)
-                else:
-                    # 기본값으로 UTC 사용
-                    current_time = datetime.datetime.now(pytz.UTC)
-            else:
-                # 데이터베이스가 없거나 user_id가 없으면 서버 시간대 사용
-                current_time = datetime.datetime.now()
-            
-            current_hour = current_time.hour
-            
-            if 5 <= current_hour < 12:
-                return "morning"
-            elif 12 <= current_hour < 17:
-                return "afternoon"
-            elif 17 <= current_hour < 21:
-                return "evening"
-            else:
-                return "night"
-        except Exception as e:
-            print(f"Error getting time period: {e}")
-            # 오류 발생 시 서버 시간대 사용
-            current_hour = datetime.datetime.now().hour
-            if 5 <= current_hour < 12:
-                return "morning"
-            elif 12 <= current_hour < 17:
-                return "afternoon"
-            elif 17 <= current_hour < 21:
-                return "evening"
-            else:
-                return "night"
-    
-    async def get_current_time_info(self, user_id: int = None) -> dict:
-        """사용자의 현재 시간 정보를 반환합니다."""
-        import datetime
-        import pytz
-        
-        try:
-            # 사용자별 시간대가 저장되어 있다면 사용, 없으면 서버 시간대 사용
-            if user_id and hasattr(self, 'db'):
-                user_timezone = await self.db.get_user_timezone(user_id)
-                if user_timezone:
-                    user_tz = pytz.timezone(user_timezone)
-                    current_time = datetime.datetime.now(user_tz)
-                    timezone_name = user_timezone
-                else:
-                    # 기본값으로 UTC 사용
-                    current_time = datetime.datetime.now(pytz.UTC)
-                    timezone_name = "UTC"
-            else:
-                # 데이터베이스가 없거나 user_id가 없으면 서버 시간대 사용
-                current_time = datetime.datetime.now()
-                timezone_name = "서버 시간대"
-            
-            # 시간 구간 판단
-            current_hour = current_time.hour
-            if 5 <= current_hour < 12:
-                period = "morning"
-                period_kr = "아침"
-            elif 12 <= current_hour < 17:
-                period = "afternoon"
-                period_kr = "오후"
-            elif 17 <= current_hour < 21:
-                period = "evening"
-                period_kr = "저녁"
-            else:
-                period = "night"
-                period_kr = "밤"
-            
-            # 시간 포맷팅
-            time_str = current_time.strftime("%H:%M")
-            date_str = current_time.strftime("%Y년 %m월 %d일")
-            
-            return {
-                "time": time_str,
-                "date": date_str,
-                "period": period,
-                "period_kr": period_kr,
-                "timezone": timezone_name,
-                "full_time": current_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "hour": current_hour,
-                "minute": current_time.minute
-            }
-        except Exception as e:
-            print(f"Error getting current time info: {e}")
-            # 오류 발생 시 서버 시간대 사용
-            current_time = datetime.datetime.now()
-            current_hour = current_time.hour
-            
-            if 5 <= current_hour < 12:
-                period = "morning"
-                period_kr = "아침"
-            elif 12 <= current_hour < 17:
-                period = "afternoon"
-                period_kr = "오후"
-            elif 17 <= current_hour < 21:
-                period = "evening"
-                period_kr = "저녁"
-            else:
-                period = "night"
-                period_kr = "밤"
-            
-            return {
-                "time": current_time.strftime("%H:%M"),
-                "date": current_time.strftime("%Y년 %m월 %d일"),
-                "period": period,
-                "period_kr": period_kr,
-                "timezone": "서버 시간대",
-                "full_time": current_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "hour": current_hour,
-                "minute": current_time.minute
-            }
-    
-    async def detect_time_question(self, message: str) -> bool:
-        """시간 관련 질문인지 감지합니다."""
-        time_keywords = [
-            "what time", "what's the time", "current time", "time now", "지금 몇 시", "몇 시야", "시간이", "시간이야",
-            "time is it", "what time is it", "현재 시간", "지금 시간", "몇시", "몇시야", "시간", "시계"
-        ]
-        
-        message_lower = message.lower()
-        for keyword in time_keywords:
-            if keyword in message_lower:
-                return True
-        return False
-    
     async def build_conversation_context(self, user_id: int, character: str, current_message: str, call_nickname: bool = False) -> list:
         """대화 컨텍스트를 구성합니다."""
         context = []
-        from config import CHARACTER_INFO, CHARACTER_PROMPTS, CHARACTER_AFFINITY_SPEECH, CHARACTER_PERSONALITIES, CHARACTER_EMOTION_REACTIONS, CHARACTER_TOPIC_REACTIONS, CHARACTER_TIME_REACTIONS
-        
+        from config import CHARACTER_INFO, CHARACTER_PROMPTS, CHARACTER_AFFINITY_SPEECH
         character_info = CHARACTER_INFO.get(character, {})
         character_prompt = CHARACTER_PROMPTS.get(character, "")
-        character_personality = CHARACTER_PERSONALITIES.get(character, {})
         nickname = self.db.get_user_nickname(user_id, character)
         affinity_info = self.db.get_affinity(user_id, character)
         affinity_grade = get_affinity_grade(affinity_info['emotion_score'])
         affinity_speech = CHARACTER_AFFINITY_SPEECH.get(character, {}).get(affinity_grade, {})
         tone = affinity_speech.get("tone", "")
         example = affinity_speech.get("example", "")
-        
-        # 감정 및 주제 분석
-        user_emotion = await self.analyze_user_emotion(current_message)
-        detected_topic = await self.detect_topic(current_message)
-        time_period = await self.get_time_period(user_id)
-        
-        # 시간 관련 질문 감지
-        time_question = await self.detect_time_question(current_message)
-        time_info = None
-        if time_question:
-            time_info = await self.get_current_time_info(user_id)
-        
-        # 캐릭터 개성 정보 추출
-        core_traits = character_personality.get("core_traits", [])
-        speech_patterns = character_personality.get("speech_patterns", [])
-        interests = character_personality.get("interests", [])
-        quirks = character_personality.get("quirks", [])
-        response_style = character_personality.get("response_style", "")
-        
-        # 감정별 반응 정보
-        emotion_reactions = CHARACTER_EMOTION_REACTIONS.get(character, {}).get(user_emotion, {})
-        emotion_reaction = ""
-        if emotion_reactions:
-            import random
-            emotion_reaction = random.choice(emotion_reactions.get("reactions", [""]))
-            emotion_follow_up = emotion_reactions.get("follow_up", "")
-        
-        # 주제별 반응 정보
-        topic_reaction = CHARACTER_TOPIC_REACTIONS.get(character, {}).get(detected_topic, "")
-        
-        # 시간대별 반응 정보
-        time_reactions = CHARACTER_TIME_REACTIONS.get(character, {}).get(time_period, {})
-        time_greeting = time_reactions.get("greeting", "")
-        time_mood = time_reactions.get("mood", "")
-        time_activity = time_reactions.get("activity", "")
-        
         nickname_instruction = f"In this response, naturally incorporate the user's nickname '{nickname}' in a way that feels genuine and matches the emotional context. Only use the nickname if it flows naturally with your response." if nickname and call_nickname else "For this response, avoid using the user's nickname and focus on creating a natural conversation flow."
-        
         system_message = f"""{character_prompt}
 
 Character Status:
@@ -1392,51 +1030,13 @@ Character Status:
 - Current tone: {tone}
 - Example response: {example}
 
-Character Personality:
-- Core traits: {', '.join(core_traits)}
-- Speech patterns: {', '.join(speech_patterns)}
-- Interests: {', '.join(interests)}
-- Quirks: {', '.join(quirks)}
-- Response style: {response_style}
-
-Context Analysis:
-- User's detected emotion: {user_emotion}
-- Detected topic: {detected_topic}
-- Current time period: {time_period}
-{f"- Current time: {time_info['time']} ({time_info['period_kr']})" if time_info else ""}
-{f"- Date: {time_info['date']}" if time_info else ""}
-{f"- Timezone: {time_info['timezone']}" if time_info else ""}
-
-Emotion-based Response:
-{emotion_reaction if emotion_reaction else "Respond naturally to the user's emotional state"}
-
-Topic-based Response:
-{topic_reaction if topic_reaction else "Respond naturally to the conversation topic"}
-
-Time-based Response:
-- Time greeting: {time_greeting}
-- Time mood: {time_mood}
-- Time activity: {time_activity}
-
 {nickname_instruction}
 
 [IMPORTANT] For this conversation:
-1. Use the specified tone and nuance based on affinity level
-2. Keep responses natural and in character - embody the core traits and quirks
+1. Use the specified tone and nuance
+2. Keep responses natural and in character
 3. Show appropriate emotions and actions in parentheses
-4. Maintain the character's unique personality and speech patterns
-5. Reference the character's interests when relevant
-6. Respond to the user's emotional state with empathy and understanding
-7. Incorporate topic-specific responses when relevant
-8. Consider the time of day in your response
-9. NEVER mention being an AI, bot, or program
-10. Always respond in the same language as the user
-11. Use informal speech style
-12. Add emotional expressions in parentheses like (smiles), (looks away), etc.
-13. Follow the character's response style and incorporate their quirks naturally
-14. Pay attention to the user's message context and respond appropriately
-15. Make the conversation feel personal and engaging
-{f"16. TIME QUESTION DETECTED: The user is asking about the current time. Provide the specific time information naturally in your response: {time_info['time']} ({time_info['period_kr']}) on {time_info['date']}" if time_question and time_info else ""}
+4. Maintain the character's personality
 """
         context.append({"role": "system", "content": system_message})
         # Silver, Gold, Platinum 등급에서만 최대 3개 메모리 요약
@@ -1529,50 +1129,6 @@ Time-based Response:
         if user_id in self.story_mode_users:
             del self.story_mode_users[user_id]
             print(f"[스토리 모드] User {user_id} ended story mode with {self.character_name}")
-
-    async def check_and_send_greeting(self, message, user_id: int, character: str):
-        """첫 대화인지 확인하고 호감도 레벨별 인사 메시지를 보냅니다."""
-        try:
-            # 오늘 첫 대화인지 확인 (UTC 기준)
-            today = datetime.utcnow().date()
-            recent_messages = self.db.get_user_recent_messages(user_id, character, 1)
-            
-            if not recent_messages:
-                # 첫 대화인 경우 호감도 레벨별 인사 메시지 전송
-                await self.send_affinity_greeting(message, user_id, character)
-        except Exception as e:
-            print(f"[ERROR] check_and_send_greeting: {e}")
-
-    async def send_affinity_greeting(self, message, user_id: int, character: str):
-        """호감도 레벨에 따른 인사 메시지를 전송합니다."""
-        try:
-            from config import CHARACTER_AFFINITY_GREETINGS
-            from utils import get_affinity_grade
-            
-            # 호감도 정보 가져오기
-            affinity_info = self.db.get_affinity(user_id, character)
-            if not affinity_info:
-                # 호감도 정보가 없으면 Rookie로 설정
-                affinity_grade = "Rookie"
-            else:
-                affinity_grade = get_affinity_grade(affinity_info['emotion_score'])
-            
-            # 닉네임 가져오기
-            nickname = self.db.get_user_nickname(user_id, character)
-            if not nickname:
-                nickname = message.author.display_name
-            
-            # 호감도 레벨별 인사 메시지 가져오기
-            greeting_template = CHARACTER_AFFINITY_GREETINGS.get(character, {}).get(affinity_grade, "Hello!")
-            
-            # 닉네임 치환
-            greeting_message = greeting_template.format(nickname=nickname)
-            
-            # 인사 메시지 전송
-            await message.channel.send(greeting_message)
-            
-        except Exception as e:
-            print(f"[ERROR] send_affinity_greeting: {e}")
 
 async def run_all_bots():
     selector_bot = None
@@ -1697,6 +1253,21 @@ def choose_card_tier(affinity):
     tiers, probs = zip(*tier_probs)
     return random.choices(tiers, weights=probs, k=1)[0]
 
+def get_available_cards(character_name: str, tier: str, user_cards: list) -> list[str]:
+    """사용자가 가진 카드를 제외한 해당 티어의 사용 가능한 카드 목록 반환"""
+    from config import CHARACTER_CARD_INFO
+
+    if character_name not in CHARACTER_CARD_INFO:
+        return []
+
+    # 해당 티어의 모든 카드 찾기
+    all_cards = []
+    for card_id, card_info in CHARACTER_CARD_INFO[character_name].items():
+        if card_info.get('tier') == tier:
+            all_cards.append(card_id)
+
+    # 사용자가 가지고 있지 않은 카드만 반환
+    return [card for card in all_cards if card not in user_cards]
 
 def get_random_card_id(character_name, tier):
     from config import CHARACTER_CARD_INFO

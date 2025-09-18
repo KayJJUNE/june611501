@@ -139,4 +139,32 @@ def get_gifts_by_rarity_v2(rarity: str, count: int = 1) -> list[str]:
     """특정 등급의 랜덤 아이템들을 반환합니다."""
     matching_gifts = [gift_id for gift_id, details in ALL_GIFTS.items() 
                      if details.get('rarity') == rarity]
-    return random.sample(matching_gifts, min(count, len(matching_gifts))) if matching_gifts else [] 
+    return random.sample(matching_gifts, min(count, len(matching_gifts))) if matching_gifts else []
+
+def get_gift_affinity_change(character_name: str, gift_id: str) -> int:
+    """
+    기프트 등급에 따른 호감도 변화를 계산합니다.
+    - 캐릭터 전용 선물이 아닌 경우: -1
+    - 전용 선물 등급에 따라: Common +1, Rare +3, Epic +5
+    """
+    # 선물이 해당 캐릭터의 선호 선물인지 확인
+    is_preferred = check_gift_preference(character_name, gift_id)
+    
+    if not is_preferred:
+        # 캐릭터 전용 선물이 아닌 경우
+        return -1
+    
+    # 선물 등급에 따른 호감도 변화
+    gift_details = get_gift_details(gift_id)
+    if not gift_details:
+        return -1
+    
+    rarity = gift_details.get('rarity', '')
+    if rarity == GIFT_RARITY["COMMON"]:
+        return 1
+    elif rarity == GIFT_RARITY["RARE"]:
+        return 3
+    elif rarity == GIFT_RARITY["EPIC"]:
+        return 5
+    else:
+        return -1 

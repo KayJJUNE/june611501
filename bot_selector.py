@@ -1147,7 +1147,8 @@ Respond in the same language as the user's message.
             # 캐릭터별 시스템 프롬프트 가져오기
             system_prompt = CHARACTER_PROMPTS.get(character_name, "")
             
-            response = await openai.ChatCompletion.acreate(
+            client = openai.AsyncOpenAI()
+            response = await client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -6666,7 +6667,7 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             story_prompt = self.story_prompt_input.value.strip()
             
             # 기존 롤플레이 세션이 있는지 확인
-            user_nickname = self.bot.get_user_nickname(interaction.user.id, self.character_name) or "user"
+            user_nickname = self.bot.db.get_user_nickname(interaction.user.id, self.character_name) or "user"
             channel_name = f"{self.character_name.lower()}-roleplay-{user_nickname}"
             
             existing_channel = discord.utils.get(interaction.guild.channels, name=channel_name)
@@ -6815,7 +6816,7 @@ class RoleplayModal(discord.ui.Modal):
             
             # 롤플레이 채널 생성
             guild = interaction.guild
-            user_nickname = self.bot.get_user_nickname(interaction.user.id, self.character_name)
+            user_nickname = self.bot.db.get_user_nickname(interaction.user.id, self.character_name)
             channel_name = f"{self.character_name.lower()}-roleplay-{user_nickname}"
             
             # 기존 롤플레이 채널이 있는지 확인
@@ -7428,7 +7429,7 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             story_prompt = self.story_prompt_input.value.strip()
             
             # 기존 롤플레이 세션이 있는지 확인
-            user_nickname = self.bot.get_user_nickname(interaction.user.id, self.character_name) or "user"
+            user_nickname = self.bot.db.get_user_nickname(interaction.user.id, self.character_name) or "user"
             channel_name = f"{self.character_name.lower()}-roleplay-{user_nickname}"
             
             existing_channel = discord.utils.get(interaction.guild.channels, name=channel_name)
