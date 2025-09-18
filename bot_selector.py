@@ -253,9 +253,17 @@ except NameError:
             self.user_role = discord.ui.TextInput(label="Your Role", max_length=150, required=True)
             self.character_role = discord.ui.TextInput(label="Character Role", max_length=150, required=True)
             self.story_line = discord.ui.TextInput(label="Story Line", max_length=1500, required=True, style=discord.TextStyle.paragraph)
+            self.mode = discord.ui.TextInput(
+                label="Roleplay Mode", 
+                max_length=50, 
+                required=True, 
+                placeholder="romantic, friendship, healing, fantasy, custom",
+                default="romantic"
+            )
             self.add_item(self.user_role)
             self.add_item(self.character_role)
             self.add_item(self.story_line)
+            self.add_item(self.mode)
 
         async def on_submit(self, interaction: discord.Interaction):
             # 글자수 초과 체크 (혹시 모를 예외 상황 대비)
@@ -293,6 +301,16 @@ except NameError:
                 )
 
                 # 2. 세션 정보 저장 (새 채널에만)
+                session_id = f"rp_{interaction.user.id}_{self.character_name}_{int(datetime.now().timestamp())}"
+                
+                # 데이터베이스에 세션 저장
+                bot_selector.db.create_roleplay_session(
+                    session_id, interaction.user.id, self.character_name, 
+                    self.mode.value.lower(), self.user_role.value, 
+                    self.character_role.value, self.story_line.value
+                )
+                
+                # 메모리에도 저장 (기존 호환성 유지)
                 bot_selector.roleplay_sessions[channel.id] = {
                     "is_active": True,
                     "user_id": interaction.user.id,
@@ -300,21 +318,33 @@ except NameError:
                     "user_role": self.user_role.value,
                     "character_role": self.character_role.value,
                     "story_line": self.story_line.value,
-                    "turns_remaining": 30
+                    "mode": self.mode.value.lower(),
+                    "session_id": session_id,
+                    "turns_remaining": 100
                 }
 
                 # 3. 새 채널에 임베드 출력
                 from config import CHARACTER_INFO
                 char_info = CHARACTER_INFO.get(self.character_name, {})
+                # 모드별 이모지 매핑
+                mode_emojis = {
+                    "romantic": "💕",
+                    "friendship": "👥", 
+                    "healing": "🕊️",
+                    "fantasy": "⚔️",
+                    "custom": "✨"
+                }
+                
                 embed = discord.Embed(
                     title=f"🎭 Roleplay Session with {self.character_name} Begins! 🎭",
                     description=(
                         f"🎬 **Roleplay Scenario** 🎬\n"
+                        f"**Mode:** {mode_emojis.get(self.mode.value.lower(), '✨')} {self.mode.value.title()}\n"
                         f"**Your Role:** `{self.user_role.value}`\n"
                         f"**{self.character_name}'s Role:** `{self.character_role.value}`\n"
                         f"**Story/Situation:**\n> {self.story_line.value}\n\n"
                         f"✨ {self.character_name} will now act according to their role and personality in this scenario! ✨\n"
-                        f"💬 Enjoy 30 turns of immersive roleplay conversation."
+                        f"💬 Enjoy 100 turns of immersive roleplay conversation."
                     ),
                     color=discord.Color.magenta()
                 )
@@ -1075,6 +1105,162 @@ class BotSelector(commands.Bot):
             
             await interaction.response.send_message("🎁 Admin pop command is available! Use the interface to distribute items.", ephemeral=True)
 
+        @self.admin_group.command(
+            name="add_role",
+            description="Add an admin role"
+        )
+        async def add_admin_role(interaction: discord.Interaction, role: discord.Role):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            self.settings_manager.add_admin_role(role.id)
+            await interaction.response.send_message(f"✅ Role {role.mention} has been added as an admin role.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="remove_role",
+            description="Remove the administrator role"
+        )
+        async def remove_admin_role(interaction: discord.Interaction, role: discord.Role):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            self.settings_manager.remove_admin_role(role.id)
+            await interaction.response.send_message(f"✅ Role {role.mention} has been removed from admin roles.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="set_daily_limit",
+            description="Setting a daily message limit"
+        )
+        async def set_daily_limit(interaction: discord.Interaction, limit: int):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            if limit < 1:
+                await interaction.response.send_message("❌ Daily limit must be at least 1.", ephemeral=True)
+                return
+            
+            self.settings_manager.set_daily_limit(limit)
+            await interaction.response.send_message(f"✅ Daily message limit has been set to {limit}.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="reset_story",
+            description="Reset story progress for a user."
+        )
+        async def reset_story_command(interaction: discord.Interaction, user: discord.Member):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            try:
+                self.db.reset_user_story_progress(user.id)
+                await interaction.response.send_message(f"✅ {user.mention}'s story progress has been reset.", ephemeral=True)
+            except Exception as e:
+                print(f"Error in reset_story_command: {e}")
+                await interaction.response.send_message("❌ An error occurred while resetting story progress.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="message_add",
+            description="Manually add a user's message count."
+        )
+        async def message_add_command(interaction: discord.Interaction, user: discord.Member, count: int):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            if count < 1:
+                await interaction.response.send_message("❌ Message count must be at least 1.", ephemeral=True)
+                return
+            
+            try:
+                self.db.add_user_messages(user.id, count)
+                await interaction.response.send_message(f"✅ Added {count} messages to {user.mention}.", ephemeral=True)
+            except Exception as e:
+                print(f"Error in message_add_command: {e}")
+                await interaction.response.send_message("❌ An error occurred while adding messages.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="reset_quest",
+            description="Reset all quest claim records for a user."
+        )
+        async def reset_quest_command(interaction: discord.Interaction, user: discord.Member):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            try:
+                self.db.reset_user_quest_claims(user.id)
+                await interaction.response.send_message(f"✅ {user.mention}'s quest claim records have been reset.", ephemeral=True)
+            except Exception as e:
+                print(f"Error in reset_quest_command: {e}")
+                await interaction.response.send_message("❌ An error occurred while resetting quest claims.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="cleanup_cards",
+            description="Clean up duplicate cards for a user or all users."
+        )
+        async def cleanup_cards_command(interaction: discord.Interaction, user: discord.Member = None):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            try:
+                if user:
+                    deleted_count = self.db.cleanup_duplicate_cards(user.id)
+                    await interaction.response.send_message(f"✅ Cleaned up {deleted_count} duplicate cards for {user.mention}", ephemeral=True)
+                else:
+                    deleted_count = self.db.cleanup_all_duplicate_cards()
+                    await interaction.response.send_message(f"✅ Cleaned up {deleted_count} duplicate cards for all users", ephemeral=True)
+            except Exception as e:
+                print(f"Error in cleanup_cards_command: {e}")
+                await interaction.response.send_message("❌ An error occurred while cleaning up duplicate cards.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="emergency_stop",
+            description="Emergency stop for critical issues"
+        )
+        async def emergency_stop_command(interaction: discord.Interaction):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            self.emergency_mode = True
+            await interaction.response.send_message("🚨 Emergency mode activated! Bot is now in emergency stop mode.", ephemeral=True)
+
     def get_memory_usage(self):
         """메모리 사용량을 반환합니다."""
         try:
@@ -1345,149 +1531,8 @@ class BotSelector(commands.Bot):
                 if not interaction.response.is_done():
                     await interaction.response.send_message("Failed to delete the channel. Please try again.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="channel",
-            description="Set admin-only channel for sensitive commands"
-        )
-        async def admin_channel_command(interaction: discord.Interaction, action: str = "add"):
-            """관리자 전용 채널 설정"""
-            if not self.is_admin_user(interaction.user.id):
-                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
-                return
-            
-            if not isinstance(interaction.channel, discord.TextChannel):
-                await interaction.response.send_message("❌ This command can only be used in server channels.", ephemeral=True)
-                return
-            
-            channel_id = interaction.channel.id
-            
-            if action.lower() == "add":
-                self.admin_channels.add(channel_id)
-                self.save_admin_channels()
-                await interaction.response.send_message(f"✅ Channel {interaction.channel.mention} has been added to admin channels.", ephemeral=True)
-            elif action.lower() == "remove":
-                self.admin_channels.discard(channel_id)
-                self.save_admin_channels()
-                await interaction.response.send_message(f"✅ Channel {interaction.channel.mention} has been removed from admin channels.", ephemeral=True)
-            elif action.lower() == "list":
-                if self.admin_channels:
-                    channel_mentions = [f"<#{cid}>" for cid in self.admin_channels]
-                    await interaction.response.send_message(f"📋 Admin channels: {', '.join(channel_mentions)}", ephemeral=True)
-                else:
-                    await interaction.response.send_message("📋 No admin channels set. All channels allow admin commands.", ephemeral=True)
-            else:
-                await interaction.response.send_message("❌ Invalid action. Use 'add', 'remove', or 'list'.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="settings",
-            description="현재 설정 확인"
-        )
-        async def settings_command(interaction: discord.Interaction):
-            if not isinstance(interaction.channel, discord.TextChannel):
-                await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
-                return
-            
-            # 지정된 관리자 사용자 확인
-            if not self.is_admin_user(interaction.user.id):
-                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
-                return
-            
-            # 관리자 채널 제한 확인
-            if not self.is_admin_channel_allowed(interaction.channel.id):
-                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
-                return
 
-            embed = discord.Embed(
-                title="Bot Settings",
-                description="Current Settings Status",
-                color=discord.Color.blue()
-            )
-
-            embed.add_field(
-                name="Daily Message Limit",
-                value=f"{self.settings_manager.daily_limit} messages",
-                inline=False
-            )
-
-            admin_roles = []
-            for role_id in self.settings_manager.admin_roles:
-                role = interaction.guild.get_role(role_id)
-                if role:
-                    admin_roles.append(role.name)
-
-            embed.add_field(
-                name="Admin Roles",
-                value="\n".join(admin_roles) if admin_roles else "None",
-                inline=False
-            )
-
-            if self.settings_manager.is_admin(interaction.user):
-                embed.add_field(
-                    name="Admin Commands",
-                    value="""
-                    `/set_daily_limit [number]` - Set daily message limit
-                    `/add_admin_role [@role]` - Add admin role
-                    `/remove_admin_role [@role]` - Remove admin role
-                    """,
-                    inline=False
-                )
-
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-
-        @self.admin_group.command(
-            name="reset_affinity",
-            description="친밀도를 초기화합니다"
-        )
-        async def reset_affinity(interaction: discord.Interaction, target: discord.Member = None):
-            # 관리자 권한 확인
-            if not self.settings_manager.is_admin(interaction.user):
-                await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
-                return
-
-            try:
-                # 현재 채널의 캐릭터 봇 찾기
-                current_bot = None
-                for char_name, bot in self.character_bots.items():
-                    if interaction.channel.id in bot.active_channels:
-                        current_bot = bot
-                        break
-
-                if not current_bot:
-                    await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
-                    return
-
-                # DatabaseManager에 reset_affinity 메서드 추가
-                if target:
-                    # 특정 유저의 친밀도만 초기화
-                    sucess = current_bot.db.reset_affinity(target.id, current_bot.character_name)
-                    if sucess:
-                        await interaction.response.send_message(
-                           f"{target.display_name}'s affinity with {current_bot.character_name} has been reset.",
-                           ephemeral=True
-                        )
-                else:
-                    # 모든 유저의 친밀도 초기화
-                    success = current_bot.db.reset_all_affinity(current_bot.character_name)
-                    if success:
-                        await interaction.response.send_message(
-                            f"All users' affinity with {current_bot.character_name} has been reset.",
-                            ephemeral=True
-                        )
-            except Exception as e:
-                print(f"Error in reset_affinity command: {e}")
-                await interaction.response.send_message("An error occurred while resetting affinity.", ephemeral=True)
-
-        @self.admin_group.command(
-            name="add_role",
-            description="Add an admin role"
-        )
-        async def add_admin_role(interaction: discord.Interaction, role: discord.Role):
-            if not interaction.user.guild_permissions.administrator:
-                await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
-                return
-
-            self.settings_manager.add_admin_role(role.id)
-            await interaction.response.send_message(f"{role.name} role has been added to the admin role.", ephemeral=True)
 
         @self.tree.command(
             name="ranking",
@@ -1869,43 +1914,7 @@ class BotSelector(commands.Bot):
                 except:
                     await interaction.followup.send("An error occurred while loading your information.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="remove_role",
-            description="Remove the administrator role"
-        )
-        async def remove_admin_role(interaction: discord.Interaction, role: discord.Role):
-            if not interaction.user.guild_permissions.administrator:
-                await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
-                return
 
-            if role.id in self.settings_manager.admin_roles:
-                self.settings_manager.remove_admin_role(role.id)
-                await interaction.response.send_message(f"{role.name} role has been removed from the admin role.", ephemeral=True)
-            else:
-                await interaction.response.send_message(f"{role.name} role is not an admin role.", ephemeral=True)
-
-        @self.admin_group.command(
-            name="set_daily_limit",
-            description="Setting a daily message limit"
-        )
-        async def set_daily_limit(interaction: discord.Interaction, limit: int):
-            if not self.settings_manager.is_admin(interaction.user):
-                await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
-                return
-
-            if limit < 1:
-                await interaction.response.send_message("The limit must be 1 or more.", ephemeral=True)
-                return
-
-            self.settings_manager.set_daily_limit(limit)
-
-            embed = discord.Embed(
-                title="Settings changed",
-                description=f"The daily message limit has been set to {limit}.",
-                color=discord.Color.green()
-            )
-
-            await interaction.response.send_message(embed=embed, ephemeral=True)
 
         @self.tree.command(
             name="force_language",
@@ -2116,58 +2125,11 @@ class BotSelector(commands.Bot):
             
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-        @self.admin_group.command(
-            name="reset_story",
-            description="Reset story progress for a user."
-        )
-        @app_commands.describe(
-            user="The user whose story progress you want to reset.",
-            character="The character whose story you want to reset."
-        )
-        @app_commands.choices(character=[
-            discord.app_commands.Choice(name=name, value=name) for name in CHARACTER_INFO.keys()
-        ])
-        async def reset_story_command(interaction: discord.Interaction, user: discord.Member, character: str):
-            """Resets story progress for a specific user and character."""
-            try:
-                success = self.db.reset_story_progress(user.id, character)
-                if success:
-                    await interaction.response.send_message(f"Successfully reset story progress for {user.display_name} with {character}.", ephemeral=True)
-                else:
-                    await interaction.response.send_message(f"Failed to reset story progress for {user.display_name} with {character}.", ephemeral=True)
-            except Exception as e:
-                print(f"Error in reset_story_command: {e}")
-                traceback.print_exc()
-                await interaction.response.send_message("An error occurred while resetting story progress.", ephemeral=True)
 
         async def story_character_select_callback(self, interaction: discord.Interaction, selected_char: str):
             # 이 함수는 더 이상 사용되지 않지만, 다른 곳에서 호출될 경우를 대비해 유지합니다.
             await interaction.response.send_message(f"Selected: {selected_char}. This part of story is under construction.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="message_add",
-            description="Manually add a user's message count."
-        )
-        async def message_add_command(interaction: discord.Interaction, target: discord.Member, count: int, character: str):
-            if not self.settings_manager.is_admin(interaction.user):
-                await interaction.response.send_message("Available to admins only.", ephemeral=True)
-                return
-            # DB에 메시지 추가 (실제 메시지 insert)
-            for _ in range(count):
-                self.db.add_message(
-                    0,              # channel_id
-                    target.id,      # user_id
-                    character,      # character_name
-                    "user",        # role
-                    "[Add an admin message]",  # content
-                    "en"           # language
-                )
-            embed = discord.Embed(
-                title="Finished adding the number of messages",
-                description=f"{target.display_name}의 {character} 메시지 수가 {count}만큼 증가했습니다.",
-                color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 
@@ -3138,50 +3100,6 @@ class BotSelector(commands.Bot):
                     except:
                         await interaction.followup.send("An error occurred while loading your information.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="pop",
-            description="Manually distribute items to users (Messages, Cards, Gifts, Affinity)"
-        )
-        async def pop_command(interaction: discord.Interaction):
-            """관리자용 물리적 상품 지급 명령어"""
-            if not self.is_admin_user(interaction.user.id):
-                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
-                return
-            
-            # 관리자 채널 제한 확인
-            if not self.is_admin_channel_allowed(interaction.channel.id):
-                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
-                return
-            
-            embed = discord.Embed(
-                title="🎯 Admin Item Distribution System",
-                description="Select the type of item you want to distribute:",
-                color=discord.Color.blue()
-            )
-            embed.add_field(
-                name="💬 Messages",
-                value="Give message balance to users",
-                inline=True
-            )
-            embed.add_field(
-                name="🃏 Cards", 
-                value="Give specific cards to users",
-                inline=True
-            )
-            embed.add_field(
-                name="🎁 Gifts",
-                value="Give gifts to users", 
-                inline=True
-            )
-            embed.add_field(
-                name="💕 Affinity",
-                value="Give affinity points to users",
-                inline=True
-            )
-            embed.set_footer(text="All distributions are logged and tracked")
-            
-            view = PopMessagesView()
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         @self.tree.command(
             name="quest",
@@ -3672,204 +3590,9 @@ class BotSelector(commands.Bot):
                 print(f"Error in log_command: {e}")
                 await interaction.response.send_message("Error occurred while checking your log.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="reset_quest",
-            description="Reset all quest claim records for a user."
-        )
-        async def reset_quest_command(interaction: discord.Interaction, target: discord.Member):
-            """
-            관리자용: 해당 유저의 모든 퀘스트 보상 수령 기록을 리셋합니다.
-            """
-            try:
-                result = self.db.reset_quest_claims(target.id)
-                if result:
-                    await interaction.response.send_message(f"{target.display_name}님의 퀘스트 보상 수령 기록이 초기화되었습니다.", ephemeral=True)
-                else:
-                    await interaction.response.send_message(f"퀘스트 리셋에 실패했습니다.", ephemeral=True)
-            except Exception as e:
-                await interaction.response.send_message(f"에러 발생: {e}", ephemeral=True)
 
-        @self.admin_group.command(
-            name="cleanup_cards",
-            description="Clean up duplicate cards for a user or all users."
-        )
-        async def cleanup_cards_command(interaction: discord.Interaction, target: discord.Member = None):
-            # 관리자 권한 확인
-            if not self.settings_manager.is_admin(interaction.user):
-                await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
-                return
 
-            try:
-                if target:
-                    # 특정 사용자의 중복 카드만 정리
-                    deleted_count = self.db.cleanup_duplicate_cards(target.id)
-                    await interaction.response.send_message(f"✅ Cleaned up {deleted_count} duplicate cards for {target.mention}", ephemeral=True)
-                else:
-                    # 전체 중복 카드 정리
-                    deleted_count = self.db.cleanup_duplicate_cards()
-                    await interaction.response.send_message(f"✅ Cleaned up {deleted_count} duplicate cards for all users", ephemeral=True)
-            except Exception as e:
-                print(f"Error in cleanup_cards_command: {e}")
-                await interaction.response.send_message("❌ An error occurred while cleaning up duplicate cards.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="status",
-            description="Check bot status and health"
-        )
-        async def status_command(interaction: discord.Interaction):
-            """봇 상태를 확인합니다."""
-            try:
-                if not self.db.is_user_admin(interaction.user.id):
-                    await interaction.response.send_message("This command is for administrators only.", ephemeral=True)
-                    return
-                
-                # 시스템 상태 확인
-                try:
-                    import psutil
-                    memory = psutil.virtual_memory()
-                    cpu = psutil.cpu_percent(interval=1)
-                    memory_percent = memory.percent
-                    memory_available = memory.available // (1024**3)
-                    cpu_percent = cpu
-                except ImportError:
-                    memory_percent = "N/A"
-                    memory_available = "N/A"
-                    cpu_percent = "N/A"
-                
-                # 데이터베이스 통계 수집
-                total_messages = self.db.get_total_message_count()
-                daily_messages = self.db.get_daily_message_count()
-                total_cards = self.db.get_total_card_count()
-                daily_cards = self.db.get_daily_card_count()
-                abnormal_activity = self.db.get_abnormal_activity_detection()
-                
-                # 에러 통계 수집
-                error_stats = {}
-                error_analysis = {}
-                if self.error_handler:
-                    error_stats = self.error_handler.get_error_stats()
-                    error_analysis = self.error_handler.get_detailed_error_analysis()
-                
-                embed = discord.Embed(
-                    title="🤖 Bot Status Report",
-                    color=discord.Color.green() if not abnormal_activity['is_abnormal'] else discord.Color.orange(),
-                    timestamp=datetime.now()
-                )
-                
-                # 기본 정보
-                embed.add_field(
-                    name="📊 Basic Info",
-                    value=f"**Latency:** {self.latency:.2f}ms\n**Guilds:** {len(self.guilds)}\n**Users:** {len(self.users)}",
-                    inline=True
-                )
-                
-                # 시스템 리소스
-                embed.add_field(
-                    name="💻 System Resources",
-                    value=f"**Memory:** {memory_percent}%\n**CPU:** {cpu_percent}%\n**Available Memory:** {memory_available}GB",
-                    inline=True
-                )
-                
-                # 데이터베이스 상태
-                try:
-                    db_test = self.db.get_connection()
-                    db_status = "✅ Connected"
-                    self.db.return_connection(db_test)
-                except Exception as e:
-                    db_status = f"❌ Error: {str(e)[:50]}"
-                
-                embed.add_field(
-                    name="🗄️ Database",
-                    value=db_status,
-                    inline=True
-                )
-                
-                # 메시지 통계
-                embed.add_field(
-                    name="💬 Message Statistics",
-                    value=f"**Total Messages:** {total_messages:,}\n**Today's Messages:** {daily_messages:,}\n**Time Zone:** UTC+8 (CST)",
-                    inline=True
-                )
-                
-                # 카드 통계
-                embed.add_field(
-                    name="🃏 Card Statistics",
-                    value=f"**Total Cards Given:** {total_cards:,}\n**Today's Cards:** {daily_cards:,}",
-                    inline=True
-                )
-                
-                # 에러 통계
-                if error_stats:
-                    error_summary = f"**Total Errors:** {error_stats['total_errors']}\n**Critical Errors:** {error_stats['critical_errors_count']}"
-                    if error_analysis and error_analysis['log_file_exists']:
-                        error_summary += f"\n**Recent Errors:** {error_analysis['total_recent_errors']}"
-                    embed.add_field(
-                        name="⚠️ Error Statistics",
-                        value=error_summary,
-                        inline=True
-                    )
-                
-                # 이상 상황 감지
-                if abnormal_activity['is_abnormal']:
-                    embed.add_field(
-                        name="🚨 Abnormal Activity Detected",
-                        value=f"**Recent Messages (1h):** {abnormal_activity['recent_messages_1h']}\n**Abnormal Affinity Users:** {len(abnormal_activity['abnormal_affinity_users'])}",
-                        inline=False
-                    )
-                    
-                    # 비정상적인 호감도 변화 사용자들
-                    if abnormal_activity['abnormal_affinity_users']:
-                        abnormal_users = []
-                        for user_id, character, score_change in abnormal_activity['abnormal_affinity_users'][:3]:
-                            abnormal_users.append(f"User {user_id} ({character}): +{score_change}")
-                        embed.add_field(
-                            name="📈 Abnormal Affinity Changes",
-                            value="\n".join(abnormal_users),
-                            inline=False
-                        )
-                
-                # 에러 패턴 분석
-                if error_analysis and error_analysis['recent_error_patterns']:
-                    error_patterns = []
-                    for error_type, count in error_analysis['recent_error_patterns'].items():
-                        error_patterns.append(f"{error_type}: {count}")
-                    embed.add_field(
-                        name="🔍 Recent Error Patterns",
-                        value="\n".join(error_patterns) if error_patterns else "No recent errors",
-                        inline=False
-                    )
-                
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                
-            except Exception as e:
-                print(f"Error in status_command: {e}")
-                await interaction.response.send_message("Error occurred while checking status.", ephemeral=True)
-
-        @self.admin_group.command(
-            name="emergency_stop",
-            description="Emergency stop for critical issues"
-        )
-        async def emergency_stop_command(interaction: discord.Interaction):
-            """긴급 정지 명령어"""
-            try:
-                if not self.db.is_user_admin(interaction.user.id):
-                    await interaction.response.send_message("This command is for administrators only.", ephemeral=True)
-                    return
-                
-                embed = discord.Embed(
-                    title="🚨 Emergency Stop",
-                    description="Bot is entering safe mode. Some features may be disabled.",
-                    color=discord.Color.red()
-                )
-                
-                # 안전 모드 활성화
-                self.emergency_mode = True
-                
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                
-            except Exception as e:
-                print(f"Error in emergency_stop_command: {e}")
-                await interaction.response.send_message("Error occurred during emergency stop.", ephemeral=True)
 
     def get_next_reset_time(self, quest_type: str) -> str:
         """퀘스트 타입에 따른 다음 리셋 시간을 반환합니다."""
@@ -4522,6 +4245,39 @@ class BotSelector(commands.Bot):
             embed.set_footer(text="ZeroLink 챗봇 • 서버와 DM 모두 지원")
             await message.channel.send(embed=embed)
 
+    # 모드별 스토리 컨텍스트 생성 함수
+    def generate_mode_context(self, character_name, mode, user_role, character_role, story_line):
+        """모드별 롤플레잉 컨텍스트를 생성합니다."""
+        mode_contexts = {
+            "romantic": {
+                "Kagari": "Focus on sweet, gentle romantic interactions. Use flower metaphors, be shy but warm-hearted. Create intimate moments and emotional connections.",
+                "Eros": "Emphasize charming, confident romantic gestures. Use cafe-related metaphors, be professional yet warm. Create special moments and surprises.",
+                "Elysia": "Focus on playful, energetic romantic interactions. Use cat-related expressions, be curious and mischievous. Create adventurous romantic moments."
+            },
+            "friendship": {
+                "Kagari": "Act like a caring older sister or close friend. Provide gentle advice, emotional support, and warm companionship. Use nurturing language.",
+                "Eros": "Be a supportive friend and mentor. Offer practical advice, professional guidance, and warm friendship. Use encouraging language.",
+                "Elysia": "Act like an energetic best friend. Be playful, supportive, and adventurous. Encourage exploration and fun activities together."
+            },
+            "healing": {
+                "Kagari": "Provide gentle emotional healing and comfort. Use calming language, flower metaphors, and peaceful imagery. Be a source of tranquility.",
+                "Eros": "Offer warm, professional comfort and healing. Use cafe-related calming metaphors, provide emotional support through hospitality.",
+                "Elysia": "Bring playful energy and joy for healing. Use cat-like comfort, be a source of happiness and distraction from troubles."
+            },
+            "fantasy": {
+                "Kagari": "Act as a gentle healer or nature mage in a fantasy world. Use flower and nature magic, be protective and caring towards companions.",
+                "Eros": "Be a skilled strategist or merchant in a fantasy world. Use tactical thinking, provide resources and guidance for adventures.",
+                "Elysia": "Act as a swift scout or agile warrior in a fantasy world. Use cat-like agility, be curious and adventurous in exploration."
+            },
+            "custom": "Adapt to the specific custom scenario provided by the user. Stay in character while responding to the unique situation and story elements."
+        }
+        
+        if mode == "custom":
+            return mode_contexts["custom"]
+        
+        character_contexts = mode_contexts.get(mode, {})
+        return character_contexts.get(character_name, f"Act in {mode} mode while maintaining your character's personality and responding to the scenario.")
+
     # 롤플레잉 모드 전용 답장 함수
     async def process_roleplay_message(self, message, session):
         import asyncio
@@ -4554,7 +4310,12 @@ class BotSelector(commands.Bot):
         else:
             session["turn_count"] += 1
 
-        turn_str = f"({session['turn_count']}/30)"
+        # 데이터베이스에 메시지 카운트 업데이트
+        session_id = session.get("session_id")
+        if session_id:
+            self.db.update_roleplay_message_count(session_id, session["turn_count"])
+
+        turn_str = f"({session['turn_count']}/100)"
 
         # 캐릭터별 특성과 톤앤매너 정의 (롤플레잉 모드 전용)
         character_traits = {
@@ -4585,6 +4346,10 @@ class BotSelector(commands.Bot):
             "themes": "general friendship"
         })
         
+        # 모드별 스토리 컨텍스트 생성
+        mode = session.get("mode", "romantic")
+        mode_context = self.generate_mode_context(character_name, mode, user_role, character_role, story_line)
+        
         # 롤플레잉 모드 전용 system prompt 생성
         system_prompt = (
             f"You are {character_name}, a character with the following traits:\n"
@@ -4593,10 +4358,13 @@ class BotSelector(commands.Bot):
             f"Emoji Style: {char_trait['emoji_style']}\n"
             f"Character Themes: {char_trait['themes']}\n\n"
             f"ROLEPLAY CONTEXT:\n"
+            f"- Mode: {mode.title()}\n"
             f"- Your role in this scenario: {character_role}\n"
             f"- User's role in this scenario: {user_role}\n"
             f"- Current story/situation: {story_line}\n"
             f"- Turn: {turn_str}\n\n"
+            f"MODE-SPECIFIC GUIDANCE:\n"
+            f"{mode_context}\n\n"
             f"CRITICAL INSTRUCTIONS:\n"
             f"1. You MUST stay in character as {character_name} at all times\n"
             f"2. Respond to the user's specific roleplay request and scenario\n"
@@ -4633,23 +4401,31 @@ class BotSelector(commands.Bot):
 
         await message.channel.send(ai_response)
         session["history"].append({"role": "assistant", "content": ai_response})
+        
+        # 데이터베이스에 대화 저장
+        if session_id:
+            self.db.save_roleplay_message(session_id, message.content, ai_response, session["turn_count"])
 
-        # 30턴 종료 처리
-        if session["turn_count"] >= 30:
+        # 100턴 종료 처리
+        if session["turn_count"] >= 100:
             embed = discord.Embed(
                 title="🎭 Roleplay Session Ended",
-                description="All 30 turns of your roleplay session are complete!\n\nThank you for participating in this immersive scenario. See you next time!\n\n⏰ This channel will be automatically deleted in 5 seconds.",
+                description="All 100 turns of your roleplay session are complete!\n\nThank you for participating in this immersive scenario. See you next time!\n\n⏰ This channel will be automatically deleted in 5 seconds.",
                 color=discord.Color.pink()
             )
             await message.channel.send(embed=embed)
+            
+            # 데이터베이스 세션 종료
+            if session_id:
+                self.db.end_roleplay_session(session_id)
             
             # 5초 후 채널 삭제
             await asyncio.sleep(5)
             try:
                 await message.channel.delete()
-                print(f"[DEBUG][Roleplay] 30턴 완료 후 채널 삭제 완료")
+                print(f"[DEBUG][Roleplay] 100턴 완료 후 채널 삭제 완료")
             except Exception as e:
-                print(f"[DEBUG][Roleplay] 30턴 완료 후 채널 삭제 실패: {e}")
+                print(f"[DEBUG][Roleplay] 100턴 완료 후 채널 삭제 실패: {e}")
 
     def remove_channel(self, channel_id):
         # 활성화된 채널 목록에서 제거

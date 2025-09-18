@@ -2185,4 +2185,124 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting user timezone: {e}")
             return None
+
+    # === 롤플레잉 관련 메서드들 ===
+    
+    def create_roleplay_session(self, session_id, user_id, character_name, mode, user_role, character_role, story_line):
+        """롤플레잉 세션을 생성합니다."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO roleplay_sessions 
+                        (session_id, user_id, character_name, mode, user_role, character_role, story_line)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (session_id, user_id, character_name, mode, user_role, character_role, story_line))
+                    conn.commit()
+                    return True
+        except Exception as e:
+            print(f"Error creating roleplay session: {e}")
+            return False
+    
+    def get_roleplay_session(self, session_id):
+        """롤플레잉 세션 정보를 가져옵니다."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT * FROM roleplay_sessions 
+                        WHERE session_id = %s AND is_active = TRUE
+                    """, (session_id,))
+                    result = cursor.fetchone()
+                    if result:
+                        return {
+                            'id': result[0],
+                            'session_id': result[1],
+                            'user_id': result[2],
+                            'character_name': result[3],
+                            'mode': result[4],
+                            'user_role': result[5],
+                            'character_role': result[6],
+                            'story_line': result[7],
+                            'message_count': result[8],
+                            'max_messages': result[9],
+                            'is_active': result[10],
+                            'created_at': result[11],
+                            'ended_at': result[12]
+                        }
+                    return None
+        except Exception as e:
+            print(f"Error getting roleplay session: {e}")
+            return None
+    
+    def update_roleplay_message_count(self, session_id, message_count):
+        """롤플레잉 세션의 메시지 카운트를 업데이트합니다."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE roleplay_sessions 
+                        SET message_count = %s 
+                        WHERE session_id = %s
+                    """, (message_count, session_id))
+                    conn.commit()
+                    return True
+        except Exception as e:
+            print(f"Error updating roleplay message count: {e}")
+            return False
+    
+    def end_roleplay_session(self, session_id):
+        """롤플레잉 세션을 종료합니다."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE roleplay_sessions 
+                        SET is_active = FALSE, ended_at = NOW() 
+                        WHERE session_id = %s
+                    """, (session_id,))
+                    conn.commit()
+                    return True
+        except Exception as e:
+            print(f"Error ending roleplay session: {e}")
+            return False
+    
+    def save_roleplay_message(self, session_id, user_message, character_response, message_count):
+        """롤플레잉 대화를 저장합니다."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO roleplay_history 
+                        (session_id, user_message, character_response, message_count)
+                        VALUES (%s, %s, %s, %s)
+                    """, (session_id, user_message, character_response, message_count))
+                    conn.commit()
+                    return True
+        except Exception as e:
+            print(f"Error saving roleplay message: {e}")
+            return False
+    
+    def get_roleplay_history(self, session_id, limit=50):
+        """롤플레잉 대화 히스토리를 가져옵니다."""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT user_message, character_response, message_count, created_at
+                        FROM roleplay_history 
+                        WHERE session_id = %s 
+                        ORDER BY created_at DESC 
+                        LIMIT %s
+                    """, (session_id, limit))
+                    results = cursor.fetchall()
+                    return [{
+                        'user_message': row[0],
+                        'character_response': row[1],
+                        'message_count': row[2],
+                        'created_at': row[3]
+                    } for row in results]
+        except Exception as e:
+            print(f"Error getting roleplay history: {e}")
+            return []
     

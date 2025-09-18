@@ -398,6 +398,36 @@ def create_all_tables():
                     UNIQUE(user_id, setting_key)
                 )
             ''')
+            # roleplay_sessions - 롤플레잉 세션 관리
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS roleplay_sessions (
+                    id SERIAL PRIMARY KEY,
+                    session_id VARCHAR(255) UNIQUE NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    character_name VARCHAR(50) NOT NULL,
+                    mode VARCHAR(50) NOT NULL,
+                    user_role TEXT NOT NULL,
+                    character_role TEXT NOT NULL,
+                    story_line TEXT NOT NULL,
+                    message_count INTEGER DEFAULT 0,
+                    max_messages INTEGER DEFAULT 100,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    ended_at TIMESTAMP WITH TIME ZONE
+                )
+            ''')
+            # roleplay_history - 롤플레잉 대화 히스토리
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS roleplay_history (
+                    id SERIAL PRIMARY KEY,
+                    session_id VARCHAR(255) NOT NULL,
+                    user_message TEXT,
+                    character_response TEXT,
+                    message_count INTEGER,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    FOREIGN KEY (session_id) REFERENCES roleplay_sessions(session_id) ON DELETE CASCADE
+                )
+            ''')
             conn.commit()
     except Exception as e:
         print(f"⚠️ 데이터베이스 연결 실패: {e}")
