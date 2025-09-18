@@ -5557,9 +5557,9 @@ class QuestClaimSelect(discord.ui.Select):
             await interaction.followup.send(embed=response_embed, ephemeral=True)
 
             # Update the original quest board message
-            new_quest_status = await self.get_quest_status(user_id)
-            new_embed = self.create_quest_embed(user_id, new_quest_status)
-            new_view = QuestView(user_id, new_quest_status, self)
+            new_quest_status = await self.bot.get_quest_status(user_id)
+            new_embed = self.bot.create_quest_embed(user_id, new_quest_status)
+            new_view = QuestView(user_id, new_quest_status, self.bot)
             await interaction.edit_original_response(embed=new_embed, view=new_view)
         else:
             await interaction.followup.send(f"❌ {message}", ephemeral=True)
