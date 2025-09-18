@@ -2321,7 +2321,7 @@ class BotSelector(commands.Bot):
                     return
 
                 # 3. 모달 표시
-                modal = RoleplayModal(current_bot.character_name)
+                modal = RoleplayModal(self, current_bot.character_name)
                 await interaction.response.send_modal(modal)
 
             except Exception as e:
@@ -6162,14 +6162,148 @@ class CardSliderView(discord.ui.View):
         
         await interaction.response.send_message(embed=share_embed)
 
+class RoleplayModal(discord.ui.Modal):
+    def __init__(self, bot_instance: "BotSelector", character_name: str):
+        super().__init__(title=f"Start Roleplay with {character_name}")
+        self.bot = bot_instance
+        self.character_name = character_name
+        
+        self.mode_input = discord.ui.TextInput(
+            label="Roleplay Mode",
+            placeholder="romantic, friendship, healing, fantasy",
+            required=True,
+            max_length=20
+        )
+        self.add_item(self.mode_input)
+        
+        self.user_role_input = discord.ui.TextInput(
+            label="Your Role",
+            placeholder="e.g., childhood friend, adventurer, etc.",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.user_role_input)
+        
+        self.character_role_input = discord.ui.TextInput(
+            label=f"{character_name}'s Role",
+            placeholder="e.g., shy student, brave warrior, etc.",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.character_role_input)
+        
+        self.story_line_input = discord.ui.TextInput(
+            label="Story Setting",
+            placeholder="Brief description of the setting/scenario",
+            required=True,
+            style=discord.TextStyle.paragraph,
+            max_length=500
+        )
+        self.add_item(self.story_line_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            mode = self.mode_input.value.strip().lower()
+            user_role = self.user_role_input.value.strip()
+            character_role = self.character_role_input.value.strip()
+            story_line = self.story_line_input.value.strip()
+            
+            # 유효한 모드인지 확인
+            valid_modes = ["romantic", "friendship", "healing", "fantasy"]
+            if mode not in valid_modes:
+                await interaction.response.send_message(
+                    f"❌ Invalid mode. Please choose from: {', '.join(valid_modes)}",
+                    ephemeral=True
+                )
+                return
+            
+            # 롤플레이 채널 생성
+            guild = interaction.guild
+            user_nickname = self.bot.get_user_nickname(interaction.user.id, self.character_name)
+            channel_name = f"{self.character_name.lower()}-roleplay-{user_nickname}"
+            
+            # 기존 롤플레이 채널이 있는지 확인
+            existing_channel = discord.utils.get(guild.channels, name=channel_name)
+            if existing_channel:
+                await interaction.response.send_message(
+                    f"❌ You already have an active roleplay session: {existing_channel.mention}",
+                    ephemeral=True
+                )
+                return
+            
+            # 새 채널 생성
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            }
+            
+            channel = await guild.create_text_channel(
+                name=channel_name,
+                overwrites=overwrites,
+                topic=f"Roleplay session with {self.character_name} | Mode: {mode.title()}"
+            )
+            
+            # 롤플레이 세션 초기화
+            session_id = self.bot.db.create_roleplay_session(
+                user_id=interaction.user.id,
+                character_name=self.character_name,
+                mode=mode,
+                user_role=user_role,
+                character_role=character_role,
+                story_line=story_line,
+                channel_id=channel.id
+            )
+            
+            # 세션 저장
+            self.bot.roleplay_sessions[channel.id] = {
+                "session_id": session_id,
+                "user_id": interaction.user.id,
+                "character_name": self.character_name,
+                "mode": mode,
+                "user_role": user_role,
+                "character_role": character_role,
+                "story_line": story_line,
+                "turn_count": 0,
+                "history": []
+            }
+            
+            # 시작 메시지 전송
+            embed = discord.Embed(
+                title=f"🎭 Roleplay Session Started!",
+                description=f"**Character:** {self.character_name}\n**Mode:** {mode.title()}\n**Your Role:** {user_role}\n**{self.character_name}'s Role:** {character_role}\n**Setting:** {story_line}",
+                color=discord.Color.purple()
+            )
+            embed.add_field(
+                name="📝 How to Play",
+                value="• Simply type your messages to interact\n• The roleplay will last for 100 turns\n• Stay in character and enjoy the story!",
+                inline=False
+            )
+            embed.set_footer(text="Turn 0/100 • Type your first message to begin!")
+            
+            await channel.send(embed=embed)
+            
+            await interaction.response.send_message(
+                f"✅ Roleplay session created! Continue in {channel.mention}",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            print(f"Error in RoleplayModal: {e}")
+            await interaction.response.send_message(
+                "❌ An error occurred while creating the roleplay session.",
+                ephemeral=True
+            )
+
 class AdminPopView(discord.ui.View):
     def __init__(self, bot_instance: "BotSelector"):
         super().__init__(timeout=300)
         self.bot = bot_instance
-        self.add_item(AdminPopSelect())
+        self.add_item(AdminPopSelect(bot_instance))
 
 class AdminPopSelect(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, bot_instance: "BotSelector"):
+        self.bot = bot_instance
         options = [
             discord.SelectOption(
                 label="💝 Give Gift",
