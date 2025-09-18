@@ -743,6 +743,8 @@ class BotSelector(commands.Bot):
         self.roleplay_sessions = {}
         self.story_sessions = {}
         self.dm_sessions = {}  # DM 세션 관리
+        self.dm_inactivity_timers = {}  # DM 비활성 타이머 관리
+        self.dm_auto_close_delay = 180  # 3분 (180초)
         
         # 관리자 전용 채널 설정
         self.admin_channels = set()  # 관리자 명령어가 허용된 채널 ID들
@@ -1021,6 +1023,12 @@ class BotSelector(commands.Bot):
             if not character_name:
                 return
             
+            # 비활성 타이머 리셋 (사용자가 메시지를 보냄)
+            await self.reset_dm_inactivity_timer(message.author.id)
+            
+            # 세션 활동 시간 업데이트
+            session['last_activity'] = time.time()
+            
             # 캐릭터 봇에서 응답 생성
             if character_name in self.character_bots:
                 bot = self.character_bots[character_name]
@@ -1154,6 +1162,79 @@ Respond in the same language as the user's message.
         except Exception as e:
             print(f"Error making OpenAI request: {e}")
             return "I'm having trouble responding right now..."
+    
+    async def close_dm_session(self, user_id: int):
+        """DM 세션을 종료합니다."""
+        try:
+            # DM 세션에서 제거
+            if user_id in self.dm_sessions:
+                del self.dm_sessions[user_id]
+            
+            # 비활성 타이머 취소
+            if user_id in self.dm_inactivity_timers:
+                self.dm_inactivity_timers[user_id].cancel()
+                del self.dm_inactivity_timers[user_id]
+            
+            print(f"[DEBUG] DM session closed for user {user_id}")
+            
+        except Exception as e:
+            print(f"Error closing DM session: {e}")
+    
+    async def reset_dm_inactivity_timer(self, user_id: int):
+        """DM 비활성 타이머를 리셋합니다."""
+        try:
+            # 기존 타이머가 있으면 취소
+            if user_id in self.dm_inactivity_timers:
+                self.dm_inactivity_timers[user_id].cancel()
+            
+            # 새 타이머 시작
+            timer = asyncio.create_task(self.dm_auto_close_timer(user_id))
+            self.dm_inactivity_timers[user_id] = timer
+            
+        except Exception as e:
+            print(f"Error resetting DM inactivity timer: {e}")
+    
+    async def dm_auto_close_timer(self, user_id: int):
+        """DM 자동 종료 타이머입니다."""
+        try:
+            # 3분 대기
+            await asyncio.sleep(self.dm_auto_close_delay)
+            
+            # 타이머가 여전히 유효한지 확인 (사용자가 대화를 재개했을 수 있음)
+            if user_id in self.dm_sessions and user_id in self.dm_inactivity_timers:
+                # DM 세션 종료
+                await self.close_dm_session(user_id)
+                
+                # 사용자에게 자동 종료 알림 (DM이므로 직접 메시지 전송 불가)
+                print(f"[DEBUG] DM session auto-closed for user {user_id} due to inactivity")
+                
+        except asyncio.CancelledError:
+            # 타이머가 취소됨 (사용자가 대화를 재개함)
+            print(f"[DEBUG] DM inactivity timer cancelled for user {user_id}")
+        except Exception as e:
+            print(f"Error in DM auto close timer: {e}")
+    
+    async def start_dm_session(self, user_id: int, character_name: str):
+        """새로운 DM 세션을 시작합니다."""
+        try:
+            # 기존 세션이 있으면 종료
+            if user_id in self.dm_sessions:
+                await self.close_dm_session(user_id)
+            
+            # 새 세션 시작
+            self.dm_sessions[user_id] = {
+                'character_name': character_name,
+                'last_activity': time.time(),
+                'start_time': time.time()
+            }
+            
+            # 비활성 타이머 시작
+            await self.reset_dm_inactivity_timer(user_id)
+            
+            print(f"[DEBUG] DM session started for user {user_id} with {character_name}")
+            
+        except Exception as e:
+            print(f"Error starting DM session: {e}")
 
     def add_admin_commands(self):
         """관리자 명령어들을 그룹에 추가합니다."""
@@ -1702,12 +1783,27 @@ Respond in the same language as the user's message.
 
         @self.tree.command(
             name="close",
-            description="Close the current chat channel"
+            description="Close the current chat channel or DM session"
         )
         async def close_command(interaction: discord.Interaction):
             try:
+                # DM에서 사용하는 경우
+                if isinstance(interaction.channel, discord.DMChannel):
+                    user_id = interaction.user.id
+                    
+                    # DM 세션이 있는지 확인
+                    if user_id not in self.dm_sessions:
+                        await interaction.response.send_message("❌ No active DM session found.", ephemeral=True)
+                        return
+                    
+                    # DM 세션 종료
+                    await self.close_dm_session(user_id)
+                    await interaction.response.send_message("✅ DM session closed. Feel free to start a new conversation anytime!", ephemeral=True)
+                    return
+                
+                # 서버 채널에서 사용하는 경우
                 if not isinstance(interaction.channel, discord.TextChannel):
-                    await interaction.response.send_message("This command can only be used in server channels.", ephemeral=True)
+                    await interaction.response.send_message("This command can only be used in server channels or DM.", ephemeral=True)
                     return
 
                 channel = interaction.channel
@@ -7126,14 +7222,12 @@ class DMCharacterSelect(discord.ui.Select):
             selected_character = self.values[0]
             user_id = interaction.user.id
             
-            # DM 세션에 캐릭터 설정
-            if user_id in self.bot_selector.dm_sessions:
-                self.bot_selector.dm_sessions[user_id]['character_name'] = selected_character
-                self.bot_selector.dm_sessions[user_id]['last_activity'] = time.time()
+            # 새로운 DM 세션 시작 (자동 종료 타이머 포함)
+            await self.bot_selector.start_dm_session(user_id, selected_character)
             
             embed = discord.Embed(
                 title=f"✅ {selected_character} 선택 완료!",
-                description=f"이제 DM에서 {selected_character}와 자유롭게 대화할 수 있습니다.\n\n**사용 가능한 명령어:**\n• `/affinity` - 호감도 확인\n• `/mycard` - 보유 카드 확인\n• `/quest` - 퀘스트 확인\n• `/help` - 도움말",
+                description=f"이제 DM에서 {selected_character}와 자유롭게 대화할 수 있습니다.\n\n**사용 가능한 명령어:**\n• `/affinity` - 호감도 확인\n• `/mycard` - 보유 카드 확인\n• `/quest` - 퀘스트 확인\n• `/close` - 대화 종료\n• `/help` - 도움말\n\n**⚠️ 자동 종료:** 3분간 대화가 없으면 자동으로 세션이 종료됩니다.",
                 color=0x00ff00
             )
             
