@@ -1044,12 +1044,46 @@ class BotSelector(commands.Bot):
                 print(f"Error in status_command: {e}")
                 await interaction.response.send_message("Error occurred while checking status.", ephemeral=True)
 
+        # 추가 admin 명령어들
+        @self.admin_group.command(
+            name="reset_affinity",
+            description="친밀도를 초기화합니다"
+        )
+        async def reset_affinity(interaction: discord.Interaction, target: discord.Member = None):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if target:
+                self.db.reset_user_affinity(target.id)
+                await interaction.response.send_message(f"✅ {target.mention}'s affinity has been reset.", ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Please specify a target user.", ephemeral=True)
+
+        @self.admin_group.command(
+            name="pop",
+            description="Manually distribute items to users (Messages, Cards, Gifts, Affinity)"
+        )
+        async def pop_command(interaction: discord.Interaction):
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            await interaction.response.send_message("🎁 Admin pop command is available! Use the interface to distribute items.", ephemeral=True)
+
     def get_memory_usage(self):
         """메모리 사용량을 반환합니다."""
-        import psutil
-        import os
-        process = psutil.Process(os.getpid())
-        return process.memory_info().rss / 1024 / 1024  # MB 단위
+        try:
+            import psutil
+            import os
+            process = psutil.Process(os.getpid())
+            return process.memory_info().rss / 1024 / 1024  # MB
+        except ImportError:
+            return 0.0  # psutil이 없으면 0 반환 단위
 
     def get_total_users(self):
         """총 사용자 수를 반환합니다."""
@@ -1918,131 +1952,6 @@ class BotSelector(commands.Bot):
                 print(f"Error in force_language command: {e}")
                 await interaction.response.send_message("An error occurred while changing language settings.", ephemeral=True)
 
-        @self.tree.command(
-            name="mycard",
-            description="Check the cards you have."
-        )
-        async def mycard_command(interaction: discord.Interaction):
-            try:
-                user_id = int(interaction.user.id)  # 항상 int로 변환
-                
-                # 현재 채널의 캐릭터 봇 찾기
-                current_bot = None
-                character_name = None
-                for char_name, bot in self.character_bots.items():
-                    if interaction.channel.id in bot.active_channels:
-                        current_bot = bot
-                        character_name = char_name
-                        break
-
-                # 전체 카드 목록 조회 (중복 제거된 버전)
-                all_user_cards = get_user_cards(user_id)
-                
-                if not all_user_cards:
-                    await interaction.response.send_message("You don't have any cards yet.", ephemeral=True)
-                    return
-
-                # 특정 캐릭터 채널인 경우 해당 캐릭터 카드만, 아니면 전체 카드 표시
-                if character_name:
-                    user_cards = [card for card in all_user_cards if card['character_name'] == character_name]
-                    title = f"🎴 {character_name} Card Collection Progress"
-                    description = f"Your current collection status for {character_name} cards"
-                else:
-                    user_cards = all_user_cards
-                    title = "🎴 Your Card Collection"
-                    description = "Your current collection status for all characters"
-
-                # 티어별 카드 분류
-                tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
-                
-                for card in user_cards:
-                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
-                    if card_info and 'tier' in card_info:
-                        tier = card_info['tier']
-                        if tier in tier_counts:
-                            tier_counts[tier] += 1
-
-                # --- 진행 바를 각 티어별 카드 수에 맞게 동적으로 생성 ---
-                collection_embed = discord.Embed(
-                    title=title,
-                    description=description,
-                    color=discord.Color.gold()
-                )
-                tier_emojis = {'C': '🥉', 'B': '🥈', 'A': '🥇', 'S': '🏆'}
-                bar_emojis = {'C': '🟩', 'B': '🟦', 'A': '🟨', 'S': '🟪'}
-                def get_progress_bar(count, total, color_emoji, empty_emoji='⬜'):
-                    filled = count
-                    empty = total - count
-                    return color_emoji * filled + empty_emoji * empty
-                for tier in ['C', 'B', 'A', 'S']:
-                    count = tier_counts[tier]
-                    total = total_cards[tier]
-                    emoji = tier_emojis.get(tier, '')
-                    color = bar_emojis.get(tier, '⬜')
-                    progress_bar = get_progress_bar(count, total, color)
-                    collection_embed.add_field(
-                        name=f"{tier} Tier {emoji}",
-                        value=f"{progress_bar}  ({count}/{total})",
-                        inline=True
-                    )
-                total_collected = sum(tier_counts.values())
-                total_possible = sum(total_cards.values())
-                total_percent = (total_collected / total_possible) * 100 if total_possible > 0 else 0
-                collection_embed.add_field(
-                    name="Total Collection",
-                    value=f"**{total_collected} / {total_possible}**  ({total_percent:.1f}%)",
-                    inline=False
-                )
-                collection_embed.add_field(name="", value="━━━━━━━━━━━━━━━━━━", inline=False)
-
-                # collection_embed를 전송
-                await interaction.response.send_message(embed=collection_embed, ephemeral=True)
-
-                if not user_cards:
-                    await interaction.followup.send(f"You don't have any {character_name if character_name else 'character'} cards yet.", ephemeral=True)
-                    return
-
-                # 카드 슬라이더 뷰
-                card_info_dict = {}
-                for card in user_cards:
-                    card_info = get_card_info_by_id(card['character_name'], card['card_id'])
-                    if card_info:
-                        card_info_dict[card['card_id']] = card_info
-
-                def get_tier_order(card_id):
-                    tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
-                    tier_order = {'C': 0, 'B': 1, 'A': 2, 'S': 3}
-                    return tier_order.get(tier, 4)
-
-                sorted_cards = sorted(list(card_info_dict.keys()), key=get_tier_order)
-
-                if not sorted_cards:
-                     await interaction.followup.send(f"You don't seem to have any valid cards for {character_name if character_name else 'any character'}.", ephemeral=True)
-                     return
-
-                slider_view = CardSliderView(
-                    user_id=user_id,
-                    cards=sorted_cards,
-                    character_name=character_name or "All",
-                    card_info_dict=card_info_dict,
-                    db=self.db  # db 인스턴스 전달
-                )
-
-                # Send the initial message using the new method
-                await slider_view.initial_message(interaction)
-
-            except Exception as e:
-                print(f"Error in mycard_command: {e}")
-                import traceback
-                traceback.print_exc()
-                try:
-                    if not interaction.response.is_done():
-                        await interaction.response.send_message("An error occurred while loading your cards. Please try again.", ephemeral=True)
-                    else:
-                        await interaction.followup.send("An error occurred while loading your cards. Please try again.", ephemeral=True)
-                except Exception as followup_error:
-                    print(f"Error sending error message: {followup_error}")
 
         @self.tree.command(
             name="check_language",
@@ -3823,17 +3732,16 @@ class BotSelector(commands.Bot):
                     memory_available = memory.available // (1024**3)
                     cpu_percent = cpu
                 except ImportError:
-                    # psutil이 없을 경우 기본값 사용
                     memory_percent = "N/A"
                     memory_available = "N/A"
                     cpu_percent = "N/A"
                 
-                    # 데이터베이스 통계 수집
-                    total_messages = self.db.get_total_message_count()
-                    daily_messages = self.db.get_daily_message_count()
-                    total_cards = self.db.get_total_card_count()
-                    daily_cards = self.db.get_daily_card_count()
-                    abnormal_activity = self.db.get_abnormal_activity_detection()
+                # 데이터베이스 통계 수집
+                total_messages = self.db.get_total_message_count()
+                daily_messages = self.db.get_daily_message_count()
+                total_cards = self.db.get_total_card_count()
+                daily_cards = self.db.get_daily_card_count()
+                abnormal_activity = self.db.get_abnormal_activity_detection()
                 
                 # 에러 통계 수집
                 error_stats = {}
@@ -4808,7 +4716,7 @@ class BotSelector(commands.Bot):
             # 랜덤 카드 획득 체크
             card_type, card_id = self.get_random_card(character_name, user_id)
             if card_id:
-                card_info = get_card_info_by_id(card_id)
+                card_info = get_card_info_by_id(character_name, card_id)
                 if card_info:
                     embed = discord.Embed(
                         title="🎉 새로운 카드를 획득했습니다!",
@@ -5439,12 +5347,12 @@ class GiftConfirmButton(discord.ui.Button['GiftView']):
                     if card_id_to_give:
                         card_embed = discord.Embed(
                             title="🎉 Get a new card!",
-                            description=f"Congratulations! {character_name} has sent you a token of affection.\nYou got a {get_card_info_by_id(card_id_to_give)['tier']} tier card!\nClick claim to receive your card.",
+                            description=f"Congratulations! {character_name} has sent you a token of affection.\nYou got a {get_card_info_by_id(character_name, card_id_to_give)['tier']} tier card!\nClick claim to receive your card.",
                             color=discord.Color.gold()
                         )
-                        card_info = get_card_info_by_id(card_id_to_give)
-                        if card_info and card_info.get('image_url_small'):
-                           card_embed.set_image(url=f"{CLOUDFLARE_IMAGE_BASE_URL}/{card_info['image_url_small']}")
+                        card_info = get_card_info_by_id(character_name, card_id_to_give)
+                        if card_info and card_info.get('image_url'):
+                           card_embed.set_image(url=card_info['image_url'])
 
                         view = CardClaimView(user_id, character_name, card_id_to_give, self.db)
                         await interaction.channel.send(embed=card_embed, view=view)
