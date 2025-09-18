@@ -2015,6 +2015,58 @@ class BotSelector(commands.Bot):
                 )
 
         @self.tree.command(
+            name="roleplay",
+            description="Start an immersive roleplay session with your chosen character."
+        )
+        async def roleplay_command(interaction: discord.Interaction):
+            """Start roleplay with mode selection"""
+            try:
+                # 현재 채널에서 활성 캐릭터 찾기
+                current_bot = None
+                character_name = None
+                
+                for char_name, bot in self.character_bots.items():
+                    if interaction.channel.id in bot.active_channels:
+                        current_bot = bot
+                        character_name = char_name
+                        break
+                
+                if not current_bot or not character_name:
+                    await interaction.response.send_message(
+                        "❌ This command can only be used in a character's chat channel.", 
+                        ephemeral=True
+                    )
+                    return
+                
+                # 호감도 체크 (200 이상 필요)
+                user_affinity = self.db.get_affinity(interaction.user.id, character_name)
+                affinity_score = user_affinity['emotion_score'] if user_affinity else 0
+                
+                if affinity_score < 200:
+                    embed = discord.Embed(
+                        title="🔒 Roleplay Mode Locked",
+                        description=f"Roleplay mode requires affinity level **200** or higher with {character_name}.",
+                        color=discord.Color.red()
+                    )
+                    embed.add_field(name="Current Affinity", value=f"**{affinity_score}**", inline=True)
+                    embed.add_field(name="Required Affinity", value="**200**", inline=True)
+                    embed.add_field(
+                        name="💡 How to Unlock",
+                        value=f"Keep chatting with {character_name} to increase your affinity!",
+                        inline=False
+                    )
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    return
+                
+                # 롤플레이 모드 선택 임베드 생성
+                view = RoleplayModeSelectView(self, character_name)
+                await interaction.response.send_message(embed=view.create_mode_embed(), view=view, ephemeral=True)
+                
+            except Exception as e:
+                print(f"Error in roleplay command: {e}")
+                await interaction.response.send_message("❌ An error occurred while starting roleplay mode.", ephemeral=True)
+
+        @self.tree.command(
             name="story",
             description="Play story chapters for each character."
         )
@@ -6116,6 +6168,282 @@ class CardSliderView(discord.ui.View):
         share_embed.set_footer(text=f"Shared by {interaction.user.display_name}")
         
         await interaction.response.send_message(embed=share_embed)
+
+class RoleplayModeSelectView(discord.ui.View):
+    def __init__(self, bot_instance: "BotSelector", character_name: str):
+        super().__init__(timeout=300)
+        self.bot = bot_instance
+        self.character_name = character_name
+        self.add_item(RoleplayModeSelect(bot_instance, character_name))
+    
+    def create_mode_embed(self):
+        """롤플레이 모드 선택 임베드 생성"""
+        embed = discord.Embed(
+            title=f"🎭 Start Roleplay with {self.character_name}",
+            description="Choose your roleplay mode to begin an immersive experience!",
+            color=discord.Color.purple()
+        )
+        
+        # 멋있는 이미지 설정 (캐릭터별)
+        character_images = {
+            "Kagari": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-kagari/public",
+            "Eros": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-eros/public", 
+            "Elysia": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-elysia/public"
+        }
+        
+        if self.character_name in character_images:
+            embed.set_image(url=character_images[self.character_name])
+        
+        # 모드 설명 추가
+        mode_descriptions = """
+        **🌹 Romantic Mode**
+        Experience intimate moments and romantic scenarios
+        
+        **👥 Friendship Mode** 
+        Enjoy casual, friendly interactions and adventures
+        
+        **🌸 Healing Mode**
+        Find comfort and emotional support in gentle conversations
+        
+        **⚔️ Fantasy Mode**
+        Embark on magical adventures in fantastical worlds
+        
+        **✨ Custom Mode**
+        Create your own unique story and scenario
+        """
+        
+        embed.add_field(
+            name="🎯 Available Modes",
+            value=mode_descriptions,
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📝 Next Steps",
+            value="Select a mode below to customize your roleplay experience!",
+            inline=False
+        )
+        
+        embed.set_footer(text=f"Roleplay with {self.character_name} • Select a mode to continue")
+        
+        return embed
+
+class RoleplayModeSelect(discord.ui.Select):
+    def __init__(self, bot_instance: "BotSelector", character_name: str):
+        self.bot = bot_instance
+        self.character_name = character_name
+        
+        options = [
+            discord.SelectOption(
+                label="🌹 Romantic Mode",
+                description="Experience intimate moments and romantic scenarios",
+                value="romantic",
+                emoji="🌹"
+            ),
+            discord.SelectOption(
+                label="👥 Friendship Mode", 
+                description="Enjoy casual, friendly interactions and adventures",
+                value="friendship",
+                emoji="👥"
+            ),
+            discord.SelectOption(
+                label="🌸 Healing Mode",
+                description="Find comfort and emotional support in gentle conversations", 
+                value="healing",
+                emoji="🌸"
+            ),
+            discord.SelectOption(
+                label="⚔️ Fantasy Mode",
+                description="Embark on magical adventures in fantastical worlds",
+                value="fantasy", 
+                emoji="⚔️"
+            ),
+            discord.SelectOption(
+                label="✨ Custom Mode",
+                description="Create your own unique story and scenario",
+                value="custom",
+                emoji="✨"
+            )
+        ]
+        
+        super().__init__(
+            placeholder="Choose your roleplay mode...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            selected_mode = self.values[0]
+            
+            # 선택된 모드에 따라 개선된 모달 표시
+            modal = EnhancedRoleplayModal(self.bot, self.character_name, selected_mode)
+            await interaction.response.send_modal(modal)
+            
+        except Exception as e:
+            print(f"Error in RoleplayModeSelect callback: {e}")
+            await interaction.response.send_message("❌ An error occurred while selecting mode.", ephemeral=True)
+
+class EnhancedRoleplayModal(discord.ui.Modal):
+    def __init__(self, bot_instance: "BotSelector", character_name: str, mode: str):
+        super().__init__(title=f"🎭 {mode.title()} Roleplay with {character_name}")
+        self.bot = bot_instance
+        self.character_name = character_name
+        self.mode = mode
+        
+        # AI가 생성한 기본 시나리오
+        default_scenarios = self.get_default_scenario(character_name, mode)
+        
+        self.user_role_input = discord.ui.TextInput(
+            label="Your Role",
+            placeholder="e.g., childhood friend, mysterious stranger, etc.",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.user_role_input)
+        
+        self.character_role_input = discord.ui.TextInput(
+            label=f"{character_name}'s Role",
+            placeholder=f"e.g., shy student, brave warrior, etc.",
+            required=True,
+            max_length=100
+        )
+        self.add_item(self.character_role_input)
+        
+        self.story_prompt_input = discord.ui.TextInput(
+            label="Story Prompt (AI Generated - Edit as needed)",
+            placeholder="AI will generate a scenario, but you can edit it!",
+            required=True,
+            style=discord.TextStyle.paragraph,
+            max_length=1500,
+            default=default_scenarios
+        )
+        self.add_item(self.story_prompt_input)
+    
+    def get_default_scenario(self, character_name: str, mode: str) -> str:
+        """AI가 생성한 기본 시나리오 반환"""
+        scenarios = {
+            "romantic": {
+                "Kagari": "You find yourself in a quiet tea garden at sunset, where Kagari sits alone under cherry blossoms, looking contemplative. The gentle breeze carries the scent of jasmine as she notices your approach. This could be the perfect moment for a heartfelt conversation that brings you closer together.",
+                "Eros": "The cozy café is empty except for you and Eros, who's just finished preparing a special honey latte with heart-shaped foam art. Soft jazz music plays in the background as golden hour light streams through the windows, creating an intimate atmosphere perfect for romantic conversation.",
+                "Elysia": "You discover Elysia napping in a sunny spot by the window, her cat ears twitching as she dreams. When she slowly wakes up and sees you, her eyes light up with a sleepy smile. The warm afternoon creates a perfect, tender moment between you two."
+            },
+            "friendship": {
+                "Kagari": "You and Kagari are exploring an ancient library together, searching for clues about a mysterious artifact. Her knowledge of old texts proves invaluable as you work as a team, building trust and camaraderie through shared adventure.",
+                "Eros": "It's a busy day at the café, and Eros needs your help serving customers. As you work together, laughing at small mishaps and celebrating successful orders, your friendship grows stronger through teamwork and shared experiences.",
+                "Elysia": "You find Elysia stuck in a tree, having climbed too high while chasing a butterfly. As you help her down, you both end up laughing about the silly situation, leading to a fun afternoon of playful adventures around town."
+            },
+            "healing": {
+                "Kagari": "After a difficult day, you seek solace in Kagari's presence. She prepares a calming tea blend and creates a peaceful atmosphere where you can share your troubles. Her quiet wisdom and gentle presence offer the comfort you need.",
+                "Eros": "Sensing your stress, Eros has prepared a special corner in the café with soft cushions and your favorite comfort drink. Her warm, caring nature creates a safe space where you can relax and find peace from life's pressures.",
+                "Elysia": "You're feeling overwhelmed, and Elysia instinctively curls up beside you, purring softly. Her simple, unconditional presence and gentle headbumps provide the wordless comfort that helps ease your worries."
+            },
+            "fantasy": {
+                "Kagari": "In a mystical realm where spirits roam freely, you and Kagari must navigate through an enchanted forest to reach an ancient shrine. Her yokai powers and your determination combine as you face magical challenges together.",
+                "Eros": "You've been transported to a magical kingdom where Eros is a fairy guardian of the Honey Gardens. Together, you must protect the sacred nectar from dark forces while discovering the true power of friendship and magic.",
+                "Elysia": "In a world where cat-people are legendary warriors, you join Elysia on a quest to find the lost Crystal of Nine Lives. Her feline agility and your unique skills make you an unstoppable team against mythical creatures."
+            },
+            "custom": {
+                "Kagari": "Create your own unique scenario with Kagari. What situation would you like to explore together? Where will your story take place, and what kind of adventure awaits?",
+                "Eros": "Design a special scenario with Eros. What kind of experience do you want to share? Let your imagination guide the setting and story you'd like to create together.",
+                "Elysia": "Craft your own adventure with Elysia. What world will you build together? What challenges or fun experiences await in your custom story?"
+            }
+        }
+        
+        return scenarios.get(mode, {}).get(character_name, "Create your own unique roleplay scenario!")
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_role = self.user_role_input.value.strip()
+            character_role = self.character_role_input.value.strip()
+            story_prompt = self.story_prompt_input.value.strip()
+            
+            # 기존 롤플레이 세션이 있는지 확인
+            user_nickname = self.bot.get_user_nickname(interaction.user.id, self.character_name) or "user"
+            channel_name = f"{self.character_name.lower()}-roleplay-{user_nickname}"
+            
+            existing_channel = discord.utils.get(interaction.guild.channels, name=channel_name)
+            if existing_channel:
+                await interaction.response.send_message(
+                    f"❌ You already have an active roleplay session: {existing_channel.mention}",
+                    ephemeral=True
+                )
+                return
+            
+            # 새 롤플레이 채널 생성
+            overwrites = {
+                interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                interaction.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            }
+            
+            channel = await interaction.guild.create_text_channel(
+                name=channel_name,
+                overwrites=overwrites,
+                topic=f"🎭 {self.mode.title()} Roleplay with {self.character_name} | {user_role} & {character_role}"
+            )
+            
+            # 롤플레이 세션 초기화
+            session_id = self.bot.db.create_roleplay_session(
+                user_id=interaction.user.id,
+                character_name=self.character_name,
+                mode=self.mode,
+                user_role=user_role,
+                character_role=character_role,
+                story_line=story_prompt,
+                channel_id=channel.id
+            )
+            
+            # 세션 저장
+            self.bot.roleplay_sessions[channel.id] = {
+                "session_id": session_id,
+                "user_id": interaction.user.id,
+                "character_name": self.character_name,
+                "mode": self.mode,
+                "user_role": user_role,
+                "character_role": character_role,
+                "story_line": story_prompt,
+                "turn_count": 0,
+                "history": []
+            }
+            
+            # 시작 임베드 생성
+            start_embed = discord.Embed(
+                title=f"🎭 {self.mode.title()} Roleplay Started!",
+                description=f"**Character:** {self.character_name}\n**Mode:** {self.mode.title()}\n**Your Role:** {user_role}\n**{self.character_name}'s Role:** {character_role}",
+                color=discord.Color.purple()
+            )
+            
+            start_embed.add_field(
+                name="📖 Story Setting",
+                value=story_prompt,
+                inline=False
+            )
+            
+            start_embed.add_field(
+                name="🎯 How to Play",
+                value="• Simply type your messages to interact\n• The roleplay will last for 100 turns\n• Stay in character and enjoy the story!\n• Type `/end-roleplay` to end the session early",
+                inline=False
+            )
+            
+            start_embed.set_footer(text="Turn 0/100 • Type your first message to begin!")
+            
+            # 채널에 시작 메시지 전송
+            await channel.send(embed=start_embed)
+            
+            # 사용자에게 성공 메시지
+            await interaction.response.send_message(
+                f"✅ {self.mode.title()} roleplay session created! Continue in {channel.mention}",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            print(f"Error in EnhancedRoleplayModal: {e}")
+            await interaction.response.send_message(
+                "❌ An error occurred while creating the roleplay session.",
+                ephemeral=True
+            )
 
 class RoleplayModal(discord.ui.Modal):
     def __init__(self, bot_instance: "BotSelector", character_name: str):
