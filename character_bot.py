@@ -1205,7 +1205,7 @@ class CardClaimView(discord.ui.View):
                 button.disabled = True
                 button.label = "Claimed"
                 await interaction.message.edit(view=self)
-                await interaction.followup.send("Card successfully claimed! Check your/mycard.", ephemeral=True)
+                await interaction.followup.send("Card successfully claimed! Check your/info.", ephemeral=True)
             else:
                 # 이미 카드를 가지고 있는 경우
                 await interaction.followup.send("You have already claimed this card.", ephemeral=True)
@@ -1217,7 +1217,7 @@ class CardClaimView(discord.ui.View):
                 button.disabled = True
                 button.label = "Claimed"
                 await interaction.message.edit(view=self)
-                await interaction.followup.send("Card successfully claimed! Check your/mycard.", ephemeral=True)
+                await interaction.followup.send("Card successfully claimed! Check your/info.", ephemeral=True)
             else:
                 await interaction.followup.send("An error occurred while claiming the card. Please try again.", ephemeral=True)
 

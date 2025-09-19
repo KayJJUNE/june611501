@@ -1081,8 +1081,67 @@ class BotSelector(commands.Bot):
     async def handle_regular_message(self, message):
         """일반 채널 메시지를 처리합니다."""
         try:
-            # 일반 채널 처리 로직
-            pass
+            # 캐릭터 채널인지 확인
+            character_name = None
+            for char_name, bot in self.character_bots.items():
+                if message.channel.id in bot.active_channels:
+                    character_name = char_name
+                    break
+            
+            if not character_name:
+                return
+            
+            # 봇 메시지는 무시
+            if message.author == self.user:
+                return
+            
+            # 명령어는 무시
+            if message.content.startswith('/'):
+                return
+            
+            user_id = message.author.id
+            
+            # 언어 감지
+            language = self.detect_language(message.content)
+            
+            # 데이터베이스에 메시지 저장 (데이터베이스가 있는 경우에만)
+            try:
+                if hasattr(self, 'db') and self.db:
+                    self.db.add_message(
+                        channel_id=message.channel.id,
+                        user_id=user_id,
+                        character_name=character_name,
+                        role="user",
+                        content=message.content,
+                        language=language
+                    )
+            except Exception as e:
+                print(f"[DEBUG] Failed to save message to database: {e}")
+            
+            # 감정 분석 및 호감도 업데이트 (데이터베이스가 있는 경우에만)
+            try:
+                if hasattr(self, 'db') and self.db:
+                    emotion_score = await self.get_ai_response([{"role": "user", "content": message.content}])
+                    self.db.add_emotion_log(user_id, character_name, emotion_score, message.content)
+                    
+                    # 랜덤 카드 획득 체크
+                    card_type, card_id = self.get_random_card(character_name, user_id)
+                    if card_id:
+                        card_info = get_card_info_by_id(character_name, card_id)
+                        if card_info:
+                            card_embed = discord.Embed(
+                                title="🎉 New Card Unlocked!",
+                                description=f"You've reached a new milestone with {character_name} and received a special card! Click the button to claim it.",
+                                color=discord.Color.gold()
+                            )
+                            if card_info.get('image_url'):
+                                card_embed.set_image(url=card_info['image_url'])
+                            
+                            view = CardClaimView(user_id, character_name, card_id, self.db)
+                            await message.channel.send(embed=card_embed, view=view)
+            except Exception as e:
+                print(f"[DEBUG] Failed to process emotion and card logic: {e}")
+                
         except Exception as e:
             print(f"Error in handle_regular_message: {e}")
     
@@ -5272,12 +5331,15 @@ Respond in the same language as the user's message.
                 card_info = get_card_info_by_id(character_name, card_id)
                 if card_info:
                     embed = discord.Embed(
-                        title="🎉 새로운 카드를 획득했습니다!",
-                        description=f"**{card_info['name']}**\n{card_info['description']}",
-                        color=0x00ff00
+                        title="🎉 New Card Unlocked!",
+                        description=f"You've reached a new milestone with {character_name} and received a special card! Click the button to claim it.",
+                        color=discord.Color.gold()
                     )
-                    embed.set_thumbnail(url=card_info['image_url'])
-                    await message.channel.send(embed=embed)
+                    if card_info.get('image_url'):
+                        embed.set_image(url=card_info['image_url'])
+                    
+                    view = CardClaimView(user_id, character_name, card_id, self.db)
+                    await message.channel.send(embed=embed, view=view)
             
         except Exception as e:
             print(f"Error in handle_dm_message: {e}")
