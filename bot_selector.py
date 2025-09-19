@@ -4922,19 +4922,13 @@ class BotSelector(commands.Bot):
             user_cards = self.db.get_user_cards(user_id, character_name)
             user_card_ids = [card[0].upper() for card in user_cards]  # 대소문자 무관하게 비교
             
-            print(f"[DEBUG] get_random_card - user {user_id} ({character_name}) has cards: {user_card_ids}")
-            print(f"[DEBUG] get_random_card - total available cards in config: {list(card_info.keys())}")
-            
-            # 아직 보유하지 않은 카드들만 필터링
+            # 아직 보유하지 않은 카드들만 필터링 (banner_image 제외)
             available_cards = []
             for card_id in card_info:
-                if card_id.upper() not in user_card_ids:
+                if card_id.upper() not in user_card_ids and card_id != 'banner_image':
                     available_cards.append(card_id)
             
-            print(f"[DEBUG] get_random_card - available cards after filtering: {available_cards}")
-            
             if not available_cards:
-                print(f"[DEBUG] No available cards for user {user_id} ({character_name}) - all cards already owned")
                 return None, None
             
             # 호감도 등급에 따른 티어별 분배 확률
@@ -4953,10 +4947,14 @@ class BotSelector(commands.Bot):
             # 티어별로 사용 가능한 카드 분류
             tier_cards = {"C": [], "B": [], "A": [], "S": []}
             for card_id in available_cards:
-                card_detail = card_info.get(card_id, {})
-                tier = card_detail.get('tier', 'C')
-                if tier in tier_cards:
-                    tier_cards[tier].append(card_id)
+                if card_id in card_info:
+                    card_detail = card_info[card_id]
+                    tier = card_detail.get('tier', 'C')
+                    if tier in tier_cards:
+                        tier_cards[tier].append(card_id)
+                else:
+                    # 카드 정보가 없으면 기본적으로 C 티어로 분류
+                    tier_cards['C'].append(card_id)
             
             # 확률에 따라 티어 선택
             import random
@@ -4973,12 +4971,10 @@ class BotSelector(commands.Bot):
             # 선택된 티어에서 랜덤 카드 선택
             if selected_tier and tier_cards[selected_tier]:
                 card_id = random.choice(tier_cards[selected_tier])
-                print(f"[DEBUG] Selected {selected_tier}-tier card {card_id} for user {user_id} ({character_name}, grade: {grade})")
                 return None, card_id
             else:
                 # 선택된 티어에 카드가 없으면 전체에서 랜덤 선택
                 card_id = random.choice(available_cards)
-                print(f"[DEBUG] Selected random card {card_id} for user {user_id} ({character_name}) - fallback")
                 return None, card_id
                 
         except Exception as e:
