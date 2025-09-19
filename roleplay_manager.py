@@ -128,18 +128,41 @@ class RoleplayManager:
             await interaction.response.send_message(embed=start_embed, ephemeral=True)
             
             # 채널에 환영 메시지 전송
+            # 모드별 색상 설정
+            mode_colors = {
+                "romantic": 0xFF69B4,  # 핫핑크
+                "friendship": 0x00BFFF,  # 딥스카이블루
+                "healing": 0x98FB98,  # 페일그린
+                "fantasy": 0x9370DB,  # 미디엄퍼플
+                "custom": 0xFFD700   # 골드
+            }
+            
+            # 모드별 이모지 설정
+            mode_emojis = {
+                "romantic": "💕",
+                "friendship": "👥",
+                "healing": "🕊️",
+                "fantasy": "⚔️",
+                "custom": "✨"
+            }
+            
+            mode_emoji = mode_emojis.get(mode, "🎭")
+            mode_color = mode_colors.get(mode, 0x9B59B6)
+            
             welcome_embed = discord.Embed(
-                title=f"🎭 Roleplay Session Started!",
-                description=f"**{character_name}**과의 {mode.title()} 모드 롤플레잉이 시작되었습니다!",
-                color=discord.Color.purple()
+                title=f"{mode_emoji} {mode.title()} Mode Roleplay Started!",
+                description=f"**{mode.title()} mode roleplay with {character_name}** has begun!\n\n*Let your imagination guide this beautiful story* ✨",
+                color=mode_color
             )
             
+            # 스토리 설정을 더 예쁘게
             welcome_embed.add_field(
                 name="📖 Story Setting",
-                value=f"**{story_line}**",
+                value=f"*{story_line}*",
                 inline=False
             )
             
+            # 역할 정보를 더 깔끔하게
             welcome_embed.add_field(
                 name="👤 Your Role",
                 value=f"**{user_role}**",
@@ -152,13 +175,34 @@ class RoleplayManager:
                 inline=True
             )
             
+            # 빈 필드로 레이아웃 정리
+            welcome_embed.add_field(
+                name="\u200b",
+                value="\u200b",
+                inline=True
+            )
+            
+            # 게임 방법을 더 친근하게
             welcome_embed.add_field(
                 name="💬 How to Play",
-                value=f"Just type your message and {character_name} will respond in character! Use `/end-roleplay` to end the session anytime.",
+                value=f"Simply type your message and **{character_name}** will respond in character!\nUse `/end-roleplay` to end the session anytime.",
                 inline=False
             )
             
-            welcome_embed.set_footer(text="Let the roleplay begin! ✨")
+            # 모드별 이미지 추가
+            try:
+                from config import CHARACTER_IMAGES
+                image_url = CHARACTER_IMAGES.get(character_name, {}).get(mode)
+                if image_url:
+                    welcome_embed.set_image(url=image_url)
+            except Exception as e:
+                print(f"Error setting roleplay image: {e}")
+            
+            # 푸터를 더 예쁘게
+            welcome_embed.set_footer(
+                text=f"Mode: {mode.title()} • Character: {character_name} • Session Active",
+                icon_url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-icon/public"
+            )
             
             await channel.send(embed=welcome_embed)
             
