@@ -302,15 +302,27 @@ except NameError:
 
                 # 2. 세션 정보 저장 (새 채널에만)
                 # 데이터베이스에 세션 저장
-                session_id = bot_selector.db.create_roleplay_session(
-                    user_id=interaction.user.id,
-                    character_name=self.character_name, 
-                    mode=self.mode.value.lower(),
-                    user_role=self.user_role.value, 
-                    character_role=self.character_role.value,
-                    story_line=self.story_line.value,
-                    channel_id=channel.id
-                )
+                try:
+                    session_id = bot_selector.db.create_roleplay_session(
+                        user_id=interaction.user.id,
+                        character_name=self.character_name, 
+                        mode=self.mode.value.lower(),
+                        user_role=self.user_role.value, 
+                        character_role=self.character_role.value,
+                        story_line=self.story_line.value,
+                        channel_id=channel.id
+                    )
+                except TypeError as e:
+                    print(f"[DEBUG] TypeError calling create_roleplay_session with channel_id: {e}")
+                    # channel_id 없이 다시 시도
+                    session_id = bot_selector.db.create_roleplay_session(
+                        user_id=interaction.user.id,
+                        character_name=self.character_name, 
+                        mode=self.mode.value.lower(),
+                        user_role=self.user_role.value, 
+                        character_role=self.character_role.value,
+                        story_line=self.story_line.value
+                    )
                 
                 # 메모리에도 저장 (기존 호환성 유지)
                 bot_selector.roleplay_sessions[channel.id] = {
@@ -7482,15 +7494,27 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             )
             
             # 롤플레이 세션 초기화
-            session_id = self.bot.db.create_roleplay_session(
-                user_id=interaction.user.id,
-                character_name=self.character_name,
-                mode=self.mode,
-                user_role=user_role,
-                character_role=character_role,
-                story_line=story_prompt,
-                channel_id=channel.id
-            )
+            try:
+                session_id = self.bot.db.create_roleplay_session(
+                    user_id=interaction.user.id,
+                    character_name=self.character_name,
+                    mode=self.mode,
+                    user_role=user_role,
+                    character_role=character_role,
+                    story_line=story_prompt,
+                    channel_id=channel.id
+                )
+            except TypeError as e:
+                print(f"[DEBUG] TypeError calling create_roleplay_session with channel_id: {e}")
+                # channel_id 없이 다시 시도
+                session_id = self.bot.db.create_roleplay_session(
+                    user_id=interaction.user.id,
+                    character_name=self.character_name,
+                    mode=self.mode,
+                    user_role=user_role,
+                    character_role=character_role,
+                    story_line=story_prompt
+                )
             
             print(f"[DEBUG] create_roleplay_session returned: {session_id}")
             
