@@ -301,10 +301,8 @@ except NameError:
                 )
 
                 # 2. 세션 정보 저장 (새 채널에만)
-                session_id = f"rp_{interaction.user.id}_{self.character_name}_{int(datetime.now().timestamp())}"
-                
                 # 데이터베이스에 세션 저장
-                bot_selector.db.create_roleplay_session(
+                session_id = bot_selector.db.create_roleplay_session(
                     user_id=interaction.user.id,
                     character_name=self.character_name, 
                     mode=self.mode.value.lower(),
@@ -971,6 +969,8 @@ class BotSelector(commands.Bot):
             
             # 사용자 ID와 채널 ID로 세션 찾기
             session = self.roleplay_sessions.get(message.channel.id)
+            print(f"[DEBUG] Looking for session in channel {message.channel.id}, found: {session is not None}")
+            print(f"[DEBUG] Available sessions: {list(self.roleplay_sessions.keys())}")
             if not session:
                 print(f"[DEBUG] No roleplay session found for channel {message.channel.id}")
                 return
@@ -7492,6 +7492,8 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                 channel_id=channel.id
             )
             
+            print(f"[DEBUG] create_roleplay_session returned: {session_id}")
+            
             if not session_id:
                 await interaction.response.send_message(
                     "❌ Failed to create roleplay session. Please try again.",
@@ -7511,6 +7513,8 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                 "turn_count": 0,
                 "history": []
             }
+            
+            print(f"[DEBUG] Roleplay session saved: {self.bot.roleplay_sessions[channel.id]}")
             
             # 멋있는 시작 임베드 생성
             start_embed = discord.Embed(
