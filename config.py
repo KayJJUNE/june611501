@@ -933,7 +933,7 @@ CHARACTER_CARD_INFO = {
         "erosb1": {"image_url": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/f8f5bff2-bc37-49c4-fec2-f03e678a1f00/public", "name": "Eros B1", "description": "Eros's B1 Card", "tier": "B", "ability": "Basic Ability 1"},
         "erosb2": {"image_url": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/3e8e1f8d-677d-4b64-3bf9-968939220400/public", "name": "Eros B2", "description": "Eros's B2 Card", "tier": "B", "ability": "Basic Ability 2"},
         "erosb3": {"image_url": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/906fc850-13b1-44e4-7e23-a836d4335300/public", "name": "Eros B3", "description": "Eros's B3 Card", "tier": "B", "ability": "Basic Ability 3"},
-        "erosb4": {"image_url": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/0423f93c-8d1d-4b72-f051-a063b18af800/public", "name": "Eros B4", "description": "Eros's B4 Card", "tier": "B", "ability": "Basic Ability 4"},
+        "erosb4": {"image_url": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/0423f93c-8dd1-4b72-f051-a063b18af800/public", "name": "Eros B4", "description": "Eros's B4 Card", "tier": "B", "ability": "Basic Ability 4"},
         "erosb5": {"image_url": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/0f05b872-b704-4ad9-1112-9b79ea594300/public", "name": "Eros B5", "description": "Eros's B5 Card", "tier": "B", "ability": "Basic Ability 5"},
         "erosb6": {"image_url": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/af2902a8-9ab4-42fa-5dff-cf7e2d015500/public", "name": "Eros B6", "description": "Eros's B6 Card", "tier": "B", "ability": "Basic Ability 6"},
         "erosb7": {"image_url": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/4bce0021-983b-411c-3b6b-f4412c80d600/public", "name": "Eros B7", "description": "Eros's B7 Card", "tier": "B", "ability": "Basic Ability 7"},
@@ -1608,4 +1608,89 @@ eros_customers_image_ids = [
 for idx, customer in enumerate(STORY_CHAPTERS["Eros"]["chapters"][0]["customers"]):
     if idx < len(eros_customers_image_ids):
         customer["image_id"] = eros_customers_image_ids[idx]
+
+# AI가 자동 생성할 롤플레잉 프롬프트
+ROLEPLAY_PROMPTS = {
+    "Kagari": {
+        "romantic": {
+            "user_role": "A gentle soul who sees beyond Kagari's cold exterior",
+            "character_role": "A fierce yokai warrior slowly opening her heart",
+            "story_line": "Under the moonlit cherry blossoms, you encounter Kagari during her evening meditation. Her usual stern expression softens slightly as she notices your presence, creating a moment of unexpected intimacy between warrior and admirer."
+        },
+        "friendship": {
+            "user_role": "A trusted companion who respects Kagari's strength",
+            "character_role": "A loyal warrior learning to value friendship",
+            "story_line": "After a difficult battle, you and Kagari sit together in comfortable silence. She's slowly learning that strength doesn't always mean standing alone, and your friendship has become a rare source of peace in her turbulent world."
+        },
+        "healing": {
+            "user_role": "A compassionate healer with a calming presence",
+            "character_role": "A wounded warrior hiding emotional scars",
+            "story_line": "In a quiet temple garden, Kagari tends to her wounds after another fierce battle. You approach with healing herbs, and for once, she doesn't push away your offer of help, allowing vulnerability to show through her warrior facade."
+        },
+        "fantasy": {
+            "user_role": "A fellow adventurer with mysterious powers",
+            "character_role": "A legendary yokai warrior on a sacred quest",
+            "story_line": "Ancient spirits have awakened, threatening the balance between worlds. You and Kagari must journey through mystical realms, combining her yokai powers with your unique abilities to restore harmony before darkness consumes everything."
+        },
+        "custom": {
+            "user_role": "A mysterious figure from Kagari's past",
+            "character_role": "A conflicted warrior facing her destiny",
+            "story_line": "Create your own unique scenario with Kagari. Perhaps you're a childhood friend, a rival warrior, or someone with a connection to her mysterious yokai heritage. The choice is yours to explore."
+        }
+    },
+    "Eros": {
+        "romantic": {
+            "user_role": "A sweet person who cherishes Eros's innocent nature",
+            "character_role": "A cheerful bee-sprite spreading love and happiness",
+            "story_line": "In the magical Spot Zero Café, Eros flutters around preparing special honey treats. Her wings sparkle in the golden afternoon light as she shyly offers you a cup of her finest honey tea, her cheeks blushing like rose petals."
+        },
+        "friendship": {
+            "user_role": "A loyal friend who enjoys Eros's company",
+            "character_role": "An energetic bee-sprite sharing daily adventures",
+            "story_line": "Eros buzzes excitedly as she shows you her secret flower garden behind the café. She's discovered a new type of magical flower that produces rainbow-colored honey, and she can't wait to share this discovery with her dearest friend."
+        },
+        "healing": {
+            "user_role": "Someone seeking comfort and warmth",
+            "character_role": "A caring bee-sprite with healing magic",
+            "story_line": "Feeling overwhelmed by life's challenges, you visit Eros at her cozy café. She senses your troubled heart and gently guides you to a quiet corner, where her soothing presence and magical honey begin to heal your weary spirit."
+        },
+        "fantasy": {
+            "user_role": "A guardian of nature working alongside magical creatures",
+            "character_role": "A powerful bee-sprite protecting the magical realm",
+            "story_line": "The magical flower meadows are withering due to a dark curse. Eros, despite her usual cheerful demeanor, must embrace her true power as a guardian bee-sprite. Together, you embark on a quest to restore the natural magic and save her beloved flower kingdom."
+        },
+        "custom": {
+            "user_role": "A regular customer at the Spot Zero Café",
+            "character_role": "A sweet bee-sprite with hidden depths",
+            "story_line": "Design your own adventure with Eros. Maybe you're a fellow magical creature, a human learning about magic, or someone with a special connection to her café. Let your imagination create the perfect scenario."
+        }
+    },
+    "Elysia": {
+        "romantic": {
+            "user_role": "A charming person who appreciates Elysia's playful nature",
+            "character_role": "A flirtatious cat-girl with a warrior's heart",
+            "story_line": "During a moonlit training session, Elysia's playful combat moves become an elegant dance. Her feline grace and confident smirk captivate you as she playfully challenges you to keep up with her swift movements, turning training into romantic tension."
+        },
+        "friendship": {
+            "user_role": "A trusted teammate who enjoys Elysia's humor",
+            "character_role": "A loyal cat-girl warrior with a mischievous streak",
+            "story_line": "After a successful mission, Elysia suggests celebrating at her favorite rooftop spot. Her cat-like eyes gleam with mischief as she shares stories of your adventures, her tail swishing contentedly as she enjoys this moment of camaraderie."
+        },
+        "healing": {
+            "user_role": "A gentle soul offering emotional support",
+            "character_role": "A strong cat-girl hiding her vulnerabilities",
+            "story_line": "Behind her confident exterior, Elysia struggles with self-doubt about her abilities. In a quiet moment away from the team, she lets her guard down, revealing the insecurities that drive her to constantly prove herself as a worthy warrior."
+        },
+        "fantasy": {
+            "user_role": "A fellow warrior exploring ancient mysteries",
+            "character_role": "A cat-girl with ancient feline magic awakening",
+            "story_line": "Ancient cat temples have begun glowing with mysterious energy, calling to Elysia's feline heritage. Together, you explore these forgotten ruins, uncovering secrets of her lineage while awakening powers that connect her to legendary cat spirits of old."
+        },
+        "custom": {
+            "user_role": "A new member of the investigation team",
+            "character_role": "An experienced cat-girl warrior and mentor",
+            "story_line": "Create your own story with Elysia. Perhaps you're a rival, a trainee learning from her skills, or someone intrigued by her mysterious feline abilities. The adventure awaits your creative direction."
+        }
+    }
+}
 

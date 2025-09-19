@@ -246,6 +246,271 @@ except NameError:
         def __init__(self, *args, **kwargs):
             super().__init__()
 
+# 모드 선택 뷰 클래스
+class RoleplayModeSelectView(discord.ui.View):
+    def __init__(self, character_name: str, user_id: int):
+        super().__init__(timeout=300)
+        self.character_name = character_name
+        self.user_id = user_id
+
+    @discord.ui.button(label="💖 Romantic", style=discord.ButtonStyle.danger, row=0)
+    async def romantic_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your roleplay session!", ephemeral=True)
+            return
+        await self.show_roleplay_modal(interaction, "romantic")
+
+    @discord.ui.button(label="👥 Friendship", style=discord.ButtonStyle.primary, row=0)
+    async def friendship_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your roleplay session!", ephemeral=True)
+            return
+        await self.show_roleplay_modal(interaction, "friendship")
+
+    @discord.ui.button(label="🌸 Healing", style=discord.ButtonStyle.success, row=0)
+    async def healing_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your roleplay session!", ephemeral=True)
+            return
+        await self.show_roleplay_modal(interaction, "healing")
+
+    @discord.ui.button(label="🔮 Fantasy", style=discord.ButtonStyle.secondary, row=1)
+    async def fantasy_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your roleplay session!", ephemeral=True)
+            return
+        await self.show_roleplay_modal(interaction, "fantasy")
+
+    @discord.ui.button(label="🎨 Custom", style=discord.ButtonStyle.secondary, row=1)
+    async def custom_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your roleplay session!", ephemeral=True)
+            return
+        await self.show_roleplay_modal(interaction, "custom")
+
+    async def show_roleplay_modal(self, interaction: discord.Interaction, mode: str):
+        """선택된 모드에 따라 AI 생성 프롬프트와 함께 모달을 표시합니다."""
+        modal = EnhancedRoleplayModal(self.character_name, mode)
+        await interaction.response.send_modal(modal)
+
+# AI 프롬프트 생성 기능이 포함된 향상된 롤플레잉 모달
+class EnhancedRoleplayModal(discord.ui.Modal, title="Roleplay Settings"):
+    def __init__(self, character_name: str, mode: str):
+        super().__init__()
+        self.character_name = character_name
+        self.mode = mode
+        
+        # AI가 생성한 프롬프트 (유저가 편집 가능)
+        generated_prompts = self.generate_ai_prompts(character_name, mode)
+        
+        self.user_role = discord.ui.TextInput(
+            label="Your Role", 
+            placeholder="Describe your character's role in this story...",
+            default=generated_prompts["user_role"],
+            max_length=150, 
+            required=True
+        )
+        
+        self.character_role = discord.ui.TextInput(
+            label=f"{character_name}'s Role", 
+            placeholder=f"Describe {character_name}'s role in this story...",
+            default=generated_prompts["character_role"],
+            max_length=150, 
+            required=True
+        )
+        
+        self.story_line = discord.ui.TextInput(
+            label="Story Scenario", 
+            placeholder="Describe the setting and initial scenario...",
+            default=generated_prompts["story_line"],
+            max_length=1500, 
+            required=True, 
+            style=discord.TextStyle.paragraph
+        )
+        
+        self.add_item(self.user_role)
+        self.add_item(self.character_role)
+        self.add_item(self.story_line)
+
+    def generate_ai_prompts(self, character_name: str, mode: str) -> dict:
+        """모드와 캐릭터에 따라 AI가 프롬프트를 자동 생성합니다."""
+        from config import ROLEPLAY_PROMPTS
+        
+        prompts = ROLEPLAY_PROMPTS.get(character_name, {}).get(mode, {
+            "user_role": "A kind and curious person",
+            "character_role": f"A friendly companion",
+            "story_line": f"You and {character_name} meet in a peaceful garden on a beautiful afternoon."
+        })
+        
+        return prompts
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # 글자수 초과 체크
+        if len(self.user_role.value) > 150 or len(self.character_role.value) > 150:
+            await interaction.response.send_message(
+                "❌ 'Your Role and Character Role must be entered in 150 characters or less.", ephemeral=True
+            )
+            return
+        if len(self.story_line.value) > 1500:
+            await interaction.response.send_message(
+                "❌ 'The Story Line must be entered within 1,500 characters.", ephemeral=True
+            )
+            return
+            
+        try:
+            bot_selector = interaction.client
+            if not hasattr(bot_selector, "roleplay_sessions"):
+                bot_selector.roleplay_sessions = {}
+
+            # 1. 새로운 롤플레잉 채널 생성
+            guild = interaction.guild
+            category = discord.utils.get(guild.categories, name="roleplay")
+            if not category:
+                category = await guild.create_category("roleplay")
+            channel_name = f"rp-{self.character_name.lower()}-{interaction.user.name.lower()}-{int(datetime.now().timestamp())}"
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            }
+            channel = await guild.create_text_channel(
+                name=channel_name,
+                category=category,
+                topic=f"Roleplay with {self.character_name} for {interaction.user.name}",
+                overwrites=overwrites
+            )
+            print(f"[DEBUG] Roleplay channel created: {channel.name} ({channel.id})")
+
+            # 세션 ID 생성 및 데이터베이스 저장 시도
+            import uuid
+            session_id = str(uuid.uuid4())
+
+            # 데이터베이스에 세션 저장 시도 (실패해도 계속 진행)
+            db_success = False
+            try:
+                print(f"[DEBUG] Checking database availability...")
+                print(f"[DEBUG] bot_selector has 'db' attribute: {hasattr(bot_selector, 'db')}")
+                if hasattr(bot_selector, 'db'):
+                    print(f"[DEBUG] bot_selector.db is not None: {bot_selector.db is not None}")
+                else:
+                    print(f"[DEBUG] bot_selector.db attribute does not exist")
+
+                if hasattr(bot_selector, 'db') and bot_selector.db:
+                    print(f"[DEBUG] Attempting to create roleplay session in database...")
+                    db_session_id = bot_selector.db.create_roleplay_session(
+                        interaction.user.id,
+                        self.character_name,
+                        self.mode,
+                        self.user_role.value,
+                        self.character_role.value,
+                        self.story_line.value,
+                        channel.id
+                    )
+                    print(f"[DEBUG] create_roleplay_session returned: {db_session_id}")
+                    if db_session_id:
+                        print(f"[DEBUG] Roleplay session saved to database: {db_session_id}")
+                        session_id = db_session_id
+                        db_success = True
+                    else:
+                        print(f"[DEBUG] Failed to save roleplay session to database, but continuing with local session")
+                else:
+                    print(f"[DEBUG] Database not available, using local session only")
+            except Exception as e:
+                print(f"[DEBUG] Database error (continuing with local session): {e}")
+                import traceback
+                print(f"[DEBUG] Traceback: {traceback.format_exc()}")
+
+            # 세션 저장 (대화 제한을 100회로 변경)
+            bot_selector.roleplay_sessions[channel.id] = {
+                "session_id": session_id,
+                "user_id": interaction.user.id,
+                "character_name": self.character_name,
+                "mode": self.mode,
+                "user_role": self.user_role.value,
+                "character_role": self.character_role.value,
+                "story_line": self.story_line.value,
+                "turn_count": 0,
+                "history": [],
+                "db_saved": db_success,
+                "max_turns": 100  # 100회로 변경
+            }
+
+            print(f"[DEBUG] Roleplay session saved: {bot_selector.roleplay_sessions[channel.id]}")
+
+            # 아름다운 시작 임베드 생성
+            start_embed = discord.Embed(
+                title="🎭 Roleplay Session Started!",
+                description=f"**{self.mode.title()}** mode with **{self.character_name}** has begun!",
+                color=discord.Color.from_rgb(138, 43, 226)
+            )
+
+            # 모드별 이미지 설정
+            mode_images = {
+                "romantic": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/c742a172-bdf3-4e97-2a80-1f5b7a100a00/public",
+                "friendship": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/1e48be9b-ecd4-4936-6fb4-955fd444ac00/public",
+                "healing": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5686b751-2d47-4084-6f76-8672282f7e00/public",
+                "fantasy": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/b3aa214f-7736-43ea-64b4-9e749f09b500/public",
+                "custom": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/b3aa214f-7736-43ea-64b4-9e749f09b500/public"
+            }
+            start_embed.set_image(url=mode_images.get(self.mode.lower(), mode_images["romantic"]))
+
+            start_embed.add_field(
+                name="👤 Your Role",
+                value=f"```{self.user_role.value}```",
+                inline=False
+            )
+            start_embed.add_field(
+                name="🎭 Character Role",
+                value=f"```{self.character_role.value}```",
+                inline=False
+            )
+            start_embed.add_field(
+                name="📖 Story Scenario",
+                value=f"```{self.story_line.value[:200]}{'...' if len(self.story_line.value) > 200 else ''}```",
+                inline=False
+            )
+
+            start_embed.add_field(
+                name="📋 Rules",
+                value="• **Roleplay mode will automatically end after 100 conversations**\n• Please engage in character-appropriate dialogue\n• Use `/end-roleplay` to end anytime",
+                inline=False
+            )
+
+            # 데이터베이스 상태 표시
+            if db_success:
+                start_embed.add_field(
+                    name="💾 Session Status",
+                    value="✅ **Database Connected** - Session saved",
+                    inline=False
+                )
+            else:
+                start_embed.add_field(
+                    name="💾 Session Status", 
+                    value="⚠️ **Local Session Only** - Database unavailable",
+                    inline=False
+                )
+
+            start_embed.set_footer(
+                text=f"Turn 0/100 • Start your adventure with {self.character_name}!",
+                icon_url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-icon/public"
+            )
+
+            # 채널에 시작 메시지 전송
+            await channel.send(embed=start_embed)
+
+            # 사용자에게 성공 메시지
+            await interaction.response.send_message(
+                f"✅ {self.mode.title()} roleplay session created! Continue in {channel.mention}",
+                ephemeral=True
+            )
+
+        except Exception as e:
+            print(f"[EnhancedRoleplayModal on_submit error] {e}")
+            import traceback
+            print(traceback.format_exc())
+            if not interaction.response.is_done():
+                await interaction.response.send_message("Something went wrong, please try again.", ephemeral=True)
+
 try:
     RoleplayModal
 except NameError:
@@ -326,40 +591,59 @@ except NameError:
                     "turns_remaining": 100
                 }
 
-                # 3. 새 채널에 임베드 출력
+                # 3. 새 채널에 임베드 출력 (이전 형태로 복원)
                 from config import CHARACTER_INFO
                 char_info = CHARACTER_INFO.get(self.character_name, {})
-                # 모드별 이모지 매핑
-                mode_emojis = {
-                    "romantic": "💕",
-                    "friendship": "👥", 
-                    "healing": "🕊️",
-                    "fantasy": "⚔️",
-                    "custom": "✨"
-                }
                 
                 embed = discord.Embed(
-                    title=f"🎭 Roleplay Session with {self.character_name} Begins! 🎭",
-                    description=(
-                        f"🎬 **Roleplay Scenario** 🎬\n"
-                        f"**Mode:** {mode_emojis.get(self.mode.value.lower(), '✨')} {self.mode.value.title()}\n"
-                        f"**Your Role:** `{self.user_role.value}`\n"
-                        f"**{self.character_name}'s Role:** `{self.character_role.value}`\n"
-                        f"**Story/Situation:**\n> {self.story_line.value}\n\n"
-                        f"✨ {self.character_name} will now act according to their role and personality in this scenario! ✨\n"
-                        f"💬 Enjoy 100 turns of immersive roleplay conversation."
-                    ),
-                    color=discord.Color.magenta()
+                    title=f"🎭 Roleplay Session Started!",
+                    description=f"**{self.mode.value.title()}** mode with **{self.character_name}** has begun!",
+                    color=discord.Color.purple()
                 )
-                icon_url = char_info.get('image') if char_info.get('image') else "https://i.postimg.cc/BZTJr9Np/ec6047e888811f61cc4b896a4c3dd22e.gif"
-                embed.set_thumbnail(url=icon_url)
-                embed.set_footer(text="🎭 Spot Zero Immersive Roleplay Mode")
+
+                # 모드별 이미지 설정
+                mode_images = {
+                    "romantic": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/c742a172-bdf3-4e97-2a80-1f5b7a100a00/public",
+                    "friendship": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/1e48be9b-ecd4-4936-6fb4-955fd444ac00/public",
+                    "healing": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/5686b751-2d47-4084-6f76-8672282f7e00/public",
+                    "fantasy": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/b3aa214f-7736-43ea-64b4-9e749f09b500/public",
+                    "custom": "https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/b3aa214f-7736-43ea-64b4-9e749f09b500/public"
+                }
+                embed.set_image(url=mode_images.get(self.mode.value.lower(), mode_images["romantic"]))
+
+                embed.add_field(
+                    name="👤 Your Role",
+                    value=f"```{self.user_role.value}```",
+                    inline=False
+                )
+                embed.add_field(
+                    name="🎭 Character Role",
+                    value=f"```{self.character_role.value}```",
+                    inline=False
+                )
+                embed.add_field(
+                    name="📖 Story Summary",
+                    value=f"```{self.story_line.value[:200]}{'...' if len(self.story_line.value) > 200 else ''}```",
+                    inline=False
+                )
+
+                embed.add_field(
+                    name="📋 Rules",
+                    value="• **Roleplay mode will automatically end after 100 conversations**\n• Please engage in character-appropriate dialogue\n• Use `/end-roleplay` to end anytime",
+                    inline=False
+                )
+
+                embed.set_footer(
+                    text=f"Turn 0/100 • Start your adventure with {self.character_name}!",
+                    icon_url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-icon/public"
+                )
+
+                # 채널에 시작 메시지 전송
                 await channel.send(embed=embed)
 
-                # 4. 기존 채널에 안내 메시지 전송
-                rp_link = f"https://discord.com/channels/{guild.id}/{channel.id}"
+                # 사용자에게 성공 메시지
                 await interaction.response.send_message(
-                    f"✨ A new roleplay mode has started! [Click here to join your special channel]({rp_link})",
+                    f"✅ {self.mode.value.title()} roleplay session created! Continue in {channel.mention}",
                     ephemeral=True
                 )
 
@@ -2284,9 +2568,64 @@ class BotSelector(commands.Bot):
                     await interaction.response.send_message(embed=embed, ephemeral=True)
                     return
 
-                # 3. 모달 표시
-                modal = RoleplayModal(current_bot.character_name)
-                await interaction.response.send_modal(modal)
+                # 3. 아름다운 모드 선택 UI 표시
+                from config import CHARACTER_IMAGES
+                char_image = CHARACTER_IMAGES.get(current_bot.character_name)
+                
+                embed = discord.Embed(
+                    title=f"🎭 Roleplay with {current_bot.character_name}",
+                    description=f"✨ **Welcome to the magical world of roleplay!** ✨\n\nChoose your desired roleplay mode to begin an unforgettable journey with {current_bot.character_name}. Each mode offers a unique experience tailored to your preferences.",
+                    color=discord.Color.from_rgb(138, 43, 226)  # Beautiful purple
+                )
+                
+                if char_image:
+                    embed.set_thumbnail(url=char_image)
+                
+                embed.add_field(
+                    name="💖 Romantic Mode",
+                    value="Experience sweet moments and romantic adventures together",
+                    inline=True
+                )
+                embed.add_field(
+                    name="👥 Friendship Mode", 
+                    value="Build a strong bond through friendship and companionship",
+                    inline=True
+                )
+                embed.add_field(
+                    name="🌸 Healing Mode",
+                    value="Find comfort and peace in gentle, caring interactions",
+                    inline=True
+                )
+                embed.add_field(
+                    name="🔮 Fantasy Mode",
+                    value="Embark on magical adventures in fantastical worlds",
+                    inline=True
+                )
+                embed.add_field(
+                    name="🎨 Custom Mode",
+                    value="Create your own unique roleplay scenario",
+                    inline=True
+                )
+                embed.add_field(
+                    name="",
+                    value="",
+                    inline=True
+                )  # Empty field for spacing
+                
+                embed.add_field(
+                    name="📋 Roleplay Rules",
+                    value="• **100 messages limit** per session\n• Stay in character and be respectful\n• Use `/end-roleplay` to end anytime\n• AI will generate initial prompts for you",
+                    inline=False
+                )
+                
+                embed.set_footer(
+                    text=f"Select a mode below to start your roleplay adventure! • Affinity: {affinity_grade}",
+                    icon_url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-icon/public"
+                )
+                
+                # 모드 선택 뷰 생성
+                view = RoleplayModeSelectView(current_bot.character_name, interaction.user.id)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
             except Exception as e:
                 print(f"Error in /roleplay: {e}")
@@ -4650,12 +4989,48 @@ class BotSelector(commands.Bot):
         else:
             session["turn_count"] += 1
 
+        # 최대 턴 수 확인 (기본값 100회)
+        max_turns = session.get("max_turns", 100)
+        
+        # 100회 제한 체크
+        if session["turn_count"] > max_turns:
+            # 세션 종료 임베드
+            end_embed = discord.Embed(
+                title="🎭 Roleplay Session Ended",
+                description=f"Your roleplay session with **{character_name}** has reached the maximum limit of {max_turns} messages.",
+                color=discord.Color.gold()
+            )
+            end_embed.add_field(
+                name="📊 Session Summary",
+                value=f"**Mode:** {session.get('mode', 'Unknown').title()}\n**Messages:** {session['turn_count']}/{max_turns}\n**Character:** {character_name}",
+                inline=False
+            )
+            end_embed.add_field(
+                name="💫 Thank you!",
+                value="Thank you for the wonderful roleplay adventure! You can start a new session anytime with `/roleplay`.",
+                inline=False
+            )
+            end_embed.set_footer(text="Session automatically ended due to message limit")
+            
+            await message.channel.send(embed=end_embed)
+            
+            # 세션 정리
+            if message.channel.id in self.roleplay_sessions:
+                del self.roleplay_sessions[message.channel.id]
+            
+            # 데이터베이스에서 세션 종료 처리
+            session_id = session.get("session_id")
+            if session_id:
+                self.db.end_roleplay_session(session_id)
+            
+            return
+
         # 데이터베이스에 메시지 카운트 업데이트
         session_id = session.get("session_id")
         if session_id:
             self.db.update_roleplay_message_count(session_id, session["turn_count"])
 
-        turn_str = f"({session['turn_count']}/100)"
+        turn_str = f"({session['turn_count']}/{max_turns})"
 
         # 캐릭터별 특성과 톤앤매너 정의 (롤플레잉 모드 전용)
         character_traits = {
