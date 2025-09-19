@@ -611,12 +611,12 @@ class CharacterSelect(discord.ui.Select):
 
             # 사용자별 채널 생성
             channel_name = f"chat-{selected_char.lower()}-{interaction.user.name}"
-            print(f"[DEBUG] 생성할 채널명: {channel_name}")
+            print(f"[DEBUG] Creating channel name: {channel_name}")
 
             # 기존 채널 확인 및 삭제
             existing_channel = discord.utils.get(interaction.guild.channels, name=channel_name)
             if existing_channel:
-                print(f"[DEBUG] 기존 채널 삭제: {existing_channel.name}")
+                print(f"[DEBUG] Deleting existing channel: {existing_channel.name}")
                 await existing_channel.delete()
 
             # 새 채널 생성
@@ -1021,6 +1021,16 @@ class BotSelector(commands.Bot):
             
             # 턴 수 업데이트
             self.db.update_roleplay_message_count(session["session_id"], current_turn)
+            
+            # 10턴마다 진행 상황 메시지 전송
+            if current_turn % 10 == 0:
+                progress_embed = discord.Embed(
+                    title="📊 Roleplay Progress",
+                    description=f"**Turn {current_turn}/100**\nYou're making great progress in your roleplay session!",
+                    color=discord.Color.green()
+                )
+                progress_embed.set_footer(text=f"Continue your adventure with {session['character_name']}!")
+                await message.channel.send(embed=progress_embed)
             
         except Exception as e:
             print(f"Error in handle_roleplay_message: {e}")
@@ -2826,9 +2836,9 @@ Respond in the same language as the user's message.
                             await asyncio.sleep(5)
                             try:
                                 await interaction.channel.delete()
-                                print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 완료")
+                                print(f"[DEBUG][{character}] Channel deleted after chapter 3 gift completion")
                             except Exception as e:
-                                print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 실패: {e}")
+                                print(f"[DEBUG][{character}] Failed to delete channel after chapter 3 gift completion: {e}")
                         else:
                             print(f"[DEBUG] handle_chapter3_gift_usage failed: {result}")
                         return  # 스토리 모드 처리 완료 후 함수 종료
@@ -2847,9 +2857,9 @@ Respond in the same language as the user's message.
                             await asyncio.sleep(5)
                             try:
                                 await interaction.channel.delete()
-                                print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 완료")
+                                print(f"[DEBUG][{character}] Channel deleted after chapter 3 gift completion")
                             except Exception as e:
-                                print(f"[DEBUG][{character}] 챕터3 선물 완료 후 채널 삭제 실패: {e}")
+                                print(f"[DEBUG][{character}] Failed to delete channel after chapter 3 gift completion: {e}")
                         return  # 스토리 모드 처리 완료 후 함수 종료
                     else:
                         # 기타 스토리 모드 선물 처리
@@ -3648,9 +3658,9 @@ Respond in the same language as the user's message.
                     await asyncio.sleep(5)
                     try:
                         await interaction.channel.delete()
-                        print(f"[DEBUG][Eros] 챕터2 성공 후 채널 삭제 완료")
+                        print(f"[DEBUG][Eros] Channel deleted after chapter 2 success")
                     except Exception as e:
-                        print(f"[DEBUG][Eros] 챕터2 성공 후 채널 삭제 실패: {e}")
+                        print(f"[DEBUG][Eros] Failed to delete channel after chapter 2 success: {e}")
                 else:
                     # 실패: 일부 정답이 틀림
                     wrong_count = total_characters - correct_count
@@ -3668,9 +3678,9 @@ Respond in the same language as the user's message.
                     await asyncio.sleep(5)
                     try:
                         await interaction.channel.delete()
-                        print(f"[DEBUG][Eros] 챕터2 실패 후 채널 삭제 완료")
+                        print(f"[DEBUG][Eros] Channel deleted after chapter 2 failure")
                     except Exception as e:
-                        print(f"[DEBUG][Eros] 챕터2 실패 후 채널 삭제 실패: {e}")
+                        print(f"[DEBUG][Eros] Failed to delete channel after chapter 2 failure: {e}")
             story_sessions[interaction.channel.id] = session
 
         @self.tree.command(
@@ -5170,9 +5180,9 @@ Respond in the same language as the user's message.
             await asyncio.sleep(10)
             try:
                 await message.channel.delete()
-                print(f"[DEBUG][Roleplay] 100턴 완료 후 채널 삭제 완료")
+                print(f"[DEBUG][Roleplay] Channel deleted after 100 turns completion")
             except Exception as e:
-                print(f"[DEBUG][Roleplay] 100턴 완료 후 채널 삭제 실패: {e}")
+                print(f"[DEBUG][Roleplay] Failed to delete channel after 100 turns completion: {e}")
 
     def remove_channel(self, channel_id):
         # 활성화된 채널 목록에서 제거
@@ -7543,7 +7553,7 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             # 멋있는 시작 임베드 생성
             start_embed = discord.Embed(
                 title="🎭 Roleplay Session Started!",
-                description=f"**{self.character_name}**과의 **{self.mode.title()}** 모드가 시작되었습니다!",
+                description=f"**{self.mode.title()}** mode with **{self.character_name}** has begun!",
                 color=discord.Color.purple()
             )
             
@@ -7590,7 +7600,7 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             
             start_embed.add_field(
                 name="📋 Rules",
-                value="• **100회 대화 후 자동으로 롤플레이 모드가 종료됩니다**\n• 캐릭터에 맞는 대화를 해주세요\n• `/end-roleplay`로 언제든 종료 가능",
+                value="• **Roleplay mode will automatically end after 100 conversations**\n• Please engage in character-appropriate dialogue\n• Use `/end-roleplay` to end anytime",
                 inline=False
             )
             
@@ -7609,7 +7619,7 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                 )
             
             start_embed.set_footer(
-                text=f"Turn 0/100 • {self.character_name}과의 모험을 시작하세요!",
+                text=f"Turn 0/100 • Start your adventure with {self.character_name}!",
                 icon_url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-icon/public"
             )
             
