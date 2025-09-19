@@ -549,7 +549,7 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
             )
             from config import CHARACTER_CARD_INFO
             card_id = rewards['card']
-            card_image_url = CHARACTER_CARD_INFO["Eros"].get(card_id, {}).get("image_path")
+            card_image_url = CHARACTER_CARD_INFO["Eros"].get(card_id, {}).get("image_url")
             if card_image_url:
                 card_embed.set_image(url=card_image_url)
             card_embed.set_footer(text="Press the button below to claim your card!")

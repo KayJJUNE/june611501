@@ -597,8 +597,8 @@ class CharacterBot(commands.Bot):
                 description=f"You've reached a new milestone with {character} and received a special card!\nClick the button to claim it.",
                 color=discord.Color.gold()
             )
-            if card_info.get("image_path"):
-                embed.set_image(url=card_info["image_path"])
+            if card_info.get("image_url"):
+                embed.set_image(url=card_info["image_url"])
             view = CardClaimView(user_id, card_id, character, self.db)
             await message.channel.send(embed=embed, view=view)
 
@@ -1229,8 +1229,8 @@ def get_card_claim_embed_and_view(user_id, character_name, card_id, db):
         description=card_info.get("description", ""),
         color=discord.Color.gold()
     )
-    if card_info.get("image_path"):
-        embed.set_image(url=card_info.get("image_path"))
+    if card_info.get("image_url"):
+        embed.set_image(url=card_info.get("image_url"))
     view = CardClaimView(user_id, character_name, card_id, db)
     return embed, view
 
