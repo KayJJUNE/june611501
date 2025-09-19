@@ -6676,11 +6676,19 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             
             existing_channel = discord.utils.get(interaction.guild.channels, name=channel_name)
             if existing_channel:
-                await interaction.response.send_message(
-                    f"❌ You already have an active roleplay session: {existing_channel.mention}",
-                    ephemeral=True
-                )
-                return
+                # 기존 세션 종료
+                if existing_channel.id in self.bot.roleplay_sessions:
+                    session = self.bot.roleplay_sessions[existing_channel.id]
+                    # 데이터베이스에서 세션 종료
+                    self.bot.db.end_roleplay_session(session["session_id"])
+                    # 메모리에서 세션 제거
+                    del self.bot.roleplay_sessions[existing_channel.id]
+                
+                # 기존 채널 삭제
+                try:
+                    await existing_channel.delete()
+                except:
+                    pass  # 채널 삭제 실패해도 계속 진행
             
             # 새 롤플레이 채널 생성
             overwrites = {
@@ -6826,11 +6834,19 @@ class RoleplayModal(discord.ui.Modal):
             # 기존 롤플레이 채널이 있는지 확인
             existing_channel = discord.utils.get(guild.channels, name=channel_name)
             if existing_channel:
-                await interaction.response.send_message(
-                    f"❌ You already have an active roleplay session: {existing_channel.mention}",
-                    ephemeral=True
-                )
-                return
+                # 기존 세션 종료
+                if existing_channel.id in self.bot.roleplay_sessions:
+                    session = self.bot.roleplay_sessions[existing_channel.id]
+                    # 데이터베이스에서 세션 종료
+                    self.bot.db.end_roleplay_session(session["session_id"])
+                    # 메모리에서 세션 제거
+                    del self.bot.roleplay_sessions[existing_channel.id]
+                
+                # 기존 채널 삭제
+                try:
+                    await existing_channel.delete()
+                except:
+                    pass  # 채널 삭제 실패해도 계속 진행
             
             # 새 채널 생성
             overwrites = {
@@ -7438,11 +7454,19 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             
             existing_channel = discord.utils.get(interaction.guild.channels, name=channel_name)
             if existing_channel:
-                await interaction.response.send_message(
-                    f"❌ You already have an active roleplay session: {existing_channel.mention}",
-                    ephemeral=True
-                )
-                return
+                # 기존 세션 종료
+                if existing_channel.id in self.bot.roleplay_sessions:
+                    session = self.bot.roleplay_sessions[existing_channel.id]
+                    # 데이터베이스에서 세션 종료
+                    self.bot.db.end_roleplay_session(session["session_id"])
+                    # 메모리에서 세션 제거
+                    del self.bot.roleplay_sessions[existing_channel.id]
+                
+                # 기존 채널 삭제
+                try:
+                    await existing_channel.delete()
+                except:
+                    pass  # 채널 삭제 실패해도 계속 진행
             
             # 새 롤플레이 채널 생성
             overwrites = {
