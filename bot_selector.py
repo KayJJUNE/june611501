@@ -246,6 +246,9 @@ except NameError:
         def __init__(self, *args, **kwargs):
             super().__init__()
 
+try:
+    RoleplayModal
+except NameError:
     class RoleplayModal(discord.ui.Modal, title="Roleplay Settings"):
         def __init__(self, character_name):
             super().__init__()
@@ -366,6 +369,10 @@ except NameError:
                 print(traceback.format_exc())
                 if not interaction.response.is_done():
                     await interaction.response.send_message("Something went wrong, please try again.", ephemeral=True)
+
+except Exception as e:
+    print(f"Error in RoleplayModal: {e}")
+    pass
 
 # 마일스톤 숫자를 카드 ID로 변환하는 함수
 # 10~100: C1~C10, 110~170: B1~B7, 180~220: A1~A5, 230~240: S1~S2
