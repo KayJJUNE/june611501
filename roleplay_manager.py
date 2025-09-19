@@ -121,8 +121,7 @@ class RoleplayManager:
             )
             
             start_embed.set_footer(
-                text=f"Session created • Mode: {mode.title()} • Character: {character_name}",
-                icon_url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-icon/public"
+                text=f"Session created • Mode: {mode.title()} • Character: {character_name}"
             )
             
             await interaction.response.send_message(embed=start_embed, ephemeral=True)
@@ -200,8 +199,7 @@ class RoleplayManager:
             
             # 푸터를 더 예쁘게
             welcome_embed.set_footer(
-                text=f"Mode: {mode.title()} • Character: {character_name} • Session Active",
-                icon_url="https://imagedelivery.net/ZQ-g2Ke3i84UnMdCSDAkmw/roleplay-icon/public"
+                text=f"Mode: {mode.title()} • Character: {character_name} • Session Active"
             )
             
             await channel.send(embed=welcome_embed)
@@ -212,7 +210,7 @@ class RoleplayManager:
             print(f"Error creating roleplay session: {e}")
             import traceback
             print(traceback.format_exc())
-            await interaction.response.send_message("❌ 롤플레잉 세션 생성 중 오류가 발생했습니다.", ephemeral=True)
+            await interaction.response.send_message("❌ Failed to create roleplay session. Please try again.", ephemeral=True)
             return None
 
     async def process_roleplay_message(self, message: discord.Message, session: Dict[str, Any]):
