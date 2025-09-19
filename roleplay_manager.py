@@ -92,9 +92,13 @@ class RoleplayManager:
                 color=discord.Color.from_rgb(138, 43, 226)
             )
             
-            char_image = CHARACTER_IMAGES.get(character_name)
-            if char_image:
-                start_embed.set_thumbnail(url=char_image)
+            # 썸네일 이미지 설정 (모드별 이미지 사용)
+            try:
+                char_image = CHARACTER_IMAGES.get(character_name, {}).get(mode)
+                if char_image:
+                    start_embed.set_thumbnail(url=char_image)
+            except Exception as e:
+                print(f"Error setting thumbnail image: {e}")
             
             start_embed.add_field(
                 name="📖 Story Setting",
@@ -190,7 +194,6 @@ class RoleplayManager:
             
             # 모드별 이미지 추가
             try:
-                from config import CHARACTER_IMAGES
                 image_url = CHARACTER_IMAGES.get(character_name, {}).get(mode)
                 if image_url:
                     welcome_embed.set_image(url=image_url)
