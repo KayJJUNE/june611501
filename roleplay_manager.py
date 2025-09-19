@@ -92,13 +92,7 @@ class RoleplayManager:
                 color=discord.Color.from_rgb(138, 43, 226)
             )
             
-            # 썸네일 이미지 설정 (모드별 이미지 사용)
-            try:
-                char_image = CHARACTER_IMAGES.get(character_name, {}).get(mode)
-                if char_image:
-                    start_embed.set_thumbnail(url=char_image)
-            except Exception as e:
-                print(f"Error setting thumbnail image: {e}")
+            # 썸네일은 제거하고 메인 이미지만 사용
             
             start_embed.add_field(
                 name="📖 Story Setting",
@@ -192,13 +186,14 @@ class RoleplayManager:
                 inline=False
             )
             
-            # 모드별 이미지 추가
-            try:
-                image_url = CHARACTER_IMAGES.get(character_name, {}).get(mode)
-                if image_url:
-                    welcome_embed.set_image(url=image_url)
-            except Exception as e:
-                print(f"Error setting roleplay image: {e}")
+            # 이미지 추가 (임시로 비활성화)
+            # try:
+            #     image_url = CHARACTER_IMAGES.get(character_name, {}).get(mode)
+            #     print(f"[DEBUG] Image URL for {character_name} {mode}: {image_url}")
+            #     if image_url:
+            #         welcome_embed.set_image(url=image_url)
+            # except Exception as e:
+            #     print(f"Error setting roleplay image: {e}")
             
             # 푸터를 더 예쁘게
             welcome_embed.set_footer(
