@@ -82,6 +82,14 @@ class RoleplayManager:
                 "max_turns": 100,
                 "is_active": True
             }
+            
+            # 롤플레잉 플레이 횟수 기록 (세션 시작 시)
+            if hasattr(self.bot_selector, 'db') and self.bot_selector.db:
+                try:
+                    # 롤플레잉 세션 테이블에 기록 (이미 위에서 저장됨)
+                    pass
+                except Exception as e:
+                    print(f"[DEBUG] Error recording roleplay play count: {e}")
 
             print(f"[DEBUG] Roleplay session saved: {self.roleplay_sessions[channel.id]}")
 
@@ -243,6 +251,10 @@ class RoleplayManager:
             
             # 100회 제한 체크
             if session["turn_count"] > max_turns:
+                # 퀘스트 완료 기록
+                mode = session.get("mode", "romantic")
+                if hasattr(self.bot_selector, 'db') and self.bot_selector.db:
+                    self.bot_selector.db.record_roleplay_completion(message.author.id, mode, max_turns)
                 await self._end_roleplay_session(message, session, character_name, max_turns)
                 return
 
@@ -339,6 +351,13 @@ class RoleplayManager:
             title="🎭 Roleplay Session Complete! 🎭",
             description=f"{ending_message}\n\n**Mode:** {mode.title()}\n**Character:** {character_name}\n**Turns:** {max_turns}/{max_turns}\n\nThank you for this amazing journey together! 💫\n\n⏰ This channel will be automatically deleted in 10 seconds.",
             color=discord.Color.pink()
+        )
+        
+        # 퀘스트 완료 안내 추가
+        embed.add_field(
+            name="🎁 Quest Complete!",
+            value=f"**{mode.title()} Mode Complete** quest has been completed!\nCheck your quests with `/quest` to claim your reward!",
+            inline=False
         )
         await message.channel.send(embed=embed)
         

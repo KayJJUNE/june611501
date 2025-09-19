@@ -145,7 +145,7 @@ def get_gift_affinity_change(character_name: str, gift_id: str) -> int:
     """
     기프트 등급에 따른 호감도 변화를 계산합니다.
     - 캐릭터 전용 선물이 아닌 경우: -1
-    - 전용 선물 등급에 따라: Common +1, Rare +3, Epic +5
+    - 전용 선물 등급에 따라: Common +3, Rare +5, Epic +10
     """
     # 선물이 해당 캐릭터의 선호 선물인지 확인
     is_preferred = check_gift_preference(character_name, gift_id)
@@ -161,10 +161,10 @@ def get_gift_affinity_change(character_name: str, gift_id: str) -> int:
     
     rarity = gift_details.get('rarity', '')
     if rarity == GIFT_RARITY["COMMON"]:
-        return 1
-    elif rarity == GIFT_RARITY["RARE"]:
         return 3
-    elif rarity == GIFT_RARITY["EPIC"]:
+    elif rarity == GIFT_RARITY["RARE"]:
         return 5
+    elif rarity == GIFT_RARITY["EPIC"]:
+        return 10
     else:
         return -1 

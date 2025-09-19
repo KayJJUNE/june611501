@@ -284,40 +284,6 @@ class DatabaseManager:
         finally:
             self.return_connection(conn)
 
-    def add_user_affinity(self, user_id: int, character_name: str, points: int) -> bool:
-        """사용자의 호감도를 직접 추가합니다."""
-        conn = None
-        try:
-            conn = self.get_connection()
-            with conn.cursor() as cursor:
-                # 기존 호감도 확인
-                cursor.execute("SELECT emotion_score FROM affinity WHERE user_id = %s AND character_name = %s", (user_id, character_name))
-                result = cursor.fetchone()
-                
-                if result:
-                    # 기존 호감도에 추가
-                    new_score = result[0] + points
-                    cursor.execute(
-                        "UPDATE affinity SET emotion_score = %s WHERE user_id = %s AND character_name = %s",
-                        (new_score, user_id, character_name)
-                    )
-                else:
-                    # 새로운 호감도 레코드 생성
-                    cursor.execute(
-                        "INSERT INTO affinity (user_id, character_name, emotion_score, daily_message_count, last_daily_reset) VALUES (%s, %s, %s, 0, %s)",
-                        (user_id, character_name, points, get_today_cst())
-                    )
-                
-                conn.commit()
-                print(f"[DEBUG] add_user_affinity - Successfully added {points} affinity points for {character_name} to user {user_id}")
-                return True
-        except Exception as e:
-            print(f"Error adding user affinity: {e}")
-            if conn: conn.rollback()
-            return False
-        finally:
-            self.return_connection(conn)
-
     def get_character_ranking(self, character_name: str):
         """특정 캐릭터의 랭킹을 반환합니다 (user_id, emotion_score, daily_message_count)"""
         EXCLUDE_BOT_IDS = [1363156675959460061]
@@ -2222,16 +2188,16 @@ class DatabaseManager:
 
     # === 롤플레잉 관련 메서드들 ===
     
-    def create_roleplay_session(self, session_id, user_id, character_name, mode, user_role, character_role, story_line):
+    def create_roleplay_session(self, session_id, user_id, character_name, mode, user_role, character_role, story_line, channel_id=None):
         """롤플레잉 세션을 생성합니다."""
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         INSERT INTO roleplay_sessions 
-                        (session_id, user_id, character_name, mode, user_role, character_role, story_line)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (session_id, user_id, character_name, mode, user_role, character_role, story_line))
+                        (session_id, user_id, character_name, mode, user_role, character_role, story_line, channel_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (session_id, user_id, character_name, mode, user_role, character_role, story_line, channel_id))
                     conn.commit()
                     return True
         except Exception as e:
@@ -2301,7 +2267,7 @@ class DatabaseManager:
             print(f"Error ending roleplay session: {e}")
             return False
     
-    def save_roleplay_message(self, session_id, user_message, character_response, message_count):
+    def save_roleplay_message(self, session_id, user_message, character_response, message_count, turn_count=None):
         """롤플레잉 대화를 저장합니다."""
         try:
             with self.get_connection() as conn:
@@ -2311,6 +2277,14 @@ class DatabaseManager:
                         (session_id, user_message, character_response, message_count)
                         VALUES (%s, %s, %s, %s)
                     """, (session_id, user_message, character_response, message_count))
+                    
+                    # turn_count가 제공된 경우 roleplay_sessions 테이블도 업데이트
+                    if turn_count is not None:
+                        cursor.execute("""
+                            UPDATE roleplay_sessions 
+                            SET turn_count = %s 
+                            WHERE session_id = %s
+                        """, (turn_count, session_id))
                     conn.commit()
                     return True
         except Exception as e:
@@ -2339,4 +2313,137 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting roleplay history: {e}")
             return []
+    
+    def reset_user_character_affinity(self, user_id: int, character_name: str) -> bool:
+        """특정 사용자의 특정 캐릭터 호감도를 리셋합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                # 특정 캐릭터의 호감도만 리셋
+                cursor.execute("""
+                    UPDATE affinity 
+                    SET emotion_score = 0, 
+                        daily_message_count = 0, 
+                        last_message = 'Reset by admin',
+                        last_message_time = NOW(),
+                        highest_milestone = 0
+                    WHERE user_id = %s AND character_name = %s
+                """, (user_id, character_name))
+                
+                # 해당 캐릭터의 호감도 레코드가 없으면 새로 생성
+                if cursor.rowcount == 0:
+                    cursor.execute("""
+                        INSERT INTO affinity (user_id, character_name, emotion_score, daily_message_count, last_message, last_message_time, highest_milestone)
+                        VALUES (%s, %s, 0, 0, 'Reset by admin', NOW(), 0)
+                    """, (user_id, character_name))
+                
+                conn.commit()
+                print(f"[DEBUG] Successfully reset affinity for user {user_id} and character {character_name}")
+                return True
+        except Exception as e:
+            print(f"Error resetting user character affinity: {e}")
+            if conn: conn.rollback()
+            return False
+        finally:
+            self.return_connection(conn)
+    
+    def reset_user_affinity(self, user_id: int) -> bool:
+        """특정 사용자의 모든 캐릭터 호감도를 리셋합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                # 모든 캐릭터의 호감도 리셋
+                cursor.execute("""
+                    UPDATE affinity 
+                    SET emotion_score = 0, 
+                        daily_message_count = 0, 
+                        last_message = 'Reset by admin',
+                        last_message_time = NOW(),
+                        highest_milestone = 0
+                    WHERE user_id = %s
+                """, (user_id,))
+                
+                conn.commit()
+                print(f"[DEBUG] Successfully reset all affinity for user {user_id}")
+                return True
+        except Exception as e:
+            print(f"Error resetting user affinity: {e}")
+            if conn: conn.rollback()
+            return False
+        finally:
+            self.return_connection(conn)
+    
+    def is_roleplay_mode_completed(self, user_id: int, mode: str) -> bool:
+        """특정 모드의 롤플레잉이 완료되었는지 확인합니다 (100턴 완료)."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM roleplay_sessions 
+                    WHERE user_id = %s AND mode = %s AND turn_count >= 100
+                """, (user_id, mode))
+                result = cursor.fetchone()
+                return result[0] > 0 if result else False
+        except Exception as e:
+            print(f"Error checking roleplay mode completion: {e}")
+            return False
+        finally:
+            self.return_connection(conn)
+    
+    def get_roleplay_play_count(self, user_id: int) -> int:
+        """사용자의 롤플레잉 플레이 횟수를 반환합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM roleplay_sessions 
+                    WHERE user_id = %s
+                """, (user_id,))
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            print(f"Error getting roleplay play count: {e}")
+            return 0
+        finally:
+            self.return_connection(conn)
+    
+    def record_roleplay_completion(self, user_id: int, mode: str, turn_count: int) -> bool:
+        """롤플레잉 완료를 기록합니다."""
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cursor:
+                # 롤플레잉 완료 기록 테이블이 없으면 생성
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS roleplay_completions (
+                        id SERIAL PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        mode VARCHAR(50) NOT NULL,
+                        turn_count INTEGER NOT NULL,
+                        completed_at TIMESTAMP DEFAULT NOW(),
+                        UNIQUE(user_id, mode)
+                    )
+                """)
+                
+                # 완료 기록 추가 (중복 방지)
+                cursor.execute("""
+                    INSERT INTO roleplay_completions (user_id, mode, turn_count)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (user_id, mode) DO UPDATE SET
+                        turn_count = GREATEST(roleplay_completions.turn_count, EXCLUDED.turn_count),
+                        completed_at = NOW()
+                """, (user_id, mode, turn_count))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error recording roleplay completion: {e}")
+            if conn: conn.rollback()
+            return False
+        finally:
+            self.return_connection(conn)
     

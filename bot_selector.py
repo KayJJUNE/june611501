@@ -60,6 +60,7 @@ from gift_manager import (
     get_gift_emoji, 
     check_gift_preference, 
     get_gift_reaction,
+    get_gift_affinity_change,
     GIFT_RARITY,
     CHARACTER_GIFT_REACTIONS,
     get_gifts_by_rarity_v2
@@ -1302,18 +1303,65 @@ class BotSelector(commands.Bot):
         # 추가 admin 명령어들
         @self.admin_group.command(
             name="reset_affinity",
-            description="친밀도를 초기화합니다"
+            description="Reset user's affinity for a specific character"
         )
-        async def reset_affinity(interaction: discord.Interaction, target: discord.Member = None):
+        @app_commands.choices(character=[
+            app_commands.Choice(name="Kagari", value="Kagari"),
+            app_commands.Choice(name="Eros", value="Eros"),
+            app_commands.Choice(name="Elysia", value="Elysia")
+        ])
+        async def reset_affinity(interaction: discord.Interaction, target: discord.Member, character: str):
             if not self.is_admin_user(interaction.user.id):
                 await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
                 return
             
-            if target:
-                self.db.reset_user_affinity(target.id)
-                await interaction.response.send_message(f"✅ {target.mention}'s affinity has been reset.", ephemeral=True)
-            else:
-                await interaction.response.send_message("❌ Please specify a target user.", ephemeral=True)
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            try:
+                # 특정 캐릭터의 호감도만 리셋
+                success = self.db.reset_user_character_affinity(target.id, character)
+                
+                if success:
+                    # 리셋 전 호감도 확인
+                    old_affinity = self.db.get_affinity(target.id, character)
+                    old_score = old_affinity['emotion_score'] if old_affinity else 0
+                    
+                    embed = discord.Embed(
+                        title="✅ Affinity Reset Successful",
+                        description=f"Successfully reset {target.mention}'s affinity with **{character}**",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(
+                        name="Target User",
+                        value=f"{target.mention} ({target.id})",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="Character",
+                        value=f"**{character}**",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="Previous Score",
+                        value=f"**{old_score}** points",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="New Score",
+                        value="**0** points",
+                        inline=True
+                    )
+                    embed.set_footer(text=f"Reset by {interaction.user.display_name}")
+                    
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"❌ Failed to reset {target.mention}'s affinity with {character}. Please try again.", ephemeral=True)
+                    
+            except Exception as e:
+                print(f"Error in reset_affinity command: {e}")
+                await interaction.response.send_message(f"❌ An error occurred while resetting affinity: {str(e)}", ephemeral=True)
 
         @self.admin_group.command(
             name="pop",
@@ -3964,6 +4012,10 @@ class BotSelector(commands.Bot):
         story_quests_str = self.format_story_quests(quest_status['story'])
         embed.add_field(name="📖 Story Quests", value=story_quests_str, inline=False)
 
+        # 롤플레잉 퀘스트
+        roleplay_quests_str = self.format_roleplay_quests(quest_status['roleplay'])
+        embed.add_field(name="🎭 Roleplay Quests", value=roleplay_quests_str, inline=False)
+
         # 하단에 Terms of Service, Privacy Policy 하이퍼링크 추가
         embed.add_field(
             name="\u200b",  # 빈 이름(공백) 필드로 하단에 추가
@@ -3988,15 +4040,19 @@ class BotSelector(commands.Bot):
             # 스토리 퀘스트 상태
             story_quests = await self.check_story_quests(user_id)
 
+            # 롤플레잉 퀘스트 상태
+            roleplay_quests = await self.check_roleplay_quests(user_id)
+
             return {
                 'daily': daily_quests,
                 'weekly': weekly_quests,
                 'levelup': levelup_quests,
-                'story': story_quests
+                'story': story_quests,
+                'roleplay': roleplay_quests
             }
         except Exception as e:
             print(f"Error getting quest status: {e}")
-            return {'daily': [], 'weekly': [], 'levelup': [], 'story': []}
+            return {'daily': [], 'weekly': [], 'levelup': [], 'story': [], 'roleplay': []}
 
     async def check_daily_quests(self, user_id: int) -> list:
         """일일 퀘스트 상태를 affinity DB의 실시간 값으로 정확히 반영합니다."""
@@ -4302,6 +4358,8 @@ class BotSelector(commands.Bot):
                 return await self.claim_levelup_reward(user_id, quest_id)
             elif quest_id.startswith('story_'):
                 return await self.claim_story_reward(user_id, quest_id)
+            elif quest_id.startswith('roleplay_'):
+                return await self.claim_roleplay_reward(user_id, quest_id)
             else:
                 return False, "Invalid quest ID"
 
@@ -4493,6 +4551,176 @@ class BotSelector(commands.Bot):
             import traceback
             traceback.print_exc()
             return False, "An error occurred while claiming story reward"
+
+    async def check_roleplay_quests(self, user_id: int) -> list:
+        """롤플레잉 퀘스트 상태를 확인합니다."""
+        quests = []
+        
+        # 실버 이상 호감도 확인
+        has_silver_affinity = False
+        for character in ['Kagari', 'Eros', 'Elysia']:
+            affinity_info = self.db.get_affinity(user_id, character)
+            if affinity_info and affinity_info['emotion_score'] >= 50:  # Silver level
+                has_silver_affinity = True
+                break
+        
+        if not has_silver_affinity:
+            # 실버 미만인 경우 잠금 상태 표시
+            quests.append({
+                'id': 'roleplay_locked',
+                'name': '🔒 Roleplay Quests',
+                'description': 'Requires Silver affinity (50+) with any character',
+                'progress': 0,
+                'max_progress': 1,
+                'completed': False,
+                'reward': 'Locked',
+                'claimed': False,
+                'locked': True
+            })
+            return quests
+        
+        # 모드별 완료 퀘스트
+        modes = ['romantic', 'friendship', 'fantasy', 'healing', 'custom']
+        for mode in modes:
+            quest_id = f'roleplay_mode_{mode}'
+            completed = self.db.is_roleplay_mode_completed(user_id, mode)
+            claimed = self.db.is_quest_claimed(user_id, quest_id)
+            
+            quests.append({
+                'id': quest_id,
+                'name': f'🎭 {mode.title()} Mode Complete',
+                'description': f'Complete 100 turns in {mode} mode',
+                'progress': 100 if completed else 0,
+                'max_progress': 100,
+                'completed': completed,
+                'reward': 'Random Common Items x2',
+                'claimed': claimed
+            })
+        
+        # 플레이 횟수 퀘스트
+        play_counts = [5, 10, 20]
+        for count in play_counts:
+            quest_id = f'roleplay_play_{count}'
+            current_count = self.db.get_roleplay_play_count(user_id)
+            claimed = self.db.is_quest_claimed(user_id, quest_id)
+            
+            if count == 5:
+                reward = 'Random Rare Items x3'
+            elif count == 10:
+                reward = 'Random Rare Items x5'
+            else:  # count == 20
+                reward = 'Random Epic Items x5'
+            
+            quests.append({
+                'id': quest_id,
+                'name': f'🎮 Roleplay {count} Times',
+                'description': f'Complete roleplay sessions {count} times',
+                'progress': min(current_count, count),
+                'max_progress': count,
+                'completed': current_count >= count,
+                'reward': reward,
+                'claimed': claimed
+            })
+        
+        return quests
+
+    def format_roleplay_quests(self, quests: list) -> str:
+        """롤플레잉 퀘스트를 포맷팅합니다."""
+        if not quests:
+            return "⏳ 🎭 Roleplay Quests\n`[□□□□□□□□□□]` (0/1)\n└ Reward: Random Common Items x2"
+        
+        quest_lines = []
+        for q in quests:
+            if q.get('locked'):
+                quest_lines.append(f"**🔒 {q['name']}**\n`{q['description']}`\n└ `{q['reward']}`")
+                continue
+                
+            if q.get('claimed'):
+                status_icon = "✅"
+            elif q.get('completed'):
+                status_icon = "🎁"
+            else:
+                status_icon = "⏳"
+            
+            title = f"**{status_icon} {q['name']}**"
+            progress_bar = self.create_progress_bar(q['progress'], q['max_progress'])
+            progress_info = f"{progress_bar} `({q['progress']}/{q['max_progress']})`"
+            
+            if q.get('claimed'):
+                reward_info = f"└ `Reward: {q['reward']}`"
+            elif q.get('completed'):
+                reward_info = f"**└ ⬇️ Claim your reward with the button below!**"
+            else:
+                reward_info = f"└ `Reward: {q['reward']}`"
+            
+            quest_lines.append(f"{title}\n{progress_info}\n{reward_info}")
+        
+        return "\n\n".join(quest_lines)
+
+    async def claim_roleplay_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
+        """롤플레잉 퀘스트 보상을 지급합니다."""
+        try:
+            print(f"[DEBUG] claim_roleplay_reward called with user_id: {user_id}, quest_id: '{quest_id}'")
+            
+            if not quest_id.startswith('roleplay_'):
+                return False, "Invalid roleplay quest ID"
+            
+            # 이미 수령했는지 확인
+            if self.db.is_quest_claimed(user_id, quest_id):
+                return False, "You have already claimed this reward!"
+            
+            from gift_manager import get_gifts_by_rarity_v2, get_gift_details, GIFT_RARITY
+            
+            # 퀘스트 타입에 따른 보상 결정
+            if quest_id.startswith('roleplay_mode_'):
+                # 모드 완료 퀘스트 - Common 아이템 2개
+                reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['COMMON'], 2)
+                if not reward_candidates:
+                    return False, "No rewards available for this quest!"
+                
+                import random
+                selected_rewards = random.sample(reward_candidates, min(2, len(reward_candidates)))
+                for gift_id in selected_rewards:
+                    self.db.add_user_gift(user_id, gift_id, 1)
+                
+                self.db.claim_quest(user_id, quest_id)
+                reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
+                return True, f"Congratulations! You completed the roleplay mode! You received: **{', '.join(reward_names)}**"
+            
+            elif quest_id.startswith('roleplay_play_'):
+                # 플레이 횟수 퀘스트
+                if '5' in quest_id:
+                    # 5회 - Rare 3개
+                    reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['RARE'], 3)
+                    quantity = 3
+                elif '10' in quest_id:
+                    # 10회 - Rare 5개
+                    reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['RARE'], 5)
+                    quantity = 5
+                else:  # 20회
+                    # 20회 - Epic 5개
+                    reward_candidates = get_gifts_by_rarity_v2(GIFT_RARITY['EPIC'], 5)
+                    quantity = 5
+                
+                if not reward_candidates:
+                    return False, "No rewards available for this quest!"
+                
+                import random
+                selected_rewards = random.sample(reward_candidates, min(quantity, len(reward_candidates)))
+                for gift_id in selected_rewards:
+                    self.db.add_user_gift(user_id, gift_id, 1)
+                
+                self.db.claim_quest(user_id, quest_id)
+                reward_names = [get_gift_details(g_id)['name'] for g_id in selected_rewards]
+                return True, f"Congratulations! You completed the roleplay play quest! You received: **{', '.join(reward_names)}**"
+            
+            return False, "Unknown roleplay quest type"
+            
+        except Exception as e:
+            print(f"Error claiming roleplay reward: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, "An error occurred while claiming roleplay reward"
 
     async def on_message(self, message: discord.Message):
         user_id = message.author.id
@@ -5153,9 +5381,7 @@ class GiftConfirmButton(discord.ui.Button['GiftView']):
             return
 
         gift_info = get_gift_details(gift_id)
-        is_preferred = check_gift_preference(character_name, gift_id)
-
-        affinity_change = 5 if is_preferred else 1
+        affinity_change = get_gift_affinity_change(character_name, gift_id)
 
         view.db.update_affinity(
             user_id=user_id,
