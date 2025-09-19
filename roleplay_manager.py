@@ -5,7 +5,7 @@ import time
 import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional
-from config import OPENAI_API_KEY, CHARACTER_INFO, CHARACTER_IMAGES
+from config import OPENAI_API_KEY, CHARACTER_INFO, ROLEPLAY_MODE_IMAGES
 
 class RoleplayManager:
     def __init__(self, bot_selector):
@@ -186,14 +186,14 @@ class RoleplayManager:
                 inline=False
             )
             
-            # 이미지 추가 (임시로 비활성화)
-            # try:
-            #     image_url = CHARACTER_IMAGES.get(character_name, {}).get(mode)
-            #     print(f"[DEBUG] Image URL for {character_name} {mode}: {image_url}")
-            #     if image_url:
-            #         welcome_embed.set_image(url=image_url)
-            # except Exception as e:
-            #     print(f"Error setting roleplay image: {e}")
+            # 모드별 이미지 추가
+            try:
+                image_url = ROLEPLAY_MODE_IMAGES.get(mode)
+                print(f"[DEBUG] Image URL for mode {mode}: {image_url}")
+                if image_url:
+                    welcome_embed.set_image(url=image_url)
+            except Exception as e:
+                print(f"Error setting roleplay image: {e}")
             
             # 푸터를 더 예쁘게
             welcome_embed.set_footer(

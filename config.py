@@ -1609,29 +1609,13 @@ for idx, customer in enumerate(STORY_CHAPTERS["Eros"]["chapters"][0]["customers"
     if idx < len(eros_customers_image_ids):
         customer["image_id"] = eros_customers_image_ids[idx]
 
-# 롤플레잉 모드별 캐릭터 이미지
-CHARACTER_IMAGES = {
-    "Kagari": {
-        "romantic": f"{CLOUDFLARE_IMAGE_BASE_URL}/c742a172-bdf3-4e97-2a80-1f5b7a100a00/public",
-        "friendship": f"{CLOUDFLARE_IMAGE_BASE_URL}/1e48be9b-ecd4-4936-6fb4-955fd444ac00/public",
-        "healing": f"{CLOUDFLARE_IMAGE_BASE_URL}/5686b751-2d47-4084-6f76-8672282f7e00/public",
-        "fantasy": f"{CLOUDFLARE_IMAGE_BASE_URL}/b3aa214f-7736-43ea-64b4-9e749f09b500/public",
-        "custom": f"{CLOUDFLARE_IMAGE_BASE_URL}/bf6bb51e-f5fd-4e3b-d5b0-8b04deb3f800/public"
-    },
-    "Eros": {
-        "romantic": f"{CLOUDFLARE_IMAGE_BASE_URL}/c742a172-bdf3-4e97-2a80-1f5b7a100a00/public",
-        "friendship": f"{CLOUDFLARE_IMAGE_BASE_URL}/1e48be9b-ecd4-4936-6fb4-955fd444ac00/public",
-        "healing": f"{CLOUDFLARE_IMAGE_BASE_URL}/5686b751-2d47-4084-6f76-8672282f7e00/public",
-        "fantasy": f"{CLOUDFLARE_IMAGE_BASE_URL}/b3aa214f-7736-43ea-64b4-9e749f09b500/public",
-        "custom": f"{CLOUDFLARE_IMAGE_BASE_URL}/bf6bb51e-f5fd-4e3b-d5b0-8b04deb3f800/public"
-    },
-    "Elysia": {
-        "romantic": f"{CLOUDFLARE_IMAGE_BASE_URL}/c742a172-bdf3-4e97-2a80-1f5b7a100a00/public",
-        "friendship": f"{CLOUDFLARE_IMAGE_BASE_URL}/1e48be9b-ecd4-4936-6fb4-955fd444ac00/public",
-        "healing": f"{CLOUDFLARE_IMAGE_BASE_URL}/5686b751-2d47-4084-6f76-8672282f7e00/public",
-        "fantasy": f"{CLOUDFLARE_IMAGE_BASE_URL}/b3aa214f-7736-43ea-64b4-9e749f09b500/public",
-        "custom": f"{CLOUDFLARE_IMAGE_BASE_URL}/bf6bb51e-f5fd-4e3b-d5b0-8b04deb3f800/public"
-    }
+# 롤플레잉 모드별 이미지 (모든 캐릭터 공통)
+ROLEPLAY_MODE_IMAGES = {
+    "romantic": f"{CLOUDFLARE_IMAGE_BASE_URL}/c742a172-bdf3-4e97-2a80-1f5b7a100a00/public",
+    "friendship": f"{CLOUDFLARE_IMAGE_BASE_URL}/1e48be9b-ecd4-4936-6fb4-955fd444ac00/public",
+    "healing": f"{CLOUDFLARE_IMAGE_BASE_URL}/5686b751-2d47-4084-6f76-8672282f7e00/public",
+    "fantasy": f"{CLOUDFLARE_IMAGE_BASE_URL}/b3aa214f-7736-43ea-64b4-9e749f09b500/public",
+    "custom": f"{CLOUDFLARE_IMAGE_BASE_URL}/bf6bb51e-f5fd-4e3b-d5b0-8b04deb3f800/public"
 }
 
 # AI가 자동 생성할 롤플레잉 프롬프트
