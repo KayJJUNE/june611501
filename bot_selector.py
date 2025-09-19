@@ -4110,12 +4110,18 @@ class BotSelector(commands.Bot):
         reward_name = None
         if claimed:
             user_gifts = self.db.get_user_gifts(user_id)
-            reward_name = user_gifts[0][0] if user_gifts else None
+            reward_name = user_gifts[0][0] if user_gifts else None        
+        # 퀘스트 완료 상태에 따라 진행률 설정
+        if progress_completed or claimed:
+            progress_value = 1
+        else:
+            progress_value = min(daily_cards, 1)
+        
         quests.append({
             'id': quest_id,
             'name': '🃏 Get New Card',
-            'description': f'Obtain 1 new card today ({daily_cards}/1)',
-            'progress': min(daily_cards, 1),
+            'description': f'Obtain 1 new card today ({progress_value}/1)',
+            'progress': progress_value,
             'max_progress': 1,
             'completed': daily_cards >= 1 or progress_completed,
             'reward': f'Random Common Item x1' + (f'\nGifts received: {reward_name}' if reward_name else ''),
