@@ -483,6 +483,14 @@ class CharacterBot(commands.Bot):
             message.content,      # content
             detected_language     # 감지된 언어
         )
+        
+        # 퀘스트 진행률 업데이트 트리거 (대화)
+        try:
+            from bot_selector import BotSelector
+            bot_selector = BotSelector()
+            bot_selector.trigger_conversation_quest_completion(user_id, character)
+        except Exception as e:
+            print(f"Error triggering conversation quest completion: {e}")
 
         affinity_before = self.db.get_affinity(user_id, character)
         if not affinity_before:
@@ -523,6 +531,14 @@ class CharacterBot(commands.Bot):
                 score_change=emotion_score,
                 highest_milestone=highest_milestone_to_update
             )
+            
+            # 퀘스트 진행률 업데이트 트리거 (호감도 상승)
+            try:
+                from bot_selector import BotSelector
+                bot_selector = BotSelector()
+                bot_selector.trigger_affinity_quest_completion(user_id, character, emotion_score)
+            except Exception as e:
+                print(f"Error triggering affinity quest completion: {e}")
 
             # 등급 변경 체크
             if prev_grade != new_grade:
@@ -1166,6 +1182,14 @@ class CardClaimButton(discord.ui.Button):
             success = self.db.add_user_card(self.user_id, self.character_name, self.milestone)
 
             if success:
+                # 퀘스트 진행률 업데이트 트리거
+                try:
+                    from bot_selector import BotSelector
+                    bot_selector = BotSelector()
+                    bot_selector.trigger_card_quest_completion(self.user_id, self.character_name)
+                except Exception as e:
+                    print(f"Error triggering quest completion: {e}")
+                
                 embed = discord.Embed(
                     title="🎉 Card Claimed!",
                     description=f"You have claimed the {self.character_name} {self.milestone} conversation milestone card.\nUse `/mycard` to check your cards!",
@@ -1202,6 +1226,14 @@ class CardClaimView(discord.ui.View):
             success = self.db.add_user_card(self.user_id, self.character_name, self.card_id)
             
             if success:
+                # 퀘스트 진행률 업데이트 트리거
+                try:
+                    from bot_selector import BotSelector
+                    bot_selector = BotSelector()
+                    bot_selector.trigger_card_quest_completion(self.user_id, self.character_name)
+                except Exception as e:
+                    print(f"Error triggering quest completion: {e}")
+                
                 button.disabled = True
                 button.label = "Claimed"
                 await interaction.message.edit(view=self)

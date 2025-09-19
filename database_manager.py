@@ -227,22 +227,25 @@ class DatabaseManager:
         finally:
             self.return_connection(conn)
 
-    def check_daily_quest(self, user_id: int, character_name: str) -> bool:
+    def check_daily_quest(self, user_id: int, quest_id: str) -> bool:
+        """daily_quest_progress 테이블에서 퀘스트 완료 상태를 확인합니다."""
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 today = get_today_cst()
-                cursor.execute("SELECT daily_message_count, last_quest_reward_date FROM affinity WHERE user_id = %s AND character_name = %s", (user_id, character_name))
+                # context 컬럼 없이 작동하도록 수정
+                cursor.execute("""
+                    SELECT completed FROM daily_quest_progress 
+                    WHERE user_id = %s AND quest_date = %s
+                """, (user_id, today))
+                
                 result = cursor.fetchone()
-
                 if result:
-                    daily_count, last_reward_date = result
-                    if daily_count >= 20 and last_reward_date != today:
-                        return True
+                    return result[0]  # completed 값 반환
                 return False
         except Exception as e:
-            print(f"Error checking daily quest: {e}")
+            print(f"Error checking daily quest progress: {e}")
             return False
         finally:
             self.return_connection(conn)
@@ -1444,6 +1447,7 @@ class DatabaseManager:
             today = get_today_cst()
             conn = self.get_connection()
             with conn.cursor() as cursor:
+                # context 컬럼 없이 작동하도록 수정
                 cursor.execute("""
                     INSERT INTO daily_quest_progress (user_id, quest_date, completed, reward_claimed, completed_at)
                     VALUES (%s, %s, %s, %s, %s)
@@ -1451,9 +1455,14 @@ class DatabaseManager:
                     DO UPDATE SET completed = %s, reward_claimed = %s, completed_at = %s
                 """, (user_id, today, completed, reward_claimed, datetime.now(), completed, reward_claimed, datetime.now()))
             conn.commit()
+            print(f"[DEBUG] Successfully recorded daily quest progress: user_id={user_id}, quest_id={quest_id}, completed={completed}, reward_claimed={reward_claimed}")
+            return True
         except Exception as e:
             print(f"Error recording daily quest progress: {e}")
+            import traceback
+            traceback.print_exc()
             if conn: conn.rollback()
+            return False
         finally:
             self.return_connection(conn)
 

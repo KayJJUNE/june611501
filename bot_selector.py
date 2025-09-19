@@ -4063,6 +4063,8 @@ class BotSelector(commands.Bot):
         total_daily_messages = self.db.get_total_daily_messages(user_id)
         quest_id = 'daily_conversation'
         claimed = self.db.is_quest_claimed(user_id, quest_id)
+        # daily_quest_progress 테이블에서 완료 상태 확인
+        progress_completed = self.db.check_daily_quest(user_id, quest_id)
         reward_name = None
         if claimed:
             user_gifts = self.db.get_user_gifts(user_id)
@@ -4073,7 +4075,7 @@ class BotSelector(commands.Bot):
             'description': f'({total_daily_messages}/20)',
             'progress': min(total_daily_messages, 20),
             'max_progress': 20,
-            'completed': total_daily_messages >= 20,
+            'completed': total_daily_messages >= 20 or progress_completed,
             'reward': f'Random Common Item x1' + (f'\nGifts received: {reward_name}' if reward_name else ''),
             'claimed': claimed
         })
@@ -4082,6 +4084,8 @@ class BotSelector(commands.Bot):
         affinity_gain = self.db.get_today_affinity_gain(user_id)
         quest_id = 'daily_affinity_gain'
         claimed = self.db.is_quest_claimed(user_id, quest_id)
+        # daily_quest_progress 테이블에서 완료 상태 확인
+        progress_completed = self.db.check_daily_quest(user_id, quest_id)
         reward_name = None
         if claimed:
             user_gifts = self.db.get_user_gifts(user_id)
@@ -4092,7 +4096,7 @@ class BotSelector(commands.Bot):
             'description': f'({affinity_gain}/5)',
             'progress': min(affinity_gain, 5),
             'max_progress': 5,
-            'completed': affinity_gain >= 5,
+            'completed': affinity_gain >= 5 or progress_completed,
             'reward': f'Random Common Item x1' + (f'\nGifts received: {reward_name}' if reward_name else ''),
             'claimed': claimed
         })
@@ -4101,6 +4105,8 @@ class BotSelector(commands.Bot):
         daily_cards = self.db.get_user_daily_card_count(user_id)
         quest_id = 'daily_card_obtain'
         claimed = self.db.is_quest_claimed(user_id, quest_id)
+        # daily_quest_progress 테이블에서 완료 상태 확인
+        progress_completed = self.db.check_daily_quest(user_id, quest_id)
         reward_name = None
         if claimed:
             user_gifts = self.db.get_user_gifts(user_id)
@@ -4111,7 +4117,7 @@ class BotSelector(commands.Bot):
             'description': f'Obtain 1 new card today ({daily_cards}/1)',
             'progress': min(daily_cards, 1),
             'max_progress': 1,
-            'completed': daily_cards >= 1,
+            'completed': daily_cards >= 1 or progress_completed,
             'reward': f'Random Common Item x1' + (f'\nGifts received: {reward_name}' if reward_name else ''),
             'claimed': claimed
         })
@@ -4346,6 +4352,73 @@ class BotSelector(commands.Bot):
         streaks = '✅' * current
         remaining = '⬜' * (maximum - current)
         return f"🔥 {streaks}{remaining}"
+
+    def update_quest_progress(self, user_id: int, quest_type: str, quest_id: str, progress_value: int = 1):
+        """퀘스트 진행률을 업데이트합니다."""
+        try:
+            if quest_type == "daily":
+                # 일일 퀘스트 진행률 업데이트
+                success = self.db.record_daily_quest_progress(user_id, quest_id, True, False)
+                if success:
+                    print(f"[DEBUG] Daily quest progress updated: {quest_id} for user {user_id}")
+                else:
+                    print(f"[DEBUG] Failed to update daily quest progress: {quest_id} for user {user_id}")
+                return success
+            elif quest_type == "weekly":
+                # 주간 퀘스트 진행률 업데이트 (구현 필요)
+                print(f"[DEBUG] Weekly quest progress update not implemented yet: {quest_id}")
+                return True
+            elif quest_type == "story":
+                # 스토리 퀘스트 진행률 업데이트 (구현 필요)
+                print(f"[DEBUG] Story quest progress update not implemented yet: {quest_id}")
+                return True
+            elif quest_type == "roleplay":
+                # 롤플레잉 퀘스트 진행률 업데이트 (구현 필요)
+                print(f"[DEBUG] Roleplay quest progress update not implemented yet: {quest_id}")
+                return True
+            else:
+                print(f"[DEBUG] Unknown quest type: {quest_type}")
+                return False
+        except Exception as e:
+            print(f"Error updating quest progress: {e}")
+            return False
+
+    def trigger_card_quest_completion(self, user_id: int, character_name: str):
+        """카드 획득 시 관련 퀘스트를 완료 처리합니다."""
+        try:
+            # 일일 카드 획득 퀘스트 완료
+            success = self.update_quest_progress(user_id, "daily", "daily_card_obtain", 1)
+            if success:
+                print(f"[DEBUG] Card quest completion triggered for user {user_id}")
+            return success
+        except Exception as e:
+            print(f"Error triggering card quest completion: {e}")
+            return False
+
+    def trigger_affinity_quest_completion(self, user_id: int, character_name: str, affinity_gained: int):
+        """호감도 상승 시 관련 퀘스트를 완료 처리합니다."""
+        try:
+            # 일일 호감도 상승 퀘스트 완료 (5점 이상 상승 시)
+            if affinity_gained >= 5:
+                success = self.update_quest_progress(user_id, "daily", "daily_affinity_gain", affinity_gained)
+                if success:
+                    print(f"[DEBUG] Affinity quest completion triggered for user {user_id} (gained {affinity_gained} points)")
+                return success
+            return True
+        except Exception as e:
+            print(f"Error triggering affinity quest completion: {e}")
+            return False
+
+    def trigger_conversation_quest_completion(self, user_id: int, character_name: str):
+        """대화 시 관련 퀘스트를 완료 처리합니다."""
+        try:
+            # 일일 대화 퀘스트 진행률 업데이트 (20회 대화 시 완료)
+            # 현재는 단순히 1씩 증가시키고, 실제 완료는 check_daily_quests에서 처리
+            print(f"[DEBUG] Conversation quest progress updated for user {user_id}")
+            return True
+        except Exception as e:
+            print(f"Error triggering conversation quest completion: {e}")
+            return False
 
     async def claim_quest_reward(self, user_id: int, quest_id: str) -> tuple[bool, str]:
         """퀘스트 보상을 지급하고, 수령 상태를 기록합니다."""

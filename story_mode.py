@@ -486,6 +486,13 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
             reward_text = ""
             if rewards['type'] == 'specific_card':
                 self.bot.db.add_user_card(self.session['user_id'], rewards['card'], 1)
+                # 퀘스트 진행률 업데이트 트리거
+                try:
+                    from bot_selector import BotSelector
+                    bot_selector = BotSelector()
+                    bot_selector.trigger_card_quest_completion(self.session['user_id'], self.session['character'])
+                except Exception as e:
+                    print(f"Error triggering quest completion: {e}")
                 reward_text = f"**Reward:** {rewards['rarity']} Card **{rewards['card']}**\nCheck your cards with `/cards`!"
             else:
                 reward_text = "Reward processed."
@@ -516,6 +523,14 @@ class ErosChapter3CulpritSelectView(discord.ui.View):
                     try:
                         success = self.bot.db.add_user_card(self.user_id, "Eros", self.card_id)
                         if success:
+                            # 퀘스트 진행률 업데이트 트리거
+                            try:
+                                from bot_selector import BotSelector
+                                bot_selector = BotSelector()
+                                bot_selector.trigger_card_quest_completion(self.user_id, "Eros")
+                            except Exception as e:
+                                print(f"Error triggering quest completion: {e}")
+                            
                             self.claimed = True
                             # 버튼 비활성화 및 텍스트 변경
                             button.disabled = True
@@ -895,6 +910,13 @@ async def handle_chapter3_gift_usage(bot: "BotSelector", user_id: int, character
 
     # 카드 보상 지급
     bot.db.add_user_card(user_id, character_name, reward_card)
+    # 퀘스트 진행률 업데이트 트리거
+    try:
+        from bot_selector import BotSelector
+        bot_selector = BotSelector()
+        bot_selector.trigger_card_quest_completion(user_id, character_name)
+    except Exception as e:
+        print(f"Error triggering quest completion: {e}")
     print(f"[DEBUG] Card added to user: {reward_card}")
 
     # 스토리 완료 처리
