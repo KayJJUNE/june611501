@@ -1004,13 +1004,17 @@ class BotSelector(commands.Bot):
             # 캐릭터 응답 메시지 전송
             await message.channel.send(character_response)
             
-            # 데이터베이스에 대화 저장
-            await self.save_roleplay_conversation(
-                session["session_id"],
-                message.content,
-                character_response,
-                current_turn
-            )
+            # 데이터베이스에 대화 저장 (데이터베이스가 있는 경우에만)
+            try:
+                if hasattr(self, 'db') and self.db:
+                    await self.save_roleplay_conversation(
+                        session["session_id"],
+                        message.content,
+                        character_response,
+                        current_turn
+                    )
+            except Exception as e:
+                print(f"[DEBUG] Failed to save roleplay conversation: {e}")
             
             # 세션 히스토리에 추가
             session["history"].append({
@@ -1019,8 +1023,12 @@ class BotSelector(commands.Bot):
                 "character_response": character_response
             })
             
-            # 턴 수 업데이트
-            self.db.update_roleplay_message_count(session["session_id"], current_turn)
+            # 턴 수 업데이트 (데이터베이스가 있는 경우에만)
+            try:
+                if hasattr(self, 'db') and self.db:
+                    self.db.update_roleplay_message_count(session["session_id"], current_turn)
+            except Exception as e:
+                print(f"[DEBUG] Failed to update roleplay message count: {e}")
             
             # 10턴마다 진행 상황 메시지 전송
             if current_turn % 10 == 0:
@@ -1137,8 +1145,12 @@ Respond in the same language as the user's message.
     async def end_roleplay_session(self, channel, session):
         """롤플레이 세션을 종료합니다."""
         try:
-            # 데이터베이스에서 세션 종료
-            self.db.end_roleplay_session(session["session_id"])
+            # 데이터베이스에서 세션 종료 (데이터베이스가 있는 경우에만)
+            try:
+                if hasattr(self, 'db') and self.db:
+                    self.db.end_roleplay_session(session["session_id"])
+            except Exception as e:
+                print(f"[DEBUG] Failed to end roleplay session in database: {e}")
             
             # 메모리에서 세션 제거
             if channel.id in self.roleplay_sessions:
@@ -5025,10 +5037,14 @@ Respond in the same language as the user's message.
         else:
             session["turn_count"] += 1
 
-        # 데이터베이스에 메시지 카운트 업데이트
+        # 데이터베이스에 메시지 카운트 업데이트 (데이터베이스가 있는 경우에만)
         session_id = session.get("session_id")
         if session_id:
-            self.db.update_roleplay_message_count(session_id, session["turn_count"])
+            try:
+                if hasattr(self, 'db') and self.db:
+                    self.db.update_roleplay_message_count(session_id, session["turn_count"])
+            except Exception as e:
+                print(f"[DEBUG] Failed to update roleplay message count: {e}")
 
         turn_str = f"({session['turn_count']}/100)"
 
@@ -5172,9 +5188,13 @@ Respond in the same language as the user's message.
             )
             await message.channel.send(embed=embed)
             
-            # 데이터베이스 세션 종료
+            # 데이터베이스 세션 종료 (데이터베이스가 있는 경우에만)
             if session_id:
-                self.db.end_roleplay_session(session_id)
+                try:
+                    if hasattr(self, 'db') and self.db:
+                        self.db.end_roleplay_session(session_id)
+                except Exception as e:
+                    print(f"[DEBUG] Failed to end roleplay session in database: {e}")
             
             # 10초 후 채널 삭제
             await asyncio.sleep(10)
@@ -6700,8 +6720,12 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                 # 기존 세션 종료
                 if existing_channel.id in self.bot.roleplay_sessions:
                     session = self.bot.roleplay_sessions[existing_channel.id]
-                    # 데이터베이스에서 세션 종료
-                    self.bot.db.end_roleplay_session(session["session_id"])
+                    # 데이터베이스에서 세션 종료 (데이터베이스가 있는 경우에만)
+                    try:
+                        if hasattr(self.bot, 'db') and self.bot.db:
+                            self.bot.db.end_roleplay_session(session["session_id"])
+                    except Exception as e:
+                        print(f"[DEBUG] Failed to end roleplay session in database: {e}")
                     # 메모리에서 세션 제거
                     del self.bot.roleplay_sessions[existing_channel.id]
                 
@@ -6858,8 +6882,12 @@ class RoleplayModal(discord.ui.Modal):
                 # 기존 세션 종료
                 if existing_channel.id in self.bot.roleplay_sessions:
                     session = self.bot.roleplay_sessions[existing_channel.id]
-                    # 데이터베이스에서 세션 종료
-                    self.bot.db.end_roleplay_session(session["session_id"])
+                    # 데이터베이스에서 세션 종료 (데이터베이스가 있는 경우에만)
+                    try:
+                        if hasattr(self.bot, 'db') and self.bot.db:
+                            self.bot.db.end_roleplay_session(session["session_id"])
+                    except Exception as e:
+                        print(f"[DEBUG] Failed to end roleplay session in database: {e}")
                     # 메모리에서 세션 제거
                     del self.bot.roleplay_sessions[existing_channel.id]
                 
@@ -7478,8 +7506,12 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                 # 기존 세션 종료
                 if existing_channel.id in self.bot.roleplay_sessions:
                     session = self.bot.roleplay_sessions[existing_channel.id]
-                    # 데이터베이스에서 세션 종료
-                    self.bot.db.end_roleplay_session(session["session_id"])
+                    # 데이터베이스에서 세션 종료 (데이터베이스가 있는 경우에만)
+                    try:
+                        if hasattr(self.bot, 'db') and self.bot.db:
+                            self.bot.db.end_roleplay_session(session["session_id"])
+                    except Exception as e:
+                        print(f"[DEBUG] Failed to end roleplay session in database: {e}")
                     # 메모리에서 세션 제거
                     del self.bot.roleplay_sessions[existing_channel.id]
                 
@@ -7510,8 +7542,7 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             db_success = False
             try:
                 if hasattr(self.bot, 'db') and self.bot.db:
-                    success = self.bot.db.create_roleplay_session(
-                        session_id,
+                    db_session_id = self.bot.db.create_roleplay_session(
                         interaction.user.id,
                         self.character_name,
                         self.mode,
@@ -7520,8 +7551,9 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                         story_prompt,
                         channel.id  # channel_id 추가
                     )
-                    if success:
-                        print(f"[DEBUG] Roleplay session saved to database: {session_id}")
+                    if db_session_id:
+                        print(f"[DEBUG] Roleplay session saved to database: {db_session_id}")
+                        session_id = db_session_id  # 데이터베이스에서 생성된 session_id 사용
                         db_success = True
                     else:
                         print(f"[DEBUG] Failed to save roleplay session to database, but continuing with local session")
