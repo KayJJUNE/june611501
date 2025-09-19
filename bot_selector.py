@@ -7496,32 +7496,33 @@ class EnhancedRoleplayModal(discord.ui.Modal):
             import uuid
             session_id = str(uuid.uuid4())  # 먼저 session_id 생성
             
+            # 데이터베이스에 세션 저장 시도 (실패해도 계속 진행)
+            db_success = False
             try:
-                # session_id를 첫 번째 매개변수로 전달
-                success = self.bot.db.create_roleplay_session(
-                    session_id,
-                    interaction.user.id,
-                    self.character_name,
-                    self.mode,
-                    user_role,
-                    character_role,
-                    story_prompt
-                )
-                if not success:
-                    print(f"[DEBUG] Failed to create roleplay session in database")
-                    session_id = None
+                if hasattr(self.bot, 'db') and self.bot.db:
+                    success = self.bot.db.create_roleplay_session(
+                        session_id,
+                        interaction.user.id,
+                        self.character_name,
+                        self.mode,
+                        user_role,
+                        character_role,
+                        story_prompt,
+                        channel.id  # channel_id 추가
+                    )
+                    if success:
+                        print(f"[DEBUG] Roleplay session saved to database: {session_id}")
+                        db_success = True
+                    else:
+                        print(f"[DEBUG] Failed to save roleplay session to database, but continuing with local session")
+                else:
+                    print(f"[DEBUG] Database not available, using local session only")
             except Exception as e:
-                print(f"[DEBUG] Error calling create_roleplay_session: {e}")
-                session_id = None
+                print(f"[DEBUG] Database error (continuing with local session): {e}")
             
-            print(f"[DEBUG] create_roleplay_session returned: {session_id}")
-            
+            # 세션 ID가 없으면 새로 생성
             if not session_id:
-                await interaction.response.send_message(
-                    "❌ Failed to create roleplay session. Please try again.",
-                    ephemeral=True
-                )
-                return
+                session_id = str(uuid.uuid4())
             
             # 세션 저장
             self.bot.roleplay_sessions[channel.id] = {
@@ -7533,7 +7534,8 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                 "character_role": character_role,
                 "story_line": story_prompt,
                 "turn_count": 0,
-                "history": []
+                "history": [],
+                "db_saved": db_success
             }
             
             print(f"[DEBUG] Roleplay session saved: {self.bot.roleplay_sessions[channel.id]}")
@@ -7591,6 +7593,20 @@ class EnhancedRoleplayModal(discord.ui.Modal):
                 value="• **100회 대화 후 자동으로 롤플레이 모드가 종료됩니다**\n• 캐릭터에 맞는 대화를 해주세요\n• `/end-roleplay`로 언제든 종료 가능",
                 inline=False
             )
+            
+            # 데이터베이스 상태 표시
+            if db_success:
+                start_embed.add_field(
+                    name="💾 Session Status",
+                    value="✅ **Database Connected** - Session saved",
+                    inline=False
+                )
+            else:
+                start_embed.add_field(
+                    name="💾 Session Status", 
+                    value="⚠️ **Local Session Only** - Database unavailable",
+                    inline=False
+                )
             
             start_embed.set_footer(
                 text=f"Turn 0/100 • {self.character_name}과의 모험을 시작하세요!",
