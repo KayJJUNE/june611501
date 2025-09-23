@@ -307,11 +307,20 @@ class RoleplayManager:
                 ai_response = response.choices[0].message.content.strip()
             except Exception as e:
                 print(f"Error in roleplay AI response: {e}")
-                ai_response = f"{character_name}: I'm sorry, I'm having trouble responding right now. Please try again. {turn_str}"
+                ai_response = f"I'm having trouble responding right now. Please try again.\n__________________\n{character_name}: \"I apologize, but I'm experiencing some difficulties. Could you please try again?\" {turn_str}"
 
-            # 답장에 캐릭터 이름 prefix 보장
-            if not ai_response.strip().startswith(f"{character_name}:"):
-                ai_response = f"{character_name}: {ai_response.strip()}"
+            # 새로운 형식에 맞게 응답 처리
+            # 이미 올바른 형식인지 확인 (분위기 설명 + 구분선 + 캐릭터 대화)
+            if "__________________" not in ai_response:
+                # 기존 형식인 경우 새 형식으로 변환
+                if ai_response.strip().startswith(f"{character_name}:"):
+                    # 캐릭터 이름 제거하고 새 형식으로 변환
+                    dialogue_part = ai_response.replace(f"{character_name}:", "").strip()
+                    # 간단한 분위기 설명 추가 (실제로는 AI가 생성해야 함)
+                    ai_response = f"The scene unfolds naturally as the moment develops.\n__________________\n{character_name}: {dialogue_part}"
+                else:
+                    # 캐릭터 이름이 없는 경우 추가
+                    ai_response = f"The scene unfolds naturally as the moment develops.\n__________________\n{character_name}: {ai_response.strip()}"
 
             # (n/100) 중복 방지
             ai_response = re.sub(r"(\(\d{1,2}/100\))(?=.*\(\d{1,2}/100\))", "", ai_response)
@@ -437,11 +446,15 @@ class RoleplayManager:
             f"- Reference previous interactions to maintain continuity\n"
             f"- Create memorable moments and emotional beats\n\n"
             f"RESPONSE STRUCTURE:\n"
-            f"- Start with character name and appropriate greeting/response\n"
-            f"- Include character-specific dialogue and personality traits\n"
-            f"- Add environmental details and sensory descriptions\n"
-            f"- Develop the story with new elements or plot progression\n"
+            f"- First, provide atmospheric description and environmental details (without character name)\n"
+            f"- Then add a separator line with underscores (__________________)\n"
+            f"- Finally, include character dialogue with name prefix\n"
             f"- End with turn counter and appropriate emojis\n\n"
+            f"FORMAT EXAMPLE:\n"
+            f"The moonlight filters through the cherry blossoms, casting delicate shadows on the ground. I pause my meditation, my eyes meeting yours. A gentle breeze carries the scent of sakura petals.\n"
+            f"__________________\n"
+            f"{character_name}: \"Ah, you have come.\" 🌸\n"
+            f"{turn_str}\n\n"
             f"CRITICAL INSTRUCTIONS:\n"
             f"1. You MUST stay in character as {character_name} at all times\n"
             f"2. Respond to the user's specific roleplay request and scenario\n"
@@ -449,7 +462,7 @@ class RoleplayManager:
             f"4. Focus on the user's prompt and roleplay scenario, NOT generic conversations\n"
             f"5. Do NOT default to cherry blossom stories unless specifically requested\n"
             f"6. Do NOT break character or mention you are an AI\n"
-            f"7. Always start your reply with '{character_name}: '\n"
+            f"7. ALWAYS use the format: [atmospheric description] + [__________________] + [{character_name}: \"dialogue\"]\n"
             f"8. End your reply with '{turn_str}'\n"
             f"9. Keep responses natural and engaging within the roleplay context\n"
             f"10. Use appropriate emojis that match your character's style\n"
