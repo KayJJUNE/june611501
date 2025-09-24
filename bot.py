@@ -87,8 +87,8 @@ class CharacterBot(commands.Bot):
     async def log(self,ctx):
         """show user paid info"""
         url = f"http://69.176.84.110:5000/user/paid/{self.user.id}/product"
-
-        payload = { "product_ids": ["product_4561", "product_456"] }
+        # 默认查询返回全部支付过的记录
+        payload = { "product_ids": [] }
         headers = {"content-type": "application/json"}
 
         response = requests.post(url, json=payload, headers=headers)
