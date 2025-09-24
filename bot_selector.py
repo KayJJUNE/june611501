@@ -1153,12 +1153,12 @@ class BotSelector(commands.Bot):
                 super().__init__(timeout=300)
                 self.db = db
             
-            @discord.ui.button(label="💬 Give Messages", style=discord.ButtonStyle.green, emoji="💬")
+            @discord.ui.button(label="💬 Give Messages", style=discord.ButtonStyle.success, emoji="💬")
             async def give_messages(self, interaction: discord.Interaction, button: discord.ui.Button):
                 modal = AdminPopMessagesModal(self.db)
                 await interaction.response.send_modal(modal)
             
-            @discord.ui.button(label="🃏 Give Cards", style=discord.ButtonStyle.blue, emoji="🃏")
+            @discord.ui.button(label="🃏 Give Cards", style=discord.ButtonStyle.blurple, emoji="🃏")
             async def give_cards(self, interaction: discord.Interaction, button: discord.ui.Button):
                 modal = AdminPopCardsModal(self.db)
                 await interaction.response.send_modal(modal)
@@ -1168,7 +1168,7 @@ class BotSelector(commands.Bot):
                 modal = AdminPopGiftsModal(self.db)
                 await interaction.response.send_modal(modal)
             
-            @discord.ui.button(label="💕 Give Affinity", style=discord.ButtonStyle.red, emoji="💕")
+            @discord.ui.button(label="💕 Give Affinity", style=discord.ButtonStyle.danger, emoji="💕")
             async def give_affinity(self, interaction: discord.Interaction, button: discord.ui.Button):
                 modal = AdminPopAffinityModal(self.db)
                 await interaction.response.send_modal(modal)
@@ -2964,7 +2964,7 @@ class BotSelector(commands.Bot):
                 super().__init__(timeout=300)
                 self.add_item(PopItemTypeSelect())
             
-            @discord.ui.button(label="Give Messages", style=discord.ButtonStyle.green, emoji="💬")
+            @discord.ui.button(label="Give Messages", style=discord.ButtonStyle.success, emoji="💬")
             async def give_messages(self, interaction: discord.Interaction, button: discord.ui.Button):
                 modal = PopMessagesModal()
                 await interaction.response.send_modal(modal)
@@ -2974,7 +2974,7 @@ class BotSelector(commands.Bot):
                 super().__init__(timeout=300)
                 self.add_item(PopItemTypeSelect())
             
-            @discord.ui.button(label="Give Cards", style=discord.ButtonStyle.green, emoji="🃏")
+            @discord.ui.button(label="Give Cards", style=discord.ButtonStyle.success, emoji="🃏")
             async def give_cards(self, interaction: discord.Interaction, button: discord.ui.Button):
                 modal = PopCardsModal()
                 await interaction.response.send_modal(modal)
@@ -2984,7 +2984,7 @@ class BotSelector(commands.Bot):
                 super().__init__(timeout=300)
                 self.add_item(PopItemTypeSelect())
             
-            @discord.ui.button(label="Give Gifts", style=discord.ButtonStyle.green, emoji="🎁")
+            @discord.ui.button(label="Give Gifts", style=discord.ButtonStyle.success, emoji="🎁")
             async def give_gifts(self, interaction: discord.Interaction, button: discord.ui.Button):
                 modal = PopGiftsModal()
                 await interaction.response.send_modal(modal)
@@ -2994,7 +2994,7 @@ class BotSelector(commands.Bot):
                 super().__init__(timeout=300)
                 self.add_item(PopItemTypeSelect())
             
-            @discord.ui.button(label="Give Affinity", style=discord.ButtonStyle.green, emoji="💕")
+            @discord.ui.button(label="Give Affinity", style=discord.ButtonStyle.success, emoji="💕")
             async def give_affinity(self, interaction: discord.Interaction, button: discord.ui.Button):
                 modal = PopAffinityModal()
                 await interaction.response.send_modal(modal)
@@ -5813,7 +5813,7 @@ class GiftSelect(discord.ui.Select):
 
 class GiftConfirmButton(discord.ui.Button['GiftView']):
     def __init__(self):
-        super().__init__(label="Send Gift", style=discord.ButtonStyle.green, disabled=True)
+        super().__init__(label="Send Gift", style=discord.ButtonStyle.success, disabled=True)
 
     async def callback(self, interaction: discord.Interaction):
         view = self.view
