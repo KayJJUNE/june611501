@@ -2849,8 +2849,42 @@ class BotSelector(commands.Bot):
                 }
 
                 # Get card collection info
-                all_user_cards = get_user_cards(user_id)
-                user_cards = [card for card in all_user_cards if card['character_name'] == character_name] if character_name else all_user_cards
+                print(f"[DEBUG] /info 명령어 - 사용자 카드 조회 시작: {user_id}, 캐릭터: {character_name}")
+                
+                if character_name:
+                    # 특정 캐릭터의 카드만 조회
+                    all_user_cards = self.db.get_user_cards(user_id, character_name)
+                    print(f"[DEBUG] /info 명령어 - {character_name} 카드 수: {len(all_user_cards)}")
+                    
+                    # 카드 데이터 형식 변환 (특정 캐릭터: card_id, acquired_at)
+                    user_cards = []
+                    for card in all_user_cards:
+                        if len(card) >= 2:  # (card_id, acquired_at) 형식
+                            card_data = {
+                                'character_name': character_name,
+                                'card_id': card[0],
+                                'acquired_at': card[1]
+                            }
+                            user_cards.append(card_data)
+                else:
+                    # 모든 캐릭터의 카드 조회
+                    all_user_cards = self.db.get_user_cards(user_id)
+                    print(f"[DEBUG] /info 명령어 - 전체 카드 수: {len(all_user_cards)}")
+                    
+                    # 카드 데이터 형식 변환 (모든 캐릭터: character_name, card_id, acquired_at)
+                    user_cards = []
+                    for card in all_user_cards:
+                        if len(card) >= 3:  # (character_name, card_id, acquired_at) 형식
+                            card_data = {
+                                'character_name': card[0],
+                                'card_id': card[1],
+                                'acquired_at': card[2]
+                            }
+                            user_cards.append(card_data)
+                
+                print(f"[DEBUG] /info 명령어 - 최종 카드 수: {len(user_cards)}")
+                for card in user_cards:
+                    print(f"[DEBUG] /info 명령어 - 카드: {card['character_name']} - {card['card_id']}")
                 
                 # 티어별 카드 분류
                 tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
@@ -4648,6 +4682,8 @@ class BotSelector(commands.Bot):
         quest_id = 'weekly_share'
         # --- weekly claimed는 이번주 내 수령 여부로 판단 ---
         claimed = self.db.is_weekly_quest_claimed(user_id, quest_id)
+        
+        print(f"[DEBUG] 주간 카드 공유 퀘스트 체크 - 사용자: {user_id}, 공유 횟수: {card_shared}, 수령 여부: {claimed}")
         quests.append({
             'id': quest_id,
             'name': '🔗 Share Your Cards',
@@ -6066,10 +6102,19 @@ class ShareCardButton(discord.ui.Button):
 
         # 카드 공유 기록 (퀘스트용)
         try:
+            print(f"[DEBUG] 카드 공유 기록 시작 - 사용자: {interaction.user.id}, 캐릭터: {self.character_name}, 카드: {self.card_id}")
             # self.view.db를 사용하여 DB에 기록
-            self.view.db.record_card_share(interaction.user.id, self.character_name, self.card_id)
+            result = self.view.db.record_card_share(interaction.user.id, self.character_name, self.card_id)
+            print(f"[DEBUG] 카드 공유 기록 완료 - 결과: {result}")
+            
+            # 기록 후 주간 카드 공유 상태 확인
+            card_shared = self.view.db.get_card_shared_this_week(interaction.user.id)
+            print(f"[DEBUG] 주간 카드 공유 횟수: {card_shared}")
+            
         except Exception as e:
-            print(f"Error recording card share: {e}")
+            print(f"[ERROR] 카드 공유 기록 실패: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 import psycopg2
@@ -6368,17 +6413,25 @@ class GiftConfirmButton(discord.ui.Button['GiftView']):
                     
                     # 카드 지급
                     if card_id_to_give:
+                        print(f"[DEBUG] 카드 지급 시작 - 캐릭터: {character_name}, 카드 ID: {card_id_to_give}")
+                        card_info = get_card_info_by_id(character_name, card_id_to_give)
+                        print(f"[DEBUG] 카드 정보: {card_info}")
+                        
                         card_embed = discord.Embed(
                             title="🎉 Get a new card!",
-                            description=f"Congratulations! {character_name} has sent you a token of affection.\nYou got a {get_card_info_by_id(character_name, card_id_to_give)['tier']} tier card!\nClick claim to receive your card.",
+                            description=f"Congratulations! {character_name} has sent you a token of affection.\nYou got a {card_info.get('tier', 'Unknown')} tier card!\nClick claim to receive your card.",
                             color=discord.Color.gold()
                         )
-                        card_info = get_card_info_by_id(character_name, card_id_to_give)
+                        
                         if card_info and card_info.get('image_url'):
-                           card_embed.set_image(url=card_info['image_url'])
+                            print(f"[DEBUG] 카드 이미지 URL 설정: {card_info['image_url']}")
+                            card_embed.set_image(url=card_info['image_url'])
+                        else:
+                            print(f"[DEBUG] 카드 이미지 URL 없음 - card_info: {card_info}")
 
                         view = CardClaimView(user_id, character_name, card_id_to_give, self.db)
                         await interaction.channel.send(embed=card_embed, view=view)
+                        print(f"[DEBUG] 카드 임베드 전송 완료")
 
                     break # Process only one level up at a time
         except Exception as e:
@@ -6856,7 +6909,10 @@ class CardClaimView(discord.ui.View):
             
             # Add card image if available
             if card_info.get('image_url'):
+                print(f"[DEBUG] CardClaimView - 카드 이미지 URL 설정: {card_info['image_url']}")
                 embed.set_image(url=card_info['image_url'])
+            else:
+                print(f"[DEBUG] CardClaimView - 카드 이미지 URL 없음: {card_info}")
             
             embed.add_field(
                 name="Card Details",
