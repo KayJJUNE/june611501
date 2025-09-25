@@ -2544,8 +2544,16 @@ class BotSelector(commands.Bot):
         async def bot_command(interaction: discord.Interaction):
             try:
                 # 블랙리스트 체크
-                blacklist_info = self.db.is_user_blacklisted(interaction.user.id)
-                if blacklist_info['is_blacklisted']:
+                try:
+                    blacklist_info = self.db.is_user_blacklisted(interaction.user.id)
+                except AttributeError:
+                    # 데이터베이스 연결 실패 시 블랙리스트 체크 건너뛰기
+                    blacklist_info = {'is_blacklisted': False}
+                except Exception as e:
+                    print(f"Error checking blacklist: {e}")
+                    blacklist_info = {'is_blacklisted': False}
+                
+                if blacklist_info.get('is_blacklisted', False):
                     duration_text = "Permanent" if blacklist_info['duration_days'] is None else f"{blacklist_info['duration_days']} days"
                     expires_text = "Never" if blacklist_info['expires_at'] is None else blacklist_info['expires_at'].strftime("%Y-%m-%d %H:%M:%S UTC+8")
                     
