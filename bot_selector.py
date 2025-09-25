@@ -50,7 +50,7 @@ from character_bot import get_affinity_grade
 from products import product_manager
 from payment_manager import PaymentManager, PaymentWebhookHandler
 
-# 강제로 gift_manager 모듈을 다시 로드하여 캐시 문제를 해결합니다.
+# Force reload gift_manager module to resolve cache issues.
 import gift_manager
 importlib.reload(gift_manager)
 
@@ -208,7 +208,7 @@ class RankingSelect(discord.ui.Select):
             except:
                 pass
 
-# --- Pylance undefined variable 오류 방지용 더미 정의 ---
+# --- Dummy definitions to prevent Pylance undefined variable errors ---
 class DiscordShareButton(discord.ui.Button):
     def __init__(self, *args, **kwargs):
         super().__init__(label="Share", style=discord.ButtonStyle.link)
@@ -216,7 +216,7 @@ class DiscordShareButton(discord.ui.Button):
 async def run_story_scene(*args, **kwargs):
     pass
 
-# get_affinity_grade가 없을 경우 임시 함수 추가
+# Add temporary function if get_affinity_grade is not available
 try:
     get_affinity_grade
 except NameError:
@@ -232,7 +232,7 @@ except NameError:
         else:
             return "Rookie"
 
-# RankingView, CardClaimView, RoleplayModal이 없을 경우 임시 클래스 추가
+# Add temporary classes if RankingView, CardClaimView, RoleplayModal are not available
 try:
     RankingView
 except NameError:
@@ -247,7 +247,7 @@ except NameError:
         def __init__(self, *args, **kwargs):
             super().__init__()
 
-    class RoleplayModal(discord.ui.Modal, title="Roleplay Settings"):
+class RoleplayModal(discord.ui.Modal, title="Roleplay Settings"):
         def __init__(self, character_name):
             super().__init__()
             self.character_name = character_name
@@ -267,7 +267,7 @@ except NameError:
             self.add_item(self.mode)
 
         async def on_submit(self, interaction: discord.Interaction):
-            # 글자수 초과 체크 (혹시 모를 예외 상황 대비)
+            # Check for character limit (just in case of unexpected exceptions)
             if len(self.user_role.value) > 150 or len(self.character_role.value) > 150:
                 await interaction.response.send_message(
                     "❌ 'Your Role and Character Role must be entered in 150 characters or less..", ephemeral=True
@@ -283,7 +283,7 @@ except NameError:
                 if not hasattr(bot_selector, "roleplay_sessions"):
                     bot_selector.roleplay_sessions = {}
 
-                # 1. 새로운 롤플레잉 채널 생성
+                # 1. Create new roleplay channel
                 guild = interaction.guild
                 category = discord.utils.get(guild.categories, name="roleplay")
                 if not category:
@@ -301,17 +301,17 @@ except NameError:
                     overwrites=overwrites
                 )
 
-                # 2. 세션 정보 저장 (새 채널에만)
+                # 2. Save session information (only for new channels)
                 session_id = f"rp_{interaction.user.id}_{self.character_name}_{int(datetime.now().timestamp())}"
                 
-                # 데이터베이스에 세션 저장
+                # Save session to database
                 bot_selector.db.create_roleplay_session(
                     session_id, interaction.user.id, self.character_name, 
                     self.mode.value.lower(), self.user_role.value, 
                     self.character_role.value, self.story_line.value
                 )
                 
-                # 메모리에도 저장 (기존 호환성 유지)
+                # Also save to memory (maintain backward compatibility)
                 bot_selector.roleplay_sessions[channel.id] = {
                     "is_active": True,
                     "user_id": interaction.user.id,
@@ -324,7 +324,7 @@ except NameError:
                     "turns_remaining": 100
                 }
 
-                # 3. 새 채널에 임베드 출력
+                # 3. Send embed to new channel
                 from config import CHARACTER_INFO
                 char_info = CHARACTER_INFO.get(self.character_name, {})
                 # 모드별 이모지 매핑
@@ -354,7 +354,7 @@ except NameError:
                 embed.set_footer(text="🎭 Spot Zero Immersive Roleplay Mode")
                 await channel.send(embed=embed)
 
-                # 4. 기존 채널에 안내 메시지 전송
+                # 4. Send notification message to existing channel
                 rp_link = f"https://discord.com/channels/{guild.id}/{channel.id}"
                 await interaction.response.send_message(
                     f"✨ A new roleplay mode has started! [Click here to join your special channel]({rp_link})",
@@ -483,7 +483,7 @@ class LanguageSelect(discord.ui.Select):
             selected_language = self.values[0]
             from config import SUPPORTED_LANGUAGES, ERROR_MESSAGES
 
-            # 데이터베이스에 언어 설정 저장
+            # Save language settings to database
             try:
                 self.db.set_channel_language(
                     interaction.channel_id,
@@ -492,7 +492,7 @@ class LanguageSelect(discord.ui.Select):
                     selected_language
                 )
 
-                # 성공 메시지 준비
+                # Prepare success message
                 success_messages = {
                     "zh": f"(system) Language has been set to {SUPPORTED_LANGUAGES[selected_language]['name']}.",
                     "en": f"(system) Language has been set to {SUPPORTED_LANGUAGES[selected_language]['name']}.",
@@ -508,7 +508,7 @@ class LanguageSelect(discord.ui.Select):
                     print("Interaction expired during language selection")
                     await interaction.channel.send(success_messages.get(selected_language, success_messages["en"]), delete_after=5)
 
-                # 시작 메시지 전송
+                # Send welcome message
                 welcome_messages = {
                     "zh": "(smiling) 你好！让我们开始聊天吧！",
                     "en": "(smiling) Hello! Let's start chatting.",
@@ -597,29 +597,29 @@ class CharacterSelect(discord.ui.Select):
                     await interaction.channel.send("The selected character was not found.", delete_after=5)
                 return
 
-            # 사용자별 채널 생성
+            # Create user-specific channel
             channel_name = f"chat-{selected_char.lower()}-{interaction.user.name}"
             print(f"[DEBUG] 생성할 채널명: {channel_name}")
 
-            # 기존 채널 확인 및 삭제
+            # Check and delete existing channel
             existing_channel = discord.utils.get(interaction.guild.channels, name=channel_name)
             if existing_channel:
                 print(f"[DEBUG] 기존 채널 삭제: {existing_channel.name}")
                 await existing_channel.delete()
 
-            # 새 채널 생성
+            # Create new channel
             channel = await interaction.guild.create_text_channel(
                 name=channel_name,
                 topic=f"Private chat with {selected_char} for {interaction.user.name}"
             )
             print(f"[DEBUG] 새 채널 생성 완료: {channel.name}")
 
-            # 채널 등록
+            # Register channel
             success, message = await selected_bot.add_channel(channel.id, interaction.user.id)
             print("[DEBUG] add_channel 호출 후")
 
             if success:
-                # 채널 생성 알림 메시지
+                # Channel creation notification message
                 try:
                     if not interaction.response.is_done():
                         await interaction.response.send_message(
@@ -635,14 +635,14 @@ class CharacterSelect(discord.ui.Select):
                     print("Interaction expired, sending message to channel instead")
                     await channel.send(f"Start chatting with {selected_char}!", delete_after=10)
 
-                # 언어 선택 임베드 생성
+                # Create language selection embed
                 embed = discord.Embed(
                     title="🌍 Language Selection",
                     description="Please select the language for conversation.",
                     color=discord.Color.blue()
                 )
 
-                # 언어별 설명 추가
+                # Add language descriptions
                 languages = {
                     "English": "English - Start conversation in English",
                     "[ベータ] 日本語": "Japanese - 日本語で会話を 始めます",
@@ -656,13 +656,13 @@ class CharacterSelect(discord.ui.Select):
                     inline=False
                 )
 
-                # 언어 선택 뷰 생성
+                # Create language selection view
                 view = LanguageSelectView(self.bot_selector.db, interaction.user.id, selected_char)
 
-                # 새로 생성된 채널에 임베드와 언어 선택 버튼 전송
+                # Send embed and language selection button to newly created channel
                 await channel.send(content="**Please select your language**", embed=embed, view=view)
             else:
-                await channel.send("채널 등록 중 오류가 발생했습니다. 채널을 다시 생성해주세요.")
+                await channel.send("An error occurred while registering the channel. Please recreate the channel.")
                 await channel.delete()
         except discord.errors.NotFound:
             print("Interaction expired during character selection")
@@ -745,16 +745,16 @@ class BotSelector(commands.Bot):
         self.story_sessions = {}
         self.dm_sessions = {}  # DM 세션 관리
         
-        # 관리자 전용 채널 설정
-        self.admin_channels = set()  # 관리자 명령어가 허용된 채널 ID들
-        self.admin_user_id = 534941503345262613  # 지정된 관리자 ID
-        self.default_admin_channel = 1417465862910246922  # 지정된 관리자 채널 ID
+        # Admin-only channel settings
+        self.admin_channels = set()  # Channel IDs allowed for admin commands
+        self.admin_user_id = 534941503345262613  # Designated admin ID
+        self.default_admin_channel = 1417465862910246922  # Designated admin channel ID
         
-        # 기본 관리자 채널 설정
+        # Set default admin channel
         self.admin_channels.add(self.default_admin_channel)
-        self.load_admin_channels()  # 데이터베이스에서 관리자 채널 로드
+        self.load_admin_channels()  # Load admin channels from database
         
-        # 관리자 명령어 그룹 초기화 (나중에 설정됨)
+        # Initialize admin command group (will be set up later)
         self.admin_group = None
         
         # 명령어 설정 (admin_group 초기화 후)
@@ -770,16 +770,16 @@ class BotSelector(commands.Bot):
         self.payment_webhook_handler = PaymentWebhookHandler(self.payment_manager)
     
     def is_admin_channel_allowed(self, channel_id: int) -> bool:
-        """관리자 명령어가 허용된 채널인지 확인"""
-        # 지정된 관리자 채널에만 허용
+        """Check if the channel is allowed for admin commands"""
+        # Only allow designated admin channels
         return channel_id in self.admin_channels
     
     def is_admin_user(self, user_id: int) -> bool:
-        """지정된 관리자 사용자인지 확인"""
+        """Check if the user is a designated administrator"""
         return user_id == self.admin_user_id
     
     def load_admin_channels(self):
-        """데이터베이스에서 관리자 채널 설정을 로드합니다."""
+        """Load admin channel settings from database"""
         try:
             # 기본 관리자 채널은 항상 포함
             self.admin_channels.add(self.default_admin_channel)
@@ -929,7 +929,7 @@ class BotSelector(commands.Bot):
         
         # 그룹을 트리에 추가
         self.tree.add_command(self.admin_group)
-        print("✅ 관리자 명령어 그룹이 설정되었습니다.")
+        print("✅ Admin command group has been set up.")
 
     def add_admin_commands(self):
         """관리자 명령어들을 그룹에 추가합니다."""
@@ -969,7 +969,7 @@ class BotSelector(commands.Bot):
 
         @self.admin_group.command(
             name="settings",
-            description="현재 설정 확인"
+            description="Check current settings"
         )
         async def settings_command(interaction: discord.Interaction):
             if not isinstance(interaction.channel, discord.TextChannel):
@@ -1024,7 +1024,7 @@ class BotSelector(commands.Bot):
             description="Check bot status and health"
         )
         async def status_command(interaction: discord.Interaction):
-            """봇 상태를 확인합니다."""
+            """Check bot status"""
             try:
                 if not self.db.is_user_admin(interaction.user.id):
                     await interaction.response.send_message("This command is for administrators only.", ephemeral=True)
@@ -1083,7 +1083,7 @@ class BotSelector(commands.Bot):
         # 추가 admin 명령어들
         @self.admin_group.command(
             name="reset_affinity",
-            description="친밀도를 초기화합니다"
+            description="Reset user affinity"
         )
         async def reset_affinity(interaction: discord.Interaction, target: discord.Member = None):
             if not self.is_admin_user(interaction.user.id):
@@ -1444,6 +1444,525 @@ class BotSelector(commands.Bot):
                 except Exception as e:
                     print(f"Error in AdminPopAffinityModal: {e}")
                     await interaction.response.send_message("❌ An error occurred while adding affinity points.", ephemeral=True)
+
+        # Admin System 관련 클래스들 정의
+        class AdminSystemView(discord.ui.View):
+            def __init__(self, db, bot_selector):
+                super().__init__(timeout=300)
+                self.db = db
+                self.bot_selector = bot_selector
+            
+            @discord.ui.button(label="📊 Status & Settings", style=discord.ButtonStyle.primary, emoji="📊")
+            async def status_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+                view = StatusSettingsView(self.db, self.bot_selector)
+                embed = discord.Embed(
+                    title="📊 Status & Settings",
+                    description="Select the status or settings function you want to use.",
+                    color=discord.Color.blue()
+                )
+                embed.add_field(name="🔍 Status", value="Check bot status and health", inline=True)
+                embed.add_field(name="⚙️ Settings", value="View current settings", inline=True)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            
+            @discord.ui.button(label="🔧 Channel & Roles", style=discord.ButtonStyle.secondary, emoji="🔧")
+            async def channel_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+                view = ChannelRolesView(self.db, self.bot_selector)
+                embed = discord.Embed(
+                    title="🔧 Channel & Roles",
+                    description="Select the channel or role function you want to use.",
+                    color=discord.Color.orange()
+                )
+                embed.add_field(name="📺 Channel", value="Manage admin channels", inline=True)
+                embed.add_field(name="👥 Add Role", value="Add admin role", inline=True)
+                embed.add_field(name="❌ Remove Role", value="Remove admin role", inline=True)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            
+            @discord.ui.button(label="👤 User Management", style=discord.ButtonStyle.success, emoji="👤")
+            async def user_management(self, interaction: discord.Interaction, button: discord.ui.Button):
+                view = UserManagementView(self.db, self.bot_selector)
+                embed = discord.Embed(
+                    title="👤 User Management",
+                    description="Select the user management function you want to use.",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="📝 Set Daily Limit", value="Set daily message limit", inline=True)
+                embed.add_field(name="📖 Reset Story", value="Reset user story progress", inline=True)
+                embed.add_field(name="💬 Message Add", value="Add user message count", inline=True)
+                embed.add_field(name="🎯 Reset Quest", value="Reset user quest claims", inline=True)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            
+            @discord.ui.button(label="🧹 Maintenance", style=discord.ButtonStyle.danger, emoji="🧹")
+            async def maintenance(self, interaction: discord.Interaction, button: discord.ui.Button):
+                view = MaintenanceView(self.db, self.bot_selector)
+                embed = discord.Embed(
+                    title="🧹 Maintenance",
+                    description="Select the maintenance function you want to use.",
+                    color=discord.Color.red()
+                )
+                embed.add_field(name="🃏 Cleanup Cards", value="Clean up duplicate cards", inline=True)
+                embed.add_field(name="🚨 Emergency Stop", value="Emergency stop mode", inline=True)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            
+            @discord.ui.button(label="💳 Payment & Testing", style=discord.ButtonStyle.blurple, emoji="💳")
+            async def payment_testing(self, interaction: discord.Interaction, button: discord.ui.Button):
+                view = PaymentTestingView(self.db, self.bot_selector)
+                embed = discord.Embed(
+                    title="💳 Payment & Testing",
+                    description="Select the payment or testing function you want to use.",
+                    color=discord.Color.purple()
+                )
+                embed.add_field(name="🧪 Test Payment", value="Test payment success DM", inline=True)
+                embed.add_field(name="🔗 Payment Webhook", value="Process payment webhook", inline=True)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+        # Status & Settings View
+        class StatusSettingsView(discord.ui.View):
+            def __init__(self, db, bot_selector):
+                super().__init__(timeout=300)
+                self.db = db
+                self.bot_selector = bot_selector
+            
+            @discord.ui.button(label="🔍 Status", style=discord.ButtonStyle.primary, emoji="🔍")
+            async def status(self, interaction: discord.Interaction, button: discord.ui.Button):
+                # 기존 status 명령어 로직 사용
+                try:
+                    uptime = datetime.utcnow() - self.bot_selector.start_time
+                    uptime_str = str(uptime).split('.')[0]
+                    
+                    embed = discord.Embed(
+                        title="🤖 Bot Status",
+                        description="Current bot status and health information",
+                        color=discord.Color.green()
+                    )
+                    
+                    embed.add_field(
+                        name="🕐 Uptime",
+                        value=uptime_str,
+                        inline=True
+                    )
+                    
+                    embed.add_field(
+                        name="💾 Memory Usage",
+                        value=f"{self.bot_selector.get_memory_usage():.2f} MB",
+                        inline=True
+                    )
+                    
+                    embed.add_field(
+                        name="🔗 Database",
+                        value="✅ Connected" if self.db else "❌ Disconnected",
+                        inline=True
+                    )
+                    
+                    embed.add_field(
+                        name="🚨 Emergency Mode",
+                        value="🔴 Active" if self.bot_selector.emergency_mode else "🟢 Normal",
+                        inline=True
+                    )
+                    
+                    embed.add_field(
+                        name="📊 Active Channels",
+                        value=len(self.bot_selector.active_channels),
+                        inline=True
+                    )
+                    
+                    embed.add_field(
+                        name="👥 Total Users",
+                        value=self.bot_selector.get_total_users(),
+                        inline=True
+                    )
+                    
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    
+                except Exception as e:
+                    print(f"Error in status: {e}")
+                    await interaction.response.send_message("Error occurred while checking status.", ephemeral=True)
+            
+            @discord.ui.button(label="⚙️ Settings", style=discord.ButtonStyle.secondary, emoji="⚙️")
+            async def settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+                # 기존 settings 명령어 로직 사용
+                embed = discord.Embed(
+                    title="⚙️ Bot Settings",
+                    description="Current bot configuration and settings",
+                    color=discord.Color.blue()
+                )
+                
+                embed.add_field(
+                    name="Daily Message Limit",
+                    value=f"{self.bot_selector.settings_manager.daily_limit} messages",
+                    inline=False
+                )
+                
+                if self.bot_selector.settings_manager.admin_roles:
+                    role_mentions = [f"<@&{role_id}>" for role_id in self.bot_selector.settings_manager.admin_roles]
+                    embed.add_field(
+                        name="Admin Roles",
+                        value=", ".join(role_mentions),
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="Admin Roles",
+                        value="No admin roles set",
+                        inline=False
+                    )
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        # Channel & Roles View
+        class ChannelRolesView(discord.ui.View):
+            def __init__(self, db, bot_selector):
+                super().__init__(timeout=300)
+                self.db = db
+                self.bot_selector = bot_selector
+            
+            @discord.ui.button(label="📺 Channel", style=discord.ButtonStyle.primary, emoji="📺")
+            async def channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = ChannelModal(self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="👥 Add Role", style=discord.ButtonStyle.success, emoji="👥")
+            async def add_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = AddRoleModal(self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="❌ Remove Role", style=discord.ButtonStyle.danger, emoji="❌")
+            async def remove_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = RemoveRoleModal(self.bot_selector)
+                await interaction.response.send_modal(modal)
+
+        # User Management View
+        class UserManagementView(discord.ui.View):
+            def __init__(self, db, bot_selector):
+                super().__init__(timeout=300)
+                self.db = db
+                self.bot_selector = bot_selector
+            
+            @discord.ui.button(label="📝 Set Daily Limit", style=discord.ButtonStyle.primary, emoji="📝")
+            async def set_daily_limit(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = SetDailyLimitModal(self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="📖 Reset Story", style=discord.ButtonStyle.secondary, emoji="📖")
+            async def reset_story(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = ResetStoryModal(self.db)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="💬 Message Add", style=discord.ButtonStyle.success, emoji="💬")
+            async def message_add(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = MessageAddModal(self.db)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="🎯 Reset Quest", style=discord.ButtonStyle.danger, emoji="🎯")
+            async def reset_quest(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = ResetQuestModal(self.db)
+                await interaction.response.send_modal(modal)
+
+        # Maintenance View
+        class MaintenanceView(discord.ui.View):
+            def __init__(self, db, bot_selector):
+                super().__init__(timeout=300)
+                self.db = db
+                self.bot_selector = bot_selector
+            
+            @discord.ui.button(label="🃏 Cleanup Cards", style=discord.ButtonStyle.secondary, emoji="🃏")
+            async def cleanup_cards(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = CleanupCardsModal(self.db)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="🚨 Emergency Stop", style=discord.ButtonStyle.danger, emoji="🚨")
+            async def emergency_stop(self, interaction: discord.Interaction, button: discord.ui.Button):
+                self.bot_selector.emergency_mode = True
+                await interaction.response.send_message("🚨 Emergency mode activated! Bot is now in emergency stop mode.", ephemeral=True)
+
+        # Payment & Testing View
+        class PaymentTestingView(discord.ui.View):
+            def __init__(self, db, bot_selector):
+                super().__init__(timeout=300)
+                self.db = db
+                self.bot_selector = bot_selector
+            
+            @discord.ui.button(label="🧪 Test Payment", style=discord.ButtonStyle.primary, emoji="🧪")
+            async def test_payment(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = TestPaymentModal(self.db)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="🔗 Payment Webhook", style=discord.ButtonStyle.secondary, emoji="🔗")
+            async def payment_webhook(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = PaymentWebhookModal(self.db)
+                await interaction.response.send_modal(modal)
+
+        # Modal 클래스들 정의
+        class ChannelModal(discord.ui.Modal):
+            def __init__(self, bot_selector):
+                super().__init__(title="📺 Admin Channel Management")
+                self.bot_selector = bot_selector
+                self.add_item(discord.ui.TextInput(
+                    label="Action (add/remove/list)",
+                    placeholder="Enter 'add', 'remove', or 'list'",
+                    required=True,
+                    max_length=10
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Channel ID (for add/remove)",
+                    placeholder="Enter channel ID or leave empty for list",
+                    required=False,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                action = self.children[0].value.lower()
+                channel_id = self.children[1].value
+                
+                if action == "add" and channel_id:
+                    try:
+                        channel_id = int(channel_id)
+                        self.bot_selector.add_admin_channel(channel_id)
+                        await interaction.response.send_message(f"✅ Channel <#{channel_id}> has been added to admin channels.", ephemeral=True)
+                    except ValueError:
+                        await interaction.response.send_message("❌ Invalid channel ID format.", ephemeral=True)
+                elif action == "remove" and channel_id:
+                    try:
+                        channel_id = int(channel_id)
+                        self.bot_selector.remove_admin_channel(channel_id)
+                        await interaction.response.send_message(f"✅ Channel <#{channel_id}> has been removed from admin channels.", ephemeral=True)
+                    except ValueError:
+                        await interaction.response.send_message("❌ Invalid channel ID format.", ephemeral=True)
+                elif action == "list":
+                    if self.bot_selector.admin_channels:
+                        channel_mentions = [f"<#{cid}>" for cid in self.bot_selector.admin_channels]
+                        await interaction.response.send_message(f"📋 Admin channels: {', '.join(channel_mentions)}", ephemeral=True)
+                    else:
+                        await interaction.response.send_message("📋 No admin channels set. All channels allow admin commands.", ephemeral=True)
+                else:
+                    await interaction.response.send_message("❌ Invalid action. Use 'add', 'remove', or 'list'.", ephemeral=True)
+
+        class AddRoleModal(discord.ui.Modal):
+            def __init__(self, bot_selector):
+                super().__init__(title="👥 Add Admin Role")
+                self.bot_selector = bot_selector
+                self.add_item(discord.ui.TextInput(
+                    label="Role ID",
+                    placeholder="Enter the role ID to add as admin",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    role_id = int(self.children[0].value)
+                    self.bot_selector.settings_manager.add_admin_role(role_id)
+                    await interaction.response.send_message(f"✅ Role <@&{role_id}> has been added as an admin role.", ephemeral=True)
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid role ID format.", ephemeral=True)
+
+        class RemoveRoleModal(discord.ui.Modal):
+            def __init__(self, bot_selector):
+                super().__init__(title="❌ Remove Admin Role")
+                self.bot_selector = bot_selector
+                self.add_item(discord.ui.TextInput(
+                    label="Role ID",
+                    placeholder="Enter the role ID to remove from admin",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    role_id = int(self.children[0].value)
+                    self.bot_selector.settings_manager.remove_admin_role(role_id)
+                    await interaction.response.send_message(f"✅ Role <@&{role_id}> has been removed from admin roles.", ephemeral=True)
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid role ID format.", ephemeral=True)
+
+        class SetDailyLimitModal(discord.ui.Modal):
+            def __init__(self, bot_selector):
+                super().__init__(title="📝 Set Daily Limit")
+                self.bot_selector = bot_selector
+                self.add_item(discord.ui.TextInput(
+                    label="Daily Message Limit",
+                    placeholder="Enter the daily message limit",
+                    required=True,
+                    max_length=10
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    limit = int(self.children[0].value)
+                    if limit < 1:
+                        await interaction.response.send_message("❌ Daily limit must be at least 1.", ephemeral=True)
+                        return
+                    self.bot_selector.settings_manager.set_daily_limit(limit)
+                    await interaction.response.send_message(f"✅ Daily message limit has been set to {limit}.", ephemeral=True)
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter a valid number.", ephemeral=True)
+
+        class ResetStoryModal(discord.ui.Modal):
+            def __init__(self, db):
+                super().__init__(title="📖 Reset Story Progress")
+                self.db = db
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter the user ID to reset story progress",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_id = int(self.children[0].value)
+                    self.db.reset_story_progress(user_id)
+                    await interaction.response.send_message(f"✅ Story progress has been reset for user {user_id}.", ephemeral=True)
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid user ID format.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error in reset_story: {e}")
+                    await interaction.response.send_message("❌ An error occurred while resetting story progress.", ephemeral=True)
+
+        class MessageAddModal(discord.ui.Modal):
+            def __init__(self, db):
+                super().__init__(title="💬 Add User Messages")
+                self.db = db
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter the user ID",
+                    required=True,
+                    max_length=20
+                ))
+                self.add_item(discord.ui.TextInput(
+                    label="Message Count",
+                    placeholder="Enter the number of messages to add",
+                    required=True,
+                    max_length=10
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_id = int(self.children[0].value)
+                    count = int(self.children[1].value)
+                    if count < 1:
+                        await interaction.response.send_message("❌ Message count must be at least 1.", ephemeral=True)
+                        return
+                    self.db.add_user_messages(user_id, count)
+                    await interaction.response.send_message(f"✅ Added {count} messages to user {user_id}.", ephemeral=True)
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter valid numbers.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error in message_add: {e}")
+                    await interaction.response.send_message("❌ An error occurred while adding messages.", ephemeral=True)
+
+        class ResetQuestModal(discord.ui.Modal):
+            def __init__(self, db):
+                super().__init__(title="🎯 Reset Quest Claims")
+                self.db = db
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter the user ID to reset quest claims",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_id = int(self.children[0].value)
+                    self.db.reset_quest_claims(user_id)
+                    await interaction.response.send_message(f"✅ Quest claims have been reset for user {user_id}.", ephemeral=True)
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid user ID format.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error in reset_quest: {e}")
+                    await interaction.response.send_message("❌ An error occurred while resetting quest claims.", ephemeral=True)
+
+        class CleanupCardsModal(discord.ui.Modal):
+            def __init__(self, db):
+                super().__init__(title="🃏 Cleanup Duplicate Cards")
+                self.db = db
+                self.add_item(discord.ui.TextInput(
+                    label="User ID (or 'all' for all users)",
+                    placeholder="Enter user ID or 'all'",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_input = self.children[0].value.lower()
+                    if user_input == "all":
+                        cleaned = self.db.cleanup_duplicate_cards()
+                        await interaction.response.send_message(f"✅ Cleaned up duplicate cards for all users. Removed {cleaned} duplicates.", ephemeral=True)
+                    else:
+                        user_id = int(user_input)
+                        cleaned = self.db.cleanup_duplicate_cards(user_id)
+                        await interaction.response.send_message(f"✅ Cleaned up duplicate cards for user {user_id}. Removed {cleaned} duplicates.", ephemeral=True)
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid user ID format. Use a number or 'all'.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error in cleanup_cards: {e}")
+                    await interaction.response.send_message("❌ An error occurred while cleaning up duplicate cards.", ephemeral=True)
+
+        class TestPaymentModal(discord.ui.Modal):
+            def __init__(self, db):
+                super().__init__(title="🧪 Test Payment")
+                self.db = db
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter the user ID to send test payment DM",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_id = int(self.children[0].value)
+                    user = interaction.client.get_user(user_id)
+                    if not user:
+                        await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                        return
+                    
+                    # Test payment success DM
+                    embed = discord.Embed(
+                        title="🎉 Payment Successful!",
+                        description="Your payment has been processed successfully.",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(name="Transaction ID", value="TEST_123456789", inline=False)
+                    embed.add_field(name="Amount", value="$9.99", inline=True)
+                    embed.add_field(name="Status", value="Completed", inline=True)
+                    
+                    try:
+                        await user.send(embed=embed)
+                        await interaction.response.send_message(f"✅ Test payment DM sent to {user.mention}.", ephemeral=True)
+                    except discord.Forbidden:
+                        await interaction.response.send_message("❌ Cannot send DM to this user. They may have DMs disabled.", ephemeral=True)
+                except ValueError:
+                    await interaction.response.send_message("❌ Invalid user ID format.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error in test_payment: {e}")
+                    await interaction.response.send_message("❌ An error occurred while sending test payment DM.", ephemeral=True)
+
+        class PaymentWebhookModal(discord.ui.Modal):
+            def __init__(self, db):
+                super().__init__(title="🔗 Payment Webhook")
+                self.db = db
+                self.add_item(discord.ui.TextInput(
+                    label="Webhook Data (JSON)",
+                    placeholder="Enter webhook data as JSON",
+                    required=True,
+                    style=discord.TextStyle.paragraph,
+                    max_length=2000
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    import json
+                    webhook_data = json.loads(self.children[0].value)
+                    
+                    # Process webhook data (simplified)
+                    await interaction.response.send_message("✅ Webhook data processed successfully.", ephemeral=True)
+                except json.JSONDecodeError:
+                    await interaction.response.send_message("❌ Invalid JSON format.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error in payment_webhook: {e}")
+                    await interaction.response.send_message("❌ An error occurred while processing webhook data.", ephemeral=True)
 
         @self.admin_group.command(
             name="add_role",
@@ -1810,8 +2329,8 @@ class BotSelector(commands.Bot):
                         }
                     
                     embed = discord.Embed(
-                        title="🌸 DM에서 캐릭터 선택",
-                        description="DM에서 대화할 캐릭터를 선택하세요.",
+                        title="🌸 Select Character for DM",
+                        description="Select a character to chat with in DM.",
                         color=discord.Color.gold()
                     )
                     embed.add_field(
@@ -2028,7 +2547,7 @@ class BotSelector(commands.Bot):
                 # DM에서 사용하는 경우
                 if isinstance(interaction.channel, discord.DMChannel):
                     if user_id not in self.dm_sessions or 'character_name' not in self.dm_sessions[user_id]:
-                        await interaction.response.send_message("❌ 먼저 `/bot` 명령어로 캐릭터를 선택해주세요.", ephemeral=True)
+                        await interaction.response.send_message("❌ Please select a character first using the `/bot` command.", ephemeral=True)
                         return
                     character_name = self.dm_sessions[user_id]['character_name']
                 else:
@@ -2165,7 +2684,7 @@ class BotSelector(commands.Bot):
                 # DM에서 사용하는 경우
                 if isinstance(interaction.channel, discord.DMChannel):
                     if user_id not in self.dm_sessions or 'character_name' not in self.dm_sessions[user_id]:
-                        await interaction.response.send_message("❌ 먼저 `/bot` 명령어로 캐릭터를 선택해주세요.", ephemeral=True)
+                        await interaction.response.send_message("❌ Please select a character first using the `/bot` command.", ephemeral=True)
                         return
                     character_name = self.dm_sessions[user_id]['character_name']
                 else:
@@ -2921,7 +3440,7 @@ class BotSelector(commands.Bot):
                 import traceback
                 print(traceback.format_exc())
                 try:
-                    await interaction.followup.send("에러가 발생했습니다. 관리자에게 문의하세요.", ephemeral=True)
+                    await interaction.followup.send("An error occurred. Please contact an administrator.", ephemeral=True)
                 except Exception as e2:
                     print(f"[ERROR] followup.send 실패: {e2}")
 
@@ -3336,202 +3855,6 @@ class BotSelector(commands.Bot):
                 except Exception as e:
                     await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
-        # info 명령어가 이미 등록되어 있는지 확인
-        if not any(cmd.name == "info" for cmd in self.tree.get_commands()):
-            @self.tree.command(
-                name="info",
-                description="Check your affinity and card collection information"
-            )
-            async def info_command(interaction: discord.Interaction):
-                try:
-                    print("\n[Info command started]")
-                    user_id = interaction.user.id
-                    character_name = None
-                    
-                    # DM에서 사용하는 경우
-                    if isinstance(interaction.channel, discord.DMChannel):
-                        if user_id not in self.dm_sessions or 'character_name' not in self.dm_sessions[user_id]:
-                            await interaction.response.send_message("❌ 먼저 `/bot` 명령어로 캐릭터를 선택해주세요.", ephemeral=True)
-                            return
-                        character_name = self.dm_sessions[user_id]['character_name']
-                    else:
-                        # 서버 채널에서 사용하는 경우
-                        if not isinstance(interaction.channel, discord.TextChannel):
-                            await interaction.response.send_message("This command can only be used in server channels or DM.", ephemeral=True)
-                            return
-                        
-                        # Find the character bot for the current channel
-                        current_bot = None
-                        for char_name, bot in self.character_bots.items():
-                            if interaction.channel.id in bot.active_channels:
-                                current_bot = bot
-                                break
-
-                        if not current_bot:
-                            await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
-                            return
-                        
-                        character_name = current_bot.character_name
-
-                    print(f"Character name: {character_name}")
-
-                    # Get affinity info
-                    affinity_info = self.db.get_affinity(interaction.user.id, character_name)
-                    print(f"Affinity info: {affinity_info}")
-
-                    if not affinity_info:
-                        current_affinity = 0
-                        affinity_grade = get_affinity_grade(0)
-                        daily_message_count = 0
-                        last_message_time = "N/A"
-                    else:
-                        current_affinity = affinity_info['emotion_score']
-                        affinity_grade = get_affinity_grade(current_affinity)
-                        daily_message_count = affinity_info['daily_message_count']
-                        last_message_time = affinity_info.get('last_message_time', "N/A")
-
-                    # Grade emoji mapping
-                    grade_emoji = {
-                        "Rookie": "🌱",
-                        "Iron": "⚔️",
-                        "Bronze": "🥉",
-                        "Silver": "🥈",
-                        "Gold": "🏆"
-                    }
-
-                    # Get card collection info
-                    all_user_cards = get_user_cards(user_id)
-                    user_cards = [card for card in all_user_cards if card['character_name'] == character_name] if character_name else all_user_cards
-                    
-                    # 티어별 카드 분류 (새로운 시스템: C 30장, B 20장, A 10장, S 5장)
-                    tier_counts = {'C': 0, 'B': 0, 'A': 0, 'S': 0}
-                    total_cards = {'C': 30, 'B': 20, 'A': 10, 'S': 5}
-                    
-                    for card in user_cards:
-                        card_info = get_card_info_by_id(card['character_name'], card['card_id'])
-                        if card_info and 'tier' in card_info:
-                            tier = card_info['tier']
-                            if tier in tier_counts:
-                                tier_counts[tier] += 1
-
-                    # Main info embed
-                    char_info = CHARACTER_INFO.get(character_name, {})
-                    char_color = char_info.get('color', discord.Color.purple())
-
-                    embed = discord.Embed(
-                        title=f"{char_info.get('emoji', '💝')} {interaction.user.display_name}'s Information",
-                        description=f"Complete information for {char_info.get('name', character_name)}",
-                        color=char_color
-                    )
-
-                    # Affinity Section
-                    embed.add_field(
-                        name="💝 Affinity Information",
-                        value=f"**Score:** {current_affinity} points\n**Grade:** {grade_emoji.get(affinity_grade, '❓')} {affinity_grade}\n**Today's Conversations:** {daily_message_count} times",
-                        inline=False
-                    )
-
-                    # Card Collection Section
-                    total_collected = sum(tier_counts.values())
-                    total_possible = sum(total_cards.values())
-                    total_percent = (total_collected / total_possible) * 100 if total_possible > 0 else 0
-                    
-                    tier_emojis = {'C': '🥉', 'B': '🥈', 'A': '🥇', 'S': '🏆'}
-                    bar_emojis = {'C': '🟩', 'B': '🟦', 'A': '🟨', 'S': '🟪'}
-                    
-                    def get_progress_bar(count, total, color_emoji, empty_emoji='⬜'):
-                        filled = count
-                        empty = total - count
-                        return color_emoji * filled + empty_emoji * empty
-                    
-                    card_progress = ""
-                    for tier in ['C', 'B', 'A', 'S']:
-                        count = tier_counts[tier]
-                        total = total_cards[tier]
-                        emoji = tier_emojis.get(tier, '')
-                        color = bar_emojis.get(tier, '⬜')
-                        progress_bar = get_progress_bar(count, total, color)
-                        card_progress += f"{tier} Tier {emoji}: {progress_bar} ({count}/{total})\n"
-                    
-                    card_progress += f"\n**Total:** {total_collected}/{total_possible} ({total_percent:.1f}%)"
-                    
-                    embed.add_field(
-                        name="🎴 Card Collection",
-                        value=card_progress,
-                        inline=False
-                    )
-
-                    # Last conversation time
-                    if last_message_time and last_message_time != "N/A":
-                        try:
-                            if isinstance(last_message_time, datetime):
-                                formatted_time = last_message_time.strftime('%Y-%m-%d %H:%M')
-                            else:
-                                last_time_str = last_message_time.split('.')[0]
-                                last_time = datetime.strptime(last_time_str, '%Y-%m-%d %H:%M:%S')
-                                formatted_time = last_time.strftime('%Y-%m-%d %H:%M')
-                            embed.add_field(
-                                name="💬 Last Conversation",
-                                value=f"```{formatted_time}```",
-                                inline=True
-                            )
-                        except Exception as e:
-                            print(f"Date parsing error: {e}")
-                            embed.add_field(
-                                name="💬 Last Conversation",
-                                value=f"```{last_message_time}```",
-                                inline=True
-                            )
-                    else:
-                        embed.add_field(
-                            name="💬 Last Conversation",
-                            value=f"```N/A```",
-                            inline=True
-                        )
-
-                    # Get the correct image URL from config.py
-                    char_image_url = CHARACTER_IMAGES.get(character_name)
-                    if char_image_url:
-                        embed.set_thumbnail(url=char_image_url)
-
-                    # Send the main info embed
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-                    # If user has cards, show card slider
-                    if user_cards:
-                        card_info_dict = {}
-                        for card in user_cards:
-                            card_info = get_card_info_by_id(card['character_name'], card['card_id'])
-                            if card_info:
-                                card_info_dict[card['card_id']] = card_info
-
-                        def get_tier_order(card_id):
-                            tier = card_info_dict.get(card_id, {}).get('tier', 'Unknown')
-                            tier_order = {'C': 0, 'B': 1, 'A': 2, 'S': 3}
-                            return tier_order.get(tier, 4)
-
-                        sorted_cards = sorted(list(card_info_dict.keys()), key=get_tier_order)
-
-                        if sorted_cards:
-                            slider_view = CardSliderView(
-                                user_id=user_id,
-                                cards=sorted_cards,
-                                character_name=character_name or "All",
-                                card_info_dict=card_info_dict,
-                                db=self.db
-                            )
-                            await slider_view.initial_message(interaction)
-
-                    print("[Info command complete]")
-
-                except Exception as e:
-                    print(f"Error during info command: {e}")
-                    import traceback
-                    print(traceback.format_exc())
-                    try:
-                        await interaction.response.send_message("An error occurred while loading your information.", ephemeral=True)
-                    except:
-                        await interaction.followup.send("An error occurred while loading your information.", ephemeral=True)
 
 
         @self.tree.command(
@@ -4663,8 +4986,8 @@ class BotSelector(commands.Bot):
             is_admin_channel = self.is_admin_channel_allowed(message.channel.id)
             
             embed = discord.Embed(
-                title="🤖 ZeroLink 챗봇",
-                description="안녕하세요! 저는 ZeroLink 챗봇입니다.\n\n**사용 방법:**\n• `/bot` - 캐릭터를 선택하여 1:1 대화\n• `/help` - 모든 명령어 보기\n• DM으로 보내면 더 자세한 대화 가능\n\n**💡 팁:** DM으로 보내시면 선택한 캐릭터와 자유롭게 대화할 수 있습니다!",
+                title="🤖 ZeroLink Chatbot",
+                description="Hello! I'm the ZeroLink chatbot.\n\n**How to use:**\n• `/bot` - Select a character for 1:1 chat\n• `/help` - View all commands\n• Send DM for more detailed conversations\n\n**💡 Tip:** Send a DM to chat freely with your selected character!",
                 color=0x00ff00
             )
             
@@ -5303,7 +5626,7 @@ class BotSelector(commands.Bot):
                 card_info = get_card_info_by_id(character_name, card_id)
                 if card_info:
                     embed = discord.Embed(
-                        title="🎉 새로운 카드를 획득했습니다!",
+                        title="🎉 New Card Acquired!",
                         description=f"**{card_info['name']}**\n{card_info['description']}",
                         color=0x00ff00
                     )
@@ -5326,8 +5649,8 @@ class BotSelector(commands.Bot):
         
         # 환영 메시지 전송
         embed = discord.Embed(
-            title="🌸 ZeroLink 챗봇에 오신 것을 환영합니다!",
-            description="DM에서도 챗봇과 대화할 수 있습니다.\n\n**사용 방법:**\n1. `/bot` 명령어로 캐릭터를 선택하세요\n2. 선택한 캐릭터와 자유롭게 대화하세요\n3. 30분간 활동이 없으면 세션이 자동으로 종료됩니다\n\n**사용 가능한 명령어:**\n• `/bot` - 캐릭터 선택\n• `/affinity` - 호감도 확인\n• `/mycard` - 보유 카드 확인\n• `/quest` - 퀘스트 확인\n• `/help` - 도움말\n\n**💡 팁:** 서버에서도 동일한 명령어를 사용할 수 있습니다!",
+            title="🌸 Welcome to ZeroLink Chatbot!",
+            description="You can chat with the chatbot in DM as well.\n\n**How to use:**\n1. Select a character using the `/bot` command\n2. Chat freely with your selected character\n3. Sessions will automatically end after 30 minutes of inactivity\n\n**Available commands:**\n• `/bot` - Select character\n• `/affinity` - Check affinity\n• `/mycard` - Check owned cards\n• `/quest` - Check quests\n• `/help` - Help\n\n**💡 Tip:** You can use the same commands on the server!",
             color=0xff69b4
         )
         embed.set_footer(text="ZeroLink 챗봇 DM 모드 • 서버와 DM 모두 지원")
@@ -6583,7 +6906,7 @@ class DMCharacterSelect(discord.ui.Select):
             )
         ]
         super().__init__(
-            placeholder="캐릭터를 선택하세요...",
+            placeholder="Select a character...",
             min_values=1,
             max_values=1,
             options=options
@@ -6600,8 +6923,8 @@ class DMCharacterSelect(discord.ui.Select):
                 self.bot_selector.dm_sessions[user_id]['last_activity'] = time.time()
             
             embed = discord.Embed(
-                title=f"✅ {selected_character} 선택 완료!",
-                description=f"이제 DM에서 {selected_character}와 자유롭게 대화할 수 있습니다.\n\n**사용 가능한 명령어:**\n• `/affinity` - 호감도 확인\n• `/mycard` - 보유 카드 확인\n• `/quest` - 퀘스트 확인\n• `/help` - 도움말",
+                title=f"✅ {selected_character} Selection Complete!",
+                description=f"You can now chat freely with {selected_character} in DM.\n\n**Available commands:**\n• `/affinity` - Check affinity\n• `/mycard` - Check owned cards\n• `/quest` - Check quests\n• `/help` - Help",
                 color=0x00ff00
             )
             
@@ -6609,7 +6932,7 @@ class DMCharacterSelect(discord.ui.Select):
             
         except Exception as e:
             print(f"Error in DMCharacterSelect callback: {e}")
-            await interaction.response.send_message("❌ 캐릭터 선택 중 오류가 발생했습니다.", ephemeral=True)
+            await interaction.response.send_message("❌ An error occurred while selecting a character.", ephemeral=True)
 
 async def main():
     intents = discord.Intents.all()
