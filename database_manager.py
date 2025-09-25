@@ -43,17 +43,7 @@ class DatabaseManager:
         print("DatabaseManager initialized.")
         self.setup_database()
         
-        # 데이터베이스 연결 실패 시에도 블랙리스트 메서드들이 작동하도록 기본 메서드 추가
-        if not hasattr(self, 'is_user_blacklisted'):
-            self.is_user_blacklisted = lambda user_id: {'is_blacklisted': False}
-        if not hasattr(self, 'add_to_blacklist'):
-            self.add_to_blacklist = lambda *args: False
-        if not hasattr(self, 'remove_from_blacklist'):
-            self.remove_from_blacklist = lambda *args: False
-        if not hasattr(self, 'get_blacklist_users'):
-            self.get_blacklist_users = lambda: []
-        if not hasattr(self, 'cleanup_expired_blacklist'):
-            self.cleanup_expired_blacklist = lambda: 0
+        # blacklist 테이블이 이제 setup_database에서 생성됩니다
 
     def get_connection(self):
         """데이터베이스 연결을 가져옵니다."""
@@ -71,6 +61,22 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
+                # blacklist 테이블 생성
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS blacklist (
+                        id SERIAL PRIMARY KEY,
+                        user_id BIGINT,
+                        username TEXT,
+                        reason TEXT,
+                        duration_days INTEGER, -- NULL이면 무제한
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP,
+                        created_by BIGINT, -- 관리자 ID
+                        is_active BOOLEAN DEFAULT TRUE,
+                        UNIQUE(user_id)
+                    )
+                ''')
+                
                 self._add_column_if_not_exists(cursor, 'affinity', 'last_quest_reward_date', 'DATE')
                 self._add_column_if_not_exists(cursor, 'user_cards', 'acquired_at', 'TIMESTAMP WITH TIME ZONE')
                 self._add_column_if_not_exists(cursor, 'affinity', 'highest_milestone_achieved', 'INTEGER DEFAULT 0')
