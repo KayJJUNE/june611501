@@ -428,6 +428,21 @@ def create_all_tables():
                     FOREIGN KEY (session_id) REFERENCES roleplay_sessions(session_id) ON DELETE CASCADE
                 )
             ''')
+            # blacklist 테이블 추가
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS blacklist (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    username TEXT,
+                    reason TEXT,
+                    duration_days INTEGER, -- NULL이면 무제한
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    created_by BIGINT, -- 관리자 ID
+                    is_active BOOLEAN DEFAULT TRUE,
+                    UNIQUE(user_id)
+                )
+            ''')
             conn.commit()
     except Exception as e:
         print(f"⚠️ 데이터베이스 연결 실패: {e}")

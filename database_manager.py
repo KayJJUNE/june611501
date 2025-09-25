@@ -42,6 +42,18 @@ class DatabaseManager:
         self.default_language = "en"
         print("DatabaseManager initialized.")
         self.setup_database()
+        
+        # 데이터베이스 연결 실패 시에도 블랙리스트 메서드들이 작동하도록 기본 메서드 추가
+        if not hasattr(self, 'is_user_blacklisted'):
+            self.is_user_blacklisted = lambda user_id: {'is_blacklisted': False}
+        if not hasattr(self, 'add_to_blacklist'):
+            self.add_to_blacklist = lambda *args: False
+        if not hasattr(self, 'remove_from_blacklist'):
+            self.remove_from_blacklist = lambda *args: False
+        if not hasattr(self, 'get_blacklist_users'):
+            self.get_blacklist_users = lambda: []
+        if not hasattr(self, 'cleanup_expired_blacklist'):
+            self.cleanup_expired_blacklist = lambda: 0
 
     def get_connection(self):
         """데이터베이스 연결을 가져옵니다."""
@@ -227,25 +239,22 @@ class DatabaseManager:
         finally:
             self.return_connection(conn)
 
-    def check_daily_quest(self, user_id: int, quest_id: str) -> bool:
-        """daily_quest_progress 테이블에서 퀘스트 완료 상태를 확인합니다."""
+    def check_daily_quest(self, user_id: int, character_name: str) -> bool:
         conn = None
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
                 today = get_today_cst()
-                # context 컬럼 없이 작동하도록 수정
-                cursor.execute("""
-                    SELECT completed FROM daily_quest_progress 
-                    WHERE user_id = %s AND quest_date = %s
-                """, (user_id, today))
-                
+                cursor.execute("SELECT daily_message_count, last_quest_reward_date FROM affinity WHERE user_id = %s AND character_name = %s", (user_id, character_name))
                 result = cursor.fetchone()
+
                 if result:
-                    return result[0]  # completed 값 반환
+                    daily_count, last_reward_date = result
+                    if daily_count >= 20 and last_reward_date != today:
+                        return True
                 return False
         except Exception as e:
-            print(f"Error checking daily quest progress: {e}")
+            print(f"Error checking daily quest: {e}")
             return False
         finally:
             self.return_connection(conn)
@@ -1184,14 +1193,18 @@ class DatabaseManager:
         try:
             conn = self.get_connection()
             with conn.cursor() as cursor:
+                today_cst = get_today_cst()
+                print(f"[DEBUG] record_card_share - 사용자: {user_id}, 캐릭터: {character_name}, 카드: {card_id}, 날짜: {today_cst}")
+                
                 # 'card_share' 이벤트 기록
                 cursor.execute("""
                     INSERT INTO user_quest_events (user_id, event_type, event_date, character_name, card_id)
                     VALUES (%s, 'card_share', %s, %s, %s)
-                """, (user_id, get_today_cst(), character_name, card_id))
+                """, (user_id, today_cst, character_name, card_id))
             conn.commit()
+            print(f"[DEBUG] record_card_share - 성공적으로 기록됨")
         except Exception as e:
-            print(f"Error in record_card_share: {e}")
+            print(f"[ERROR] record_card_share 실패: {e}")
             if conn: conn.rollback()
         finally:
             self.return_connection(conn)
@@ -1208,6 +1221,8 @@ class DatabaseManager:
                 start_of_week = today_cst - timedelta(days=today_cst.weekday())
                 end_of_week = start_of_week + timedelta(days=6)
                 
+                print(f"[DEBUG] get_card_shared_this_week - 사용자: {user_id}, 이번 주: {start_of_week} ~ {end_of_week}")
+                
                 cursor.execute(
                     """
                     SELECT COUNT(*) FROM user_quest_events
@@ -1216,7 +1231,8 @@ class DatabaseManager:
                     (user_id, start_of_week, end_of_week)
                 )
                 count = cursor.fetchone()[0]
-                return 1 if count > 0 else 0
+                print(f"[DEBUG] get_card_shared_this_week - 카드 공유 이벤트 수: {count}")
+                return count
         except Exception as e:
             print(f"Error checking weekly card share: {e}")
             return 0
@@ -1447,7 +1463,6 @@ class DatabaseManager:
             today = get_today_cst()
             conn = self.get_connection()
             with conn.cursor() as cursor:
-                # context 컬럼 없이 작동하도록 수정
                 cursor.execute("""
                     INSERT INTO daily_quest_progress (user_id, quest_date, completed, reward_claimed, completed_at)
                     VALUES (%s, %s, %s, %s, %s)
@@ -1455,14 +1470,9 @@ class DatabaseManager:
                     DO UPDATE SET completed = %s, reward_claimed = %s, completed_at = %s
                 """, (user_id, today, completed, reward_claimed, datetime.now(), completed, reward_claimed, datetime.now()))
             conn.commit()
-            print(f"[DEBUG] Successfully recorded daily quest progress: user_id={user_id}, quest_id={quest_id}, completed={completed}, reward_claimed={reward_claimed}")
-            return True
         except Exception as e:
             print(f"Error recording daily quest progress: {e}")
-            import traceback
-            traceback.print_exc()
             if conn: conn.rollback()
-            return False
         finally:
             self.return_connection(conn)
 
@@ -2197,16 +2207,16 @@ class DatabaseManager:
 
     # === 롤플레잉 관련 메서드들 ===
     
-    def create_roleplay_session(self, session_id, user_id, character_name, mode, user_role, character_role, story_line, channel_id=None):
+    def create_roleplay_session(self, session_id, user_id, character_name, mode, user_role, character_role, story_line):
         """롤플레잉 세션을 생성합니다."""
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         INSERT INTO roleplay_sessions 
-                        (session_id, user_id, character_name, mode, user_role, character_role, story_line, channel_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (session_id, user_id, character_name, mode, user_role, character_role, story_line, channel_id))
+                        (session_id, user_id, character_name, mode, user_role, character_role, story_line)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (session_id, user_id, character_name, mode, user_role, character_role, story_line))
                     conn.commit()
                     return True
         except Exception as e:
@@ -2276,7 +2286,7 @@ class DatabaseManager:
             print(f"Error ending roleplay session: {e}")
             return False
     
-    def save_roleplay_message(self, session_id, user_message, character_response, message_count, turn_count=None):
+    def save_roleplay_message(self, session_id, user_message, character_response, message_count):
         """롤플레잉 대화를 저장합니다."""
         try:
             with self.get_connection() as conn:
@@ -2286,14 +2296,6 @@ class DatabaseManager:
                         (session_id, user_message, character_response, message_count)
                         VALUES (%s, %s, %s, %s)
                     """, (session_id, user_message, character_response, message_count))
-                    
-                    # turn_count가 제공된 경우 roleplay_sessions 테이블도 업데이트
-                    if turn_count is not None:
-                        cursor.execute("""
-                            UPDATE roleplay_sessions 
-                            SET turn_count = %s 
-                            WHERE session_id = %s
-                        """, (turn_count, session_id))
                     conn.commit()
                     return True
         except Exception as e:
@@ -2323,136 +2325,185 @@ class DatabaseManager:
             print(f"Error getting roleplay history: {e}")
             return []
     
-    def reset_user_character_affinity(self, user_id: int, character_name: str) -> bool:
-        """특정 사용자의 특정 캐릭터 호감도를 리셋합니다."""
-        conn = None
-        try:
-            conn = self.get_connection()
-            with conn.cursor() as cursor:
-                # 특정 캐릭터의 호감도만 리셋
-                cursor.execute("""
-                    UPDATE affinity 
-                    SET emotion_score = 0, 
-                        daily_message_count = 0, 
-                        last_message = 'Reset by admin',
-                        last_message_time = NOW(),
-                        highest_milestone = 0
-                    WHERE user_id = %s AND character_name = %s
-                """, (user_id, character_name))
-                
-                # 해당 캐릭터의 호감도 레코드가 없으면 새로 생성
-                if cursor.rowcount == 0:
-                    cursor.execute("""
-                        INSERT INTO affinity (user_id, character_name, emotion_score, daily_message_count, last_message, last_message_time, highest_milestone)
-                        VALUES (%s, %s, 0, 0, 'Reset by admin', NOW(), 0)
-                    """, (user_id, character_name))
-                
-                conn.commit()
-                print(f"[DEBUG] Successfully reset affinity for user {user_id} and character {character_name}")
-                return True
-        except Exception as e:
-            print(f"Error resetting user character affinity: {e}")
-            if conn: conn.rollback()
-            return False
-        finally:
-            self.return_connection(conn)
+    # ====== 블랙리스트 관리 함수들 ======
     
-    def reset_user_affinity(self, user_id: int) -> bool:
-        """특정 사용자의 모든 캐릭터 호감도를 리셋합니다."""
-        conn = None
+    def add_to_blacklist(self, user_id: int, username: str, reason: str, duration_days: int, created_by: int):
+        """사용자를 블랙리스트에 추가합니다."""
         try:
             conn = self.get_connection()
-            with conn.cursor() as cursor:
-                # 모든 캐릭터의 호감도 리셋
+            cursor = conn.cursor()
+            
+            # 만료 시간 계산 (UTC+8 기준)
+            from datetime import datetime, timedelta
+            import pytz
+            
+            utc_plus_8 = pytz.timezone('Asia/Shanghai')
+            now = datetime.now(utc_plus_8)
+            
+            if duration_days is None:  # 무제한
+                expires_at = None
+            else:
+                expires_at = now + timedelta(days=duration_days)
+            
+            # 기존 블랙리스트가 있는지 확인
+            cursor.execute("SELECT id FROM blacklist WHERE user_id = %s AND is_active = TRUE", (user_id,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # 기존 블랙리스트 업데이트
                 cursor.execute("""
-                    UPDATE affinity 
-                    SET emotion_score = 0, 
-                        daily_message_count = 0, 
-                        last_message = 'Reset by admin',
-                        last_message_time = NOW(),
-                        highest_milestone = 0
-                    WHERE user_id = %s
-                """, (user_id,))
-                
-                conn.commit()
-                print(f"[DEBUG] Successfully reset all affinity for user {user_id}")
-                return True
-        except Exception as e:
-            print(f"Error resetting user affinity: {e}")
-            if conn: conn.rollback()
-            return False
-        finally:
+                    UPDATE blacklist 
+                    SET username = %s, reason = %s, duration_days = %s, 
+                        expires_at = %s, created_by = %s, created_at = %s
+                    WHERE user_id = %s AND is_active = TRUE
+                """, (username, reason, duration_days, expires_at, created_by, now, user_id))
+            else:
+                # 새 블랙리스트 추가
+                cursor.execute("""
+                    INSERT INTO blacklist (user_id, username, reason, duration_days, expires_at, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (user_id, username, reason, duration_days, expires_at, created_by))
+            
+            conn.commit()
+            cursor.close()
             self.return_connection(conn)
-    
-    def is_roleplay_mode_completed(self, user_id: int, mode: str) -> bool:
-        """특정 모드의 롤플레잉이 완료되었는지 확인합니다 (100턴 완료)."""
-        conn = None
-        try:
-            conn = self.get_connection()
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT COUNT(*) FROM roleplay_sessions 
-                    WHERE user_id = %s AND mode = %s AND turn_count >= 100
-                """, (user_id, mode))
-                result = cursor.fetchone()
-                return result[0] > 0 if result else False
+            return True
         except Exception as e:
-            print(f"Error checking roleplay mode completion: {e}")
+            print(f"Error adding to blacklist: {e}")
             return False
-        finally:
-            self.return_connection(conn)
     
-    def get_roleplay_play_count(self, user_id: int) -> int:
-        """사용자의 롤플레잉 플레이 횟수를 반환합니다."""
-        conn = None
+    def remove_from_blacklist(self, user_id: int):
+        """사용자를 블랙리스트에서 제거합니다."""
         try:
             conn = self.get_connection()
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT COUNT(*) FROM roleplay_sessions 
-                    WHERE user_id = %s
-                """, (user_id,))
-                result = cursor.fetchone()
-                return result[0] if result else 0
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE blacklist 
+                SET is_active = FALSE 
+                WHERE user_id = %s AND is_active = TRUE
+            """, (user_id,))
+            
+            conn.commit()
+            cursor.close()
+            self.return_connection(conn)
+            return True
         except Exception as e:
-            print(f"Error getting roleplay play count: {e}")
+            print(f"Error removing from blacklist: {e}")
+            return False
+    
+    def is_user_blacklisted(self, user_id: int):
+        """사용자가 블랙리스트에 있는지 확인합니다."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # 만료된 블랙리스트 자동 제거
+            from datetime import datetime
+            import pytz
+            utc_plus_8 = pytz.timezone('Asia/Shanghai')
+            now = datetime.now(utc_plus_8)
+            
+            cursor.execute("""
+                UPDATE blacklist 
+                SET is_active = FALSE 
+                WHERE user_id = %s AND expires_at IS NOT NULL AND expires_at < %s AND is_active = TRUE
+            """, (user_id, now))
+            
+            # 현재 활성 블랙리스트 확인
+            cursor.execute("""
+                SELECT id, username, reason, duration_days, expires_at, created_at
+                FROM blacklist 
+                WHERE user_id = %s AND is_active = TRUE
+            """, (user_id,))
+            
+            result = cursor.fetchone()
+            conn.commit()
+            cursor.close()
+            self.return_connection(conn)
+            
+            if result:
+                return {
+                    'is_blacklisted': True,
+                    'username': result[1],
+                    'reason': result[2],
+                    'duration_days': result[3],
+                    'expires_at': result[4],
+                    'created_at': result[5]
+                }
+            return {'is_blacklisted': False}
+        except Exception as e:
+            print(f"Error checking blacklist: {e}")
+            return {'is_blacklisted': False}
+    
+    def get_blacklist_users(self):
+        """현재 블랙리스트에 있는 모든 사용자를 반환합니다."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # 만료된 블랙리스트 자동 제거
+            from datetime import datetime
+            import pytz
+            utc_plus_8 = pytz.timezone('Asia/Shanghai')
+            now = datetime.now(utc_plus_8)
+            
+            cursor.execute("""
+                UPDATE blacklist 
+                SET is_active = FALSE 
+                WHERE expires_at IS NOT NULL AND expires_at < %s AND is_active = TRUE
+            """, (now,))
+            
+            # 현재 활성 블랙리스트 조회
+            cursor.execute("""
+                SELECT user_id, username, reason, duration_days, expires_at, created_at, created_by
+                FROM blacklist 
+                WHERE is_active = TRUE
+                ORDER BY created_at DESC
+            """)
+            
+            results = cursor.fetchall()
+            conn.commit()
+            cursor.close()
+            self.return_connection(conn)
+            
+            return [{
+                'user_id': row[0],
+                'username': row[1],
+                'reason': row[2],
+                'duration_days': row[3],
+                'expires_at': row[4],
+                'created_at': row[5],
+                'created_by': row[6]
+            } for row in results]
+        except Exception as e:
+            print(f"Error getting blacklist users: {e}")
+            return []
+    
+    def cleanup_expired_blacklist(self):
+        """만료된 블랙리스트를 정리합니다."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            from datetime import datetime
+            import pytz
+            utc_plus_8 = pytz.timezone('Asia/Shanghai')
+            now = datetime.now(utc_plus_8)
+            
+            cursor.execute("""
+                UPDATE blacklist 
+                SET is_active = FALSE 
+                WHERE expires_at IS NOT NULL AND expires_at < %s AND is_active = TRUE
+            """, (now,))
+            
+            affected_rows = cursor.rowcount
+            conn.commit()
+            cursor.close()
+            self.return_connection(conn)
+            
+            return affected_rows
+        except Exception as e:
+            print(f"Error cleaning up expired blacklist: {e}")
             return 0
-        finally:
-            self.return_connection(conn)
-    
-    def record_roleplay_completion(self, user_id: int, mode: str, turn_count: int) -> bool:
-        """롤플레잉 완료를 기록합니다."""
-        conn = None
-        try:
-            conn = self.get_connection()
-            with conn.cursor() as cursor:
-                # 롤플레잉 완료 기록 테이블이 없으면 생성
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS roleplay_completions (
-                        id SERIAL PRIMARY KEY,
-                        user_id BIGINT NOT NULL,
-                        mode VARCHAR(50) NOT NULL,
-                        turn_count INTEGER NOT NULL,
-                        completed_at TIMESTAMP DEFAULT NOW(),
-                        UNIQUE(user_id, mode)
-                    )
-                """)
-                
-                # 완료 기록 추가 (중복 방지)
-                cursor.execute("""
-                    INSERT INTO roleplay_completions (user_id, mode, turn_count)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (user_id, mode) DO UPDATE SET
-                        turn_count = GREATEST(roleplay_completions.turn_count, EXCLUDED.turn_count),
-                        completed_at = NOW()
-                """, (user_id, mode, turn_count))
-                
-                conn.commit()
-                return True
-        except Exception as e:
-            print(f"Error recording roleplay completion: {e}")
-            if conn: conn.rollback()
-            return False
-        finally:
-            self.return_connection(conn)
     
