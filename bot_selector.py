@@ -887,6 +887,24 @@ class BotSelector(commands.Bot):
         
         # Cog 로드를 제거하고, 명령어는 setup_commands에서 직접 등록
         await self.tree.sync()
+        
+        # 자동 블랙리스트 정리 작업 시작
+        asyncio.create_task(self.blacklist_cleanup_task())
+
+    async def blacklist_cleanup_task(self):
+        """자동 블랙리스트 정리 작업 (매 시간마다 실행)"""
+        while True:
+            try:
+                # 1시간마다 실행
+                await asyncio.sleep(3600)
+                
+                # 만료된 블랙리스트 정리
+                cleaned_count = self.db.cleanup_expired_blacklist()
+                if cleaned_count > 0:
+                    print(f"✅ Cleaned up {cleaned_count} expired blacklist entries.")
+                    
+            except Exception as e:
+                print(f"Error in blacklist cleanup task: {e}")
 
     def load_active_channels(self):
         """데이터베이스에서 활성 채널 정보를 불러옵니다."""
@@ -1514,6 +1532,19 @@ class BotSelector(commands.Bot):
                 embed.add_field(name="🧪 Test Payment", value="Test payment success DM", inline=True)
                 embed.add_field(name="🔗 Payment Webhook", value="Process payment webhook", inline=True)
                 await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            
+            @discord.ui.button(label="🚫 Blacklist Management", style=discord.ButtonStyle.danger, emoji="🚫")
+            async def blacklist_management(self, interaction: discord.Interaction, button: discord.ui.Button):
+                view = BlacklistManagementView(self.db, self.bot_selector)
+                embed = discord.Embed(
+                    title="🚫 Blacklist Management",
+                    description="Select the blacklist management function you want to use.",
+                    color=discord.Color.dark_red()
+                )
+                embed.add_field(name="➕ Add to Blacklist", value="Add user to blacklist", inline=True)
+                embed.add_field(name="➖ Remove from Blacklist", value="Remove user from blacklist", inline=True)
+                embed.add_field(name="📋 View Blacklist", value="View current blacklist", inline=True)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
         # Status & Settings View
         class StatusSettingsView(discord.ui.View):
@@ -1964,6 +1995,201 @@ class BotSelector(commands.Bot):
                     print(f"Error in payment_webhook: {e}")
                     await interaction.response.send_message("❌ An error occurred while processing webhook data.", ephemeral=True)
 
+        # Blacklist Management View
+        class BlacklistManagementView(discord.ui.View):
+            def __init__(self, db, bot_selector):
+                super().__init__(timeout=300)
+                self.db = db
+                self.bot_selector = bot_selector
+            
+            @discord.ui.button(label="➕ Add to Blacklist", style=discord.ButtonStyle.danger, emoji="➕")
+            async def add_to_blacklist(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = AddBlacklistModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="➖ Remove from Blacklist", style=discord.ButtonStyle.success, emoji="➖")
+            async def remove_from_blacklist(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = RemoveBlacklistModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="📋 View Blacklist", style=discord.ButtonStyle.primary, emoji="📋")
+            async def view_blacklist(self, interaction: discord.Interaction, button: discord.ui.Button):
+                try:
+                    # 만료된 블랙리스트 정리
+                    self.db.cleanup_expired_blacklist()
+                    
+                    # 현재 블랙리스트 조회
+                    blacklist_users = self.db.get_blacklist_users()
+                    
+                    if not blacklist_users:
+                        embed = discord.Embed(
+                            title="📋 Current Blacklist",
+                            description="No users are currently blacklisted.",
+                            color=discord.Color.green()
+                        )
+                    else:
+                        embed = discord.Embed(
+                            title="📋 Current Blacklist",
+                            description=f"Total blacklisted users: {len(blacklist_users)}",
+                            color=discord.Color.red()
+                        )
+                        
+                        for i, user in enumerate(blacklist_users[:10], 1):  # 최대 10명만 표시
+                            duration_text = "Permanent" if user['duration_days'] is None else f"{user['duration_days']} days"
+                            expires_text = "Never" if user['expires_at'] is None else user['expires_at'].strftime("%Y-%m-%d %H:%M:%S UTC+8")
+                            
+                            embed.add_field(
+                                name=f"{i}. User ID: {user['user_id']}",
+                                value=f"**Username:** {user['username']}\n**Reason:** {user['reason']}\n**Duration:** {duration_text}\n**Expires:** {expires_text}",
+                                inline=False
+                            )
+                        
+                        if len(blacklist_users) > 10:
+                            embed.set_footer(text=f"... and {len(blacklist_users) - 10} more users")
+                    
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                except Exception as e:
+                    print(f"Error viewing blacklist: {e}")
+                    await interaction.response.send_message("❌ An error occurred while viewing blacklist.", ephemeral=True)
+
+        # Add to Blacklist Modal
+        class AddBlacklistModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="➕ Add User to Blacklist")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="User ID or Username",
+                    placeholder="Enter Discord user ID or username",
+                    required=True,
+                    max_length=100
+                ))
+                
+                self.add_item(discord.ui.TextInput(
+                    label="Reason",
+                    placeholder="Enter reason for blacklisting",
+                    required=True,
+                    max_length=500
+                ))
+                
+                self.add_item(discord.ui.TextInput(
+                    label="Duration (days)",
+                    placeholder="Enter duration in days (1, 3, 7) or 'permanent' for unlimited",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_input = self.children[0].value.strip()
+                    reason = self.children[1].value.strip()
+                    duration_input = self.children[2].value.strip().lower()
+                    
+                    # Duration 처리
+                    if duration_input == "permanent":
+                        duration_days = None
+                    else:
+                        try:
+                            duration_days = int(duration_input)
+                            if duration_days not in [1, 3, 7]:
+                                await interaction.response.send_message("❌ Duration must be 1, 3, 7 days or 'permanent'.", ephemeral=True)
+                                return
+                        except ValueError:
+                            await interaction.response.send_message("❌ Invalid duration format. Use 1, 3, 7 or 'permanent'.", ephemeral=True)
+                            return
+                    
+                    # 사용자 ID 파싱
+                    user_id = None
+                    username = user_input
+                    
+                    try:
+                        # 숫자로 시작하면 ID로 간주
+                        if user_input.isdigit():
+                            user_id = int(user_input)
+                            # Discord에서 사용자 정보 가져오기
+                            try:
+                                user = await interaction.client.fetch_user(user_id)
+                                username = user.display_name or user.name
+                            except:
+                                username = f"Unknown User ({user_id})"
+                        else:
+                            # @username 형식 처리
+                            if user_input.startswith('<@') and user_input.endswith('>'):
+                                user_id = int(user_input[2:-1])
+                                try:
+                                    user = await interaction.client.fetch_user(user_id)
+                                    username = user.display_name or user.name
+                                except:
+                                    username = f"Unknown User ({user_id})"
+                            else:
+                                await interaction.response.send_message("❌ Please enter a valid Discord user ID or @username.", ephemeral=True)
+                                return
+                    except ValueError:
+                        await interaction.response.send_message("❌ Invalid user ID format.", ephemeral=True)
+                        return
+                    
+                    # 블랙리스트에 추가
+                    success = self.db.add_to_blacklist(
+                        user_id=user_id,
+                        username=username,
+                        reason=reason,
+                        duration_days=duration_days,
+                        created_by=interaction.user.id
+                    )
+                    
+                    if success:
+                        duration_text = "Permanent" if duration_days is None else f"{duration_days} days"
+                        await interaction.response.send_message(
+                            f"✅ User {username} (ID: {user_id}) has been added to blacklist for {duration_text}.\n**Reason:** {reason}",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.response.send_message("❌ Failed to add user to blacklist.", ephemeral=True)
+                        
+                except Exception as e:
+                    print(f"Error adding to blacklist: {e}")
+                    await interaction.response.send_message("❌ An error occurred while adding user to blacklist.", ephemeral=True)
+
+        # Remove from Blacklist Modal
+        class RemoveBlacklistModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="➖ Remove User from Blacklist")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter Discord user ID to remove from blacklist",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_input = self.children[0].value.strip()
+                    
+                    try:
+                        user_id = int(user_input)
+                    except ValueError:
+                        await interaction.response.send_message("❌ Please enter a valid user ID.", ephemeral=True)
+                        return
+                    
+                    # 블랙리스트에서 제거
+                    success = self.db.remove_from_blacklist(user_id)
+                    
+                    if success:
+                        await interaction.response.send_message(
+                            f"✅ User ID {user_id} has been removed from blacklist.",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.response.send_message("❌ User was not found in blacklist or already removed.", ephemeral=True)
+                        
+                except Exception as e:
+                    print(f"Error removing from blacklist: {e}")
+                    await interaction.response.send_message("❌ An error occurred while removing user from blacklist.", ephemeral=True)
+
         @self.admin_group.command(
             name="add_role",
             description="Add an admin role"
@@ -2317,6 +2543,25 @@ class BotSelector(commands.Bot):
         )
         async def bot_command(interaction: discord.Interaction):
             try:
+                # 블랙리스트 체크
+                blacklist_info = self.db.is_user_blacklisted(interaction.user.id)
+                if blacklist_info['is_blacklisted']:
+                    duration_text = "Permanent" if blacklist_info['duration_days'] is None else f"{blacklist_info['duration_days']} days"
+                    expires_text = "Never" if blacklist_info['expires_at'] is None else blacklist_info['expires_at'].strftime("%Y-%m-%d %H:%M:%S UTC+8")
+                    
+                    embed = discord.Embed(
+                        title="🚫 Access Denied",
+                        description="You have been blacklisted and cannot use this bot.",
+                        color=discord.Color.red()
+                    )
+                    embed.add_field(name="Reason", value=blacklist_info['reason'], inline=False)
+                    embed.add_field(name="Duration", value=duration_text, inline=True)
+                    embed.add_field(name="Expires", value=expires_text, inline=True)
+                    embed.add_field(name="Contact", value="Please contact an administrator or moderator for assistance.", inline=False)
+                    
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    return
+                
                 # DM에서 사용하는 경우
                 if isinstance(interaction.channel, discord.DMChannel):
                     user_id = interaction.user.id
@@ -2533,143 +2778,6 @@ class BotSelector(commands.Bot):
                     await interaction.response.send_message("An error occurred while loading ranking information.", ephemeral=True)
                 else:
                     await interaction.followup.send("An error occurred while loading ranking information.", ephemeral=True)
-
-        @self.tree.command(
-            name="affinity",
-            description="Check your current affinity with the character"
-        )
-        async def affinity_command(interaction: discord.Interaction):
-            try:
-                print("\n[Affinity check started]")
-                user_id = interaction.user.id
-                character_name = None
-                
-                # DM에서 사용하는 경우
-                if isinstance(interaction.channel, discord.DMChannel):
-                    if user_id not in self.dm_sessions or 'character_name' not in self.dm_sessions[user_id]:
-                        await interaction.response.send_message("❌ Please select a character first using the `/bot` command.", ephemeral=True)
-                        return
-                    character_name = self.dm_sessions[user_id]['character_name']
-                else:
-                    # 서버 채널에서 사용하는 경우
-                    if not isinstance(interaction.channel, discord.TextChannel):
-                        await interaction.response.send_message("This command can only be used in server channels or DM.", ephemeral=True)
-                        return
-                    
-                    # Find the character bot for the current channel
-                    current_bot = None
-                    for char_name, bot in self.character_bots.items():
-                        if interaction.channel.id in bot.active_channels:
-                            current_bot = bot
-                            break
-
-                    if not current_bot:
-                        await interaction.response.send_message("This command can only be used in character chat channels.", ephemeral=True)
-                        return
-                    
-                    character_name = current_bot.character_name
-
-                print(f"Character name: {character_name}")
-
-                # Get affinity info
-                affinity_info = self.db.get_affinity(interaction.user.id, character_name)
-                print(f"Affinity info: {affinity_info}")
-
-                if not affinity_info:
-                    current_affinity = 0
-                    affinity_grade = get_affinity_grade(0)
-                    daily_message_count = 0
-                    last_message_time = "N/A"
-                else:
-                    current_affinity = affinity_info['emotion_score']
-                    affinity_grade = get_affinity_grade(current_affinity)
-                    daily_message_count = affinity_info['daily_message_count']
-                    last_message_time = affinity_info.get('last_message_time', "N/A")
-
-                # Grade emoji mapping
-                grade_emoji = {
-                    "Rookie": "🌱",
-                    "Iron": "⚔️",
-                    "Bronze": "🥉",
-                    "Silver": "🥈",
-                    "Gold": "🏆"
-                }
-
-                # Affinity embed
-                char_info = CHARACTER_INFO.get(character_name, {})
-                char_color = char_info.get('color', discord.Color.purple())
-
-                embed = discord.Embed(
-                    title=f"{char_info.get('emoji', '💝')} Affinity for {interaction.user.display_name}",
-                    description=f"Affinity information with {char_info.get('name', character_name)}.",
-                    color=char_color
-                )
-
-                embed.add_field(
-                    name="Affinity Score",
-                    value=f"```{current_affinity} points```",
-                    inline=True
-                )
-                embed.add_field(
-                    name="Today's Conversations",
-                    value=f"```{daily_message_count} times```",
-                    inline=True
-                )
-                embed.add_field(
-                    name="Affinity Grade",
-                    value=f"{grade_emoji.get(affinity_grade, '❓')} **{affinity_grade}**",
-                    inline=True
-                )
-
-                if last_message_time and last_message_time != "N/A":
-                    try:
-                        # last_message_time이 이미 datetime 객체인지 확인
-                        if isinstance(last_message_time, datetime):
-                            formatted_time = last_message_time.strftime('%Y-%m-%d %H:%M')
-                        else:
-                            # 문자열인 경우 기존 로직 사용
-                            last_time_str = last_message_time.split('.')[0]
-                            last_time = datetime.strptime(last_time_str, '%Y-%m-%d %H:%M:%S')
-                            formatted_time = last_time.strftime('%Y-%m-%d %H:%M')
-
-                        embed.add_field(
-                            name="Last Conversation",
-                            value=f"```{formatted_time}```",
-                            inline=False
-                        )
-                    except Exception as e:
-                        print(f"Date parsing error: {e}")
-                        embed.add_field(
-                            name="Last Conversation",
-                            value=f"```{last_message_time}```",
-                            inline=False
-                        )
-                else:
-                    embed.add_field(
-                        name="Last Conversation",
-                        value=f"```N/A```",
-                        inline=False
-                    )
-
-                print("Embed created")
-
-                # Get the correct image URL from config.py
-                char_image_url = CHARACTER_IMAGES.get(character_name)
-                if char_image_url:
-                    embed.set_thumbnail(url=char_image_url)
-
-                await interaction.response.send_message(embed=embed)
-
-                print("[Affinity check complete]")
-
-            except Exception as e:
-                print(f"Error during affinity command: {e}")
-                import traceback
-                print(traceback.format_exc())
-                try:
-                    await interaction.response.send_message("An error occurred while loading affinity information.", ephemeral=True)
-                except:
-                    await interaction.followup.send("An error occurred while loading affinity information.", ephemeral=True)
 
         @self.tree.command(
             name="info",
@@ -3147,7 +3255,7 @@ class BotSelector(commands.Bot):
                         embed.add_field(name="How to Talk with Characters", value="- Use /bot to create a private chat channel with a character like Kagari or Eros.\n- Supports multilingual input (EN/JP/ZH), responses are always in English.\n- Characters react to your emotions, tone, and depth of conversation.\n🧠 Pro Tip: The more emotionally engaging your dialogue, the faster you grow your bond!", inline=False)
                     elif topic == "affinity":
                         embed.title = "❤️ Affinity & Level System"
-                        embed.add_field(name="Level Up with Conversations", value="- Rookie (0-9): Basic chat only.\n- ⚔️ Iron (10-29): Unlock basic emotions & C-rank cards.\n- 🥉 Bronze (30-49): B/C cards & more emotions.\n- Silver (50-99): A/B/C cards & story mood options.\n- Gold (100+): S-tier chance & story unlock.\nCommand: /affinity to check your current level, progress, and daily message stats.", inline=False)
+                        embed.add_field(name="Level Up with Conversations", value="- Rookie (0-9): Basic chat only.\n- ⚔️ Iron (10-29): Unlock basic emotions & C-rank cards.\n- 🥉 Bronze (30-49): B/C cards & more emotions.\n- Silver (50-99): A/B/C cards & story mood options.\n- Gold (100+): S-tier chance & story unlock.\nCommand: /info to check your current level, progress, and daily message stats.", inline=False)
                     elif topic == "card":
                         embed.title = "🎴 Card & Reward System"
                         embed.add_field(name="How to Earn & Collect Cards", value="You earn cards through:\n- 🗣️ Emotional chat: score-based triggers (10/20/30)\n- 🎮 Story Mode completions\n- ❤️ Affinity milestone bonuses\nCard Tier Example (Gold user):\n- A (20%) / B (30%) / C (50%)\n- Gold+ user: S (10%) / A (20%) / B (30%) / C (40%)\n📜 Use /mycard to view your collection.", inline=False)
@@ -3159,13 +3267,13 @@ class BotSelector(commands.Bot):
                         embed.add_field(name="How Rankings Work", value="Rankings are based on:\n1. Total affinity across all characters\n2. Daily conversation count\n3. Story mode completion\n\nCheck your rank with /ranking", inline=False)
                     elif topic == "dm":
                         embed.title = "💬 DM Usage Guide"
-                        embed.add_field(name="How to Use in DMs", value="1. **Start a DM**: Send any message to the bot in DMs\n2. **Select Character**: Use `/bot` command to choose a character\n3. **Start Chatting**: Talk freely with your chosen character\n4. **Session Timeout**: 30 minutes of inactivity will end the session\n\n**Available Commands in DM:**\n• `/bot` - Select character\n• `/affinity` - Check affinity\n• `/mycard` - View cards\n• `/quest` - Check quests\n• `/help` - Show this help", inline=False)
+                        embed.add_field(name="How to Use in DMs", value="1. **Start a DM**: Send any message to the bot in DMs\n2. **Select Character**: Use `/bot` command to choose a character\n3. **Start Chatting**: Talk freely with your chosen character\n4. **Session Timeout**: 30 minutes of inactivity will end the session\n\n**Available Commands in DM:**\n• `/bot` - Select character\n• `/info` - Check affinity and cards\n• `/mycard` - View cards\n• `/quest` - Check quests\n• `/help` - Show this help", inline=False)
                         embed.add_field(name="💡 Tips", value="• DM allows more private conversations\n• All features work the same as in servers\n• Characters remember your conversation context\n• You can switch characters anytime with `/bot`", inline=False)
                     elif topic == "faq":
                         embed.title = "❓ FAQ"
                         embed.add_field(name="Q1: How can I get higher grade cards?", value="A: Card grades depend on your affinity level:\n- Iron: Mainly C cards (80%), small chance for B (20%)\n- Bronze: Better chance for B cards (30%)\n- Silver: Can get A cards (20%)\n- Gold: Can get S cards (10%)\nHigher affinity = better card chances!", inline=False)
                         embed.add_field(name="Q2: How are rewards calculated in Story Mode?", value="A: There are two score systems in Story Mode:\n- Mission Clear Logic: Each story has a mission goal. If you clear it, you're guaranteed an S-tier card.\n- Affinity Score Logic: Your outcome is affected by how close you are with the character.\nIf your crush score is too low, you may not receive a card at all. Higher crush = higher card tier and more beautiful card art!", inline=False)
-                        embed.add_field(name="Q3: What changes based on my Crush with the character?", value="A: Character tone, reaction, and card chances all change based on your Affinity level.\n- Higher Affinity = More natural or intimate dialogue\n- Higher Affinity = Better chance at A-tier or S-tier cards\n- Lower Affinity = Dull responses, chance of being rejected\nUse /affinity to track your current level with each character.", inline=False)
+                        embed.add_field(name="Q3: What changes based on my Crush with the character?", value="A: Character tone, reaction, and card chances all change based on your Affinity level.\n- Higher Affinity = More natural or intimate dialogue\n- Higher Affinity = Better chance at A-tier or S-tier cards\n- Lower Affinity = Dull responses, chance of being rejected\nUse /info to track your current level with each character.", inline=False)
                     await interaction2.response.send_message(embed=embed, ephemeral=True)
 
             class HelpView(discord.ui.View):
@@ -5650,7 +5758,7 @@ class BotSelector(commands.Bot):
         # 환영 메시지 전송
         embed = discord.Embed(
             title="🌸 Welcome to ZeroLink Chatbot!",
-            description="You can chat with the chatbot in DM as well.\n\n**How to use:**\n1. Select a character using the `/bot` command\n2. Chat freely with your selected character\n3. Sessions will automatically end after 30 minutes of inactivity\n\n**Available commands:**\n• `/bot` - Select character\n• `/affinity` - Check affinity\n• `/mycard` - Check owned cards\n• `/quest` - Check quests\n• `/help` - Help\n\n**💡 Tip:** You can use the same commands on the server!",
+            description="You can chat with the chatbot in DM as well.\n\n**How to use:**\n1. Select a character using the `/bot` command\n2. Chat freely with your selected character\n3. Sessions will automatically end after 30 minutes of inactivity\n\n**Available commands:**\n• `/bot` - Select character\n• `/info` - Check affinity and cards\n• `/mycard` - Check owned cards\n• `/quest` - Check quests\n• `/help` - Help\n\n**💡 Tip:** You can use the same commands on the server!",
             color=0xff69b4
         )
         embed.set_footer(text="ZeroLink 챗봇 DM 모드 • 서버와 DM 모두 지원")
@@ -6924,7 +7032,7 @@ class DMCharacterSelect(discord.ui.Select):
             
             embed = discord.Embed(
                 title=f"✅ {selected_character} Selection Complete!",
-                description=f"You can now chat freely with {selected_character} in DM.\n\n**Available commands:**\n• `/affinity` - Check affinity\n• `/mycard` - Check owned cards\n• `/quest` - Check quests\n• `/help` - Help",
+                description=f"You can now chat freely with {selected_character} in DM.\n\n**Available commands:**\n• `/info` - Check affinity and cards\n• `/mycard` - Check owned cards\n• `/quest` - Check quests\n• `/help` - Help",
                 color=0x00ff00
             )
             
