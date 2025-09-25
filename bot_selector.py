@@ -755,7 +755,7 @@ class BotSelector(commands.Bot):
         self.load_admin_channels()  # Load admin channels from database
         
         # Initialize admin command group (will be set up later)
-        self.admin_group = None
+        # admin_group 제거됨 - 개별 명령어로 변경
         
         # 명령어 설정 (admin_group 초기화 후)
         self.setup_commands()
@@ -938,22 +938,15 @@ class BotSelector(commands.Bot):
 
     def setup_admin_commands(self):
         """관리자 명령어들을 설정합니다."""
-        # 관리자 명령어 그룹 생성
-        self.admin_group = app_commands.Group(name="admin", description="Administrative commands")
-        # default_permissions 제거 - 개별 명령어에서 권한 체크
-        
-        # 관리자 명령어들을 그룹에 추가
+        # 관리자 명령어들을 개별 명령어로 등록
         self.add_admin_commands()
-        
-        # 그룹을 트리에 추가
-        self.tree.add_command(self.admin_group)
-        print("✅ Admin command group has been set up.")
+        print("✅ Admin commands have been set up as individual commands.")
 
     def add_admin_commands(self):
-        """관리자 명령어들을 그룹에 추가합니다."""
+        """관리자 명령어들을 개별 명령어로 등록합니다."""
         
-        @self.admin_group.command(
-            name="channel",
+        @self.tree.command(
+            name="admin_channel",
             description="Set admin-only channel for sensitive commands"
         )
         async def admin_channel_command(interaction: discord.Interaction, action: str = "add"):
@@ -985,8 +978,8 @@ class BotSelector(commands.Bot):
             else:
                 await interaction.response.send_message("❌ Invalid action. Use 'add', 'remove', or 'list'.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="settings",
+        @self.tree.command(
+            name="admin_settings",
             description="Check current settings"
         )
         async def settings_command(interaction: discord.Interaction):
@@ -1037,8 +1030,8 @@ class BotSelector(commands.Bot):
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        @self.admin_group.command(
-            name="status",
+        @self.tree.command(
+            name="admin_status",
             description="Check bot status and health"
         )
         async def status_command(interaction: discord.Interaction):
@@ -1099,8 +1092,8 @@ class BotSelector(commands.Bot):
                 await interaction.response.send_message("Error occurred while checking status.", ephemeral=True)
 
         # 추가 admin 명령어들
-        @self.admin_group.command(
-            name="reset_affinity",
+        @self.tree.command(
+            name="admin_reset_affinity",
             description="Reset user affinity"
         )
         async def reset_affinity(interaction: discord.Interaction, target: discord.Member = None):
@@ -1114,8 +1107,8 @@ class BotSelector(commands.Bot):
             else:
                 await interaction.response.send_message("❌ Please specify a target user.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="pop",
+        @self.tree.command(
+            name="admin_pop",
             description="Manually distribute items to users (Messages, Cards, Gifts, Affinity)"
         )
         async def pop_command(interaction: discord.Interaction):
@@ -2190,8 +2183,441 @@ class BotSelector(commands.Bot):
                     print(f"Error removing from blacklist: {e}")
                     await interaction.response.send_message("❌ An error occurred while removing user from blacklist.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="add_role",
+        # User Management View
+        class UserManagementView(discord.ui.View):
+            def __init__(self, db, bot_selector):
+                super().__init__(timeout=300)
+                self.db = db
+                self.bot_selector = bot_selector
+            
+            @discord.ui.button(label="💝 Reset Affinity", style=discord.ButtonStyle.secondary, emoji="💝")
+            async def reset_affinity(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = ResetAffinityModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="👑 Add Role", style=discord.ButtonStyle.success, emoji="👑")
+            async def add_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = AddRoleModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="❌ Remove Role", style=discord.ButtonStyle.danger, emoji="❌")
+            async def remove_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = RemoveRoleModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="📊 Set Daily Limit", style=discord.ButtonStyle.primary, emoji="📊")
+            async def set_daily_limit(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = SetDailyLimitModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="📖 Reset Story", style=discord.ButtonStyle.secondary, emoji="📖")
+            async def reset_story(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = ResetStoryModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="📝 Message Add", style=discord.ButtonStyle.primary, emoji="📝")
+            async def message_add(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = MessageAddModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="🎯 Reset Quest", style=discord.ButtonStyle.secondary, emoji="🎯")
+            async def reset_quest(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = ResetQuestModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+            
+            @discord.ui.button(label="🃏 Cleanup Cards", style=discord.ButtonStyle.secondary, emoji="🃏")
+            async def cleanup_cards(self, interaction: discord.Interaction, button: discord.ui.Button):
+                modal = CleanupCardsModal(self.db, self.bot_selector)
+                await interaction.response.send_modal(modal)
+
+        # Reset Affinity Modal
+        class ResetAffinityModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="💝 Reset User Affinity")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter Discord user ID to reset affinity",
+                    required=True,
+                    max_length=20
+                ))
+                
+                self.add_item(discord.ui.TextInput(
+                    label="Character Name",
+                    placeholder="Enter character name (kagari, eros, elysia) or 'all'",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_id = int(self.children[0].value.strip())
+                    character_name = self.children[1].value.strip().lower()
+                    
+                    # 사용자 존재 확인
+                    user = interaction.client.get_user(user_id)
+                    if not user:
+                        await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                        return
+                    
+                    # 친밀도 초기화
+                    if character_name == 'all':
+                        characters = ['kagari', 'eros', 'elysia']
+                        success_count = 0
+                        for char in characters:
+                            if self.db.reset_user_affinity(user_id, char):
+                                success_count += 1
+                        
+                        if success_count > 0:
+                            await interaction.response.send_message(
+                                f"✅ Reset affinity for user {user.mention} for {success_count} characters.",
+                                ephemeral=True
+                            )
+                        else:
+                            await interaction.response.send_message("❌ Failed to reset affinity.", ephemeral=True)
+                    else:
+                        if character_name not in ['kagari', 'eros', 'elysia']:
+                            await interaction.response.send_message("❌ Invalid character name. Use 'kagari', 'eros', 'elysia', or 'all'.", ephemeral=True)
+                            return
+                        
+                        success = self.db.reset_user_affinity(user_id, character_name)
+                        if success:
+                            await interaction.response.send_message(
+                                f"✅ Reset {character_name} affinity for user {user.mention}.",
+                                ephemeral=True
+                            )
+                        else:
+                            await interaction.response.send_message("❌ Failed to reset affinity.", ephemeral=True)
+                            
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter a valid user ID.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error resetting affinity: {e}")
+                    await interaction.response.send_message("❌ An error occurred while resetting affinity.", ephemeral=True)
+
+        # Add Role Modal
+        class AddRoleModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="👑 Add Admin Role")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="Role ID",
+                    placeholder="Enter Discord role ID to add as admin role",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    role_id = int(self.children[0].value.strip())
+                    
+                    # 역할 존재 확인
+                    role = interaction.guild.get_role(role_id)
+                    if not role:
+                        await interaction.response.send_message("❌ Role not found.", ephemeral=True)
+                        return
+                    
+                    # 관리자 역할 추가
+                    success = self.bot_selector.settings_manager.add_admin_role(role_id)
+                    if success:
+                        await interaction.response.send_message(
+                            f"✅ Role {role.mention} has been added as an admin role.",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.response.send_message("❌ Failed to add admin role.", ephemeral=True)
+                        
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter a valid role ID.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error adding role: {e}")
+                    await interaction.response.send_message("❌ An error occurred while adding role.", ephemeral=True)
+
+        # Remove Role Modal
+        class RemoveRoleModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="❌ Remove Admin Role")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="Role ID",
+                    placeholder="Enter Discord role ID to remove from admin roles",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    role_id = int(self.children[0].value.strip())
+                    
+                    # 관리자 역할 제거
+                    success = self.bot_selector.settings_manager.remove_admin_role(role_id)
+                    if success:
+                        await interaction.response.send_message(
+                            f"✅ Role ID {role_id} has been removed from admin roles.",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.response.send_message("❌ Role was not found in admin roles or already removed.", ephemeral=True)
+                        
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter a valid role ID.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error removing role: {e}")
+                    await interaction.response.send_message("❌ An error occurred while removing role.", ephemeral=True)
+
+        # Set Daily Limit Modal
+        class SetDailyLimitModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="📊 Set Daily Limit")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="Daily Limit",
+                    placeholder="Enter daily message limit (e.g., 100)",
+                    required=True,
+                    max_length=10
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    limit = int(self.children[0].value.strip())
+                    
+                    if limit < 1 or limit > 10000:
+                        await interaction.response.send_message("❌ Daily limit must be between 1 and 10000.", ephemeral=True)
+                        return
+                    
+                    # 일일 제한 설정
+                    self.bot_selector.settings_manager.set_daily_limit(limit)
+                    await interaction.response.send_message(
+                        f"✅ Daily message limit has been set to {limit}.",
+                        ephemeral=True
+                    )
+                        
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter a valid number.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error setting daily limit: {e}")
+                    await interaction.response.send_message("❌ An error occurred while setting daily limit.", ephemeral=True)
+
+        # Reset Story Modal
+        class ResetStoryModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="📖 Reset Story Progress")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter Discord user ID to reset story progress",
+                    required=True,
+                    max_length=20
+                ))
+                
+                self.add_item(discord.ui.TextInput(
+                    label="Character Name",
+                    placeholder="Enter character name (kagari, eros, elysia) or 'all'",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_id = int(self.children[0].value.strip())
+                    character_name = self.children[1].value.strip().lower()
+                    
+                    # 사용자 존재 확인
+                    user = interaction.client.get_user(user_id)
+                    if not user:
+                        await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                        return
+                    
+                    # 스토리 진행 초기화
+                    if character_name == 'all':
+                        characters = ['kagari', 'eros', 'elysia']
+                        success_count = 0
+                        for char in characters:
+                            if self.db.reset_user_story_progress(user_id, char):
+                                success_count += 1
+                        
+                        if success_count > 0:
+                            await interaction.response.send_message(
+                                f"✅ Reset story progress for user {user.mention} for {success_count} characters.",
+                                ephemeral=True
+                            )
+                        else:
+                            await interaction.response.send_message("❌ Failed to reset story progress.", ephemeral=True)
+                    else:
+                        if character_name not in ['kagari', 'eros', 'elysia']:
+                            await interaction.response.send_message("❌ Invalid character name. Use 'kagari', 'eros', 'elysia', or 'all'.", ephemeral=True)
+                            return
+                        
+                        success = self.db.reset_user_story_progress(user_id, character_name)
+                        if success:
+                            await interaction.response.send_message(
+                                f"✅ Reset {character_name} story progress for user {user.mention}.",
+                                ephemeral=True
+                            )
+                        else:
+                            await interaction.response.send_message("❌ Failed to reset story progress.", ephemeral=True)
+                            
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter a valid user ID.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error resetting story: {e}")
+                    await interaction.response.send_message("❌ An error occurred while resetting story progress.", ephemeral=True)
+
+        # Message Add Modal
+        class MessageAddModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="📝 Add Message Count")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter Discord user ID",
+                    required=True,
+                    max_length=20
+                ))
+                
+                self.add_item(discord.ui.TextInput(
+                    label="Message Count",
+                    placeholder="Enter number of messages to add",
+                    required=True,
+                    max_length=10
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_id = int(self.children[0].value.strip())
+                    message_count = int(self.children[1].value.strip())
+                    
+                    if message_count < 1 or message_count > 10000:
+                        await interaction.response.send_message("❌ Message count must be between 1 and 10000.", ephemeral=True)
+                        return
+                    
+                    # 사용자 존재 확인
+                    user = interaction.client.get_user(user_id)
+                    if not user:
+                        await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                        return
+                    
+                    # 메시지 수 추가
+                    success = self.db.add_user_messages(user_id, message_count)
+                    if success:
+                        await interaction.response.send_message(
+                            f"✅ Added {message_count} messages to user {user.mention}.",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.response.send_message("❌ Failed to add messages.", ephemeral=True)
+                        
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter valid numbers.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error adding messages: {e}")
+                    await interaction.response.send_message("❌ An error occurred while adding messages.", ephemeral=True)
+
+        # Reset Quest Modal
+        class ResetQuestModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="🎯 Reset Quest Records")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="User ID",
+                    placeholder="Enter Discord user ID to reset quest records",
+                    required=True,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_id = int(self.children[0].value.strip())
+                    
+                    # 사용자 존재 확인
+                    user = interaction.client.get_user(user_id)
+                    if not user:
+                        await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                        return
+                    
+                    # 퀘스트 기록 초기화
+                    success = self.db.reset_user_quest_records(user_id)
+                    if success:
+                        await interaction.response.send_message(
+                            f"✅ Reset quest records for user {user.mention}.",
+                            ephemeral=True
+                        )
+                    else:
+                        await interaction.response.send_message("❌ Failed to reset quest records.", ephemeral=True)
+                        
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter a valid user ID.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error resetting quest: {e}")
+                    await interaction.response.send_message("❌ An error occurred while resetting quest records.", ephemeral=True)
+
+        # Cleanup Cards Modal
+        class CleanupCardsModal(discord.ui.Modal):
+            def __init__(self, db, bot_selector):
+                super().__init__(title="🃏 Cleanup Cards")
+                self.db = db
+                self.bot_selector = bot_selector
+                
+                self.add_item(discord.ui.TextInput(
+                    label="User ID (Optional)",
+                    placeholder="Enter Discord user ID to cleanup specific user, or leave empty for all users",
+                    required=False,
+                    max_length=20
+                ))
+            
+            async def on_submit(self, interaction: discord.Interaction):
+                try:
+                    user_input = self.children[0].value.strip()
+                    
+                    if user_input:
+                        # 특정 사용자 카드 정리
+                        user_id = int(user_input)
+                        user = interaction.client.get_user(user_id)
+                        if not user:
+                            await interaction.response.send_message("❌ User not found.", ephemeral=True)
+                            return
+                        
+                        success = self.db.cleanup_duplicate_cards(user_id)
+                        if success:
+                            await interaction.response.send_message(
+                                f"✅ Cleaned up duplicate cards for user {user.mention}.",
+                                ephemeral=True
+                            )
+                        else:
+                            await interaction.response.send_message("❌ Failed to cleanup cards.", ephemeral=True)
+                    else:
+                        # 모든 사용자 카드 정리
+                        success = self.db.cleanup_duplicate_cards()
+                        if success:
+                            await interaction.response.send_message(
+                                "✅ Cleaned up duplicate cards for all users.",
+                                ephemeral=True
+                            )
+                        else:
+                            await interaction.response.send_message("❌ Failed to cleanup cards.", ephemeral=True)
+                        
+                except ValueError:
+                    await interaction.response.send_message("❌ Please enter a valid user ID.", ephemeral=True)
+                except Exception as e:
+                    print(f"Error cleaning up cards: {e}")
+                    await interaction.response.send_message("❌ An error occurred while cleaning up cards.", ephemeral=True)
+
+        @self.tree.command(
+            name="admin_add_role",
             description="Add an admin role"
         )
         async def add_admin_role(interaction: discord.Interaction, role: discord.Role):
@@ -2206,8 +2632,8 @@ class BotSelector(commands.Bot):
             self.settings_manager.add_admin_role(role.id)
             await interaction.response.send_message(f"✅ Role {role.mention} has been added as an admin role.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="remove_role",
+        @self.tree.command(
+            name="admin_remove_role",
             description="Remove the administrator role"
         )
         async def remove_admin_role(interaction: discord.Interaction, role: discord.Role):
@@ -2222,8 +2648,8 @@ class BotSelector(commands.Bot):
             self.settings_manager.remove_admin_role(role.id)
             await interaction.response.send_message(f"✅ Role {role.mention} has been removed from admin roles.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="set_daily_limit",
+        @self.tree.command(
+            name="admin_set_daily_limit",
             description="Setting a daily message limit"
         )
         async def set_daily_limit(interaction: discord.Interaction, limit: int):
@@ -2242,8 +2668,8 @@ class BotSelector(commands.Bot):
             self.settings_manager.set_daily_limit(limit)
             await interaction.response.send_message(f"✅ Daily message limit has been set to {limit}.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="reset_story",
+        @self.tree.command(
+            name="admin_reset_story",
             description="Reset story progress for a user."
         )
         async def reset_story_command(interaction: discord.Interaction, user: discord.Member):
@@ -2262,8 +2688,8 @@ class BotSelector(commands.Bot):
                 print(f"Error in reset_story_command: {e}")
                 await interaction.response.send_message("❌ An error occurred while resetting story progress.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="message_add",
+        @self.tree.command(
+            name="admin_message_add",
             description="Manually add a user's message count."
         )
         async def message_add_command(interaction: discord.Interaction, user: discord.Member, count: int):
@@ -2286,8 +2712,8 @@ class BotSelector(commands.Bot):
                 print(f"Error in message_add_command: {e}")
                 await interaction.response.send_message("❌ An error occurred while adding messages.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="reset_quest",
+        @self.tree.command(
+            name="admin_reset_quest",
             description="Reset all quest claim records for a user."
         )
         async def reset_quest_command(interaction: discord.Interaction, user: discord.Member):
@@ -2306,8 +2732,8 @@ class BotSelector(commands.Bot):
                 print(f"Error in reset_quest_command: {e}")
                 await interaction.response.send_message("❌ An error occurred while resetting quest claims.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="cleanup_cards",
+        @self.tree.command(
+            name="admin_cleanup_cards",
             description="Clean up duplicate cards for a user or all users."
         )
         async def cleanup_cards_command(interaction: discord.Interaction, user: discord.Member = None):
@@ -2330,8 +2756,8 @@ class BotSelector(commands.Bot):
                 print(f"Error in cleanup_cards_command: {e}")
                 await interaction.response.send_message("❌ An error occurred while cleaning up duplicate cards.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="emergency_stop",
+        @self.tree.command(
+            name="admin_emergency_stop",
             description="Emergency stop for critical issues"
         )
         async def emergency_stop_command(interaction: discord.Interaction):
@@ -2346,8 +2772,8 @@ class BotSelector(commands.Bot):
             self.emergency_mode = True
             await interaction.response.send_message("🚨 Emergency mode activated! Bot is now in emergency stop mode.", ephemeral=True)
 
-        @self.admin_group.command(
-            name="test_payment",
+        @self.tree.command(
+            name="admin_test_payment",
             description="Test payment success DM to a user"
         )
         async def test_payment_command(interaction: discord.Interaction, user: discord.Member):
@@ -2389,8 +2815,8 @@ class BotSelector(commands.Bot):
                 print(f"Error in test_payment_command: {e}")
                 await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
 
-        @self.admin_group.command(
-            name="payment_webhook",
+        @self.tree.command(
+            name="admin_payment_webhook",
             description="Process payment webhook data"
         )
         async def payment_webhook_command(interaction: discord.Interaction, user_id: int, status: str, product_name: str = "Premium Subscription", amount: float = 9.99):
@@ -2438,6 +2864,156 @@ class BotSelector(commands.Bot):
             except Exception as e:
                 print(f"Error in payment_webhook_command: {e}")
                 await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
+
+        @self.tree.command(
+            name="admin_blacklist_add",
+            description="Add user to blacklist"
+        )
+        async def admin_blacklist_add_command(interaction: discord.Interaction, user: discord.Member, reason: str, duration_days: int = None):
+            """사용자를 블랙리스트에 추가합니다."""
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            try:
+                # 블랙리스트에 추가
+                success = self.db.add_to_blacklist(
+                    user_id=user.id,
+                    username=user.display_name or user.name,
+                    reason=reason,
+                    duration_days=duration_days,
+                    created_by=interaction.user.id
+                )
+                
+                if success:
+                    duration_text = "Permanent" if duration_days is None else f"{duration_days} days"
+                    await interaction.response.send_message(
+                        f"✅ User {user.mention} has been added to blacklist for {duration_text}.\n**Reason:** {reason}",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.response.send_message("❌ Failed to add user to blacklist.", ephemeral=True)
+                    
+            except Exception as e:
+                print(f"Error adding to blacklist: {e}")
+                await interaction.response.send_message("❌ An error occurred while adding user to blacklist.", ephemeral=True)
+
+        @self.tree.command(
+            name="admin_blacklist_remove",
+            description="Remove user from blacklist"
+        )
+        async def admin_blacklist_remove_command(interaction: discord.Interaction, user: discord.Member):
+            """사용자를 블랙리스트에서 제거합니다."""
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            try:
+                # 블랙리스트에서 제거
+                success = self.db.remove_from_blacklist(user.id)
+                
+                if success:
+                    await interaction.response.send_message(
+                        f"✅ User {user.mention} has been removed from blacklist.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.response.send_message("❌ User was not found in blacklist or already removed.", ephemeral=True)
+                    
+            except Exception as e:
+                print(f"Error removing from blacklist: {e}")
+                await interaction.response.send_message("❌ An error occurred while removing user from blacklist.", ephemeral=True)
+
+        @self.tree.command(
+            name="admin_blacklist_view",
+            description="View current blacklist"
+        )
+        async def admin_blacklist_view_command(interaction: discord.Interaction):
+            """현재 블랙리스트를 확인합니다."""
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            try:
+                # 만료된 블랙리스트 정리
+                self.db.cleanup_expired_blacklist()
+                
+                # 현재 블랙리스트 조회
+                blacklist_users = self.db.get_blacklist_users()
+                
+                if not blacklist_users:
+                    embed = discord.Embed(
+                        title="📋 Current Blacklist",
+                        description="No users are currently blacklisted.",
+                        color=discord.Color.green()
+                    )
+                else:
+                    embed = discord.Embed(
+                        title="📋 Current Blacklist",
+                        description=f"Total blacklisted users: {len(blacklist_users)}",
+                        color=discord.Color.red()
+                    )
+                    
+                    for i, user in enumerate(blacklist_users[:10], 1):  # 최대 10명만 표시
+                        duration_text = "Permanent" if user['duration_days'] is None else f"{user['duration_days']} days"
+                        expires_text = "Never" if user['expires_at'] is None else user['expires_at'].strftime("%Y-%m-%d %H:%M:%S UTC+8")
+                        
+                        embed.add_field(
+                            name=f"{i}. User ID: {user['user_id']}",
+                            value=f"**Username:** {user['username']}\n**Reason:** {user['reason']}\n**Duration:** {duration_text}\n**Expires:** {expires_text}",
+                            inline=False
+                        )
+                    
+                    if len(blacklist_users) > 10:
+                        embed.set_footer(text=f"... and {len(blacklist_users) - 10} more users")
+                
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            except Exception as e:
+                print(f"Error viewing blacklist: {e}")
+                await interaction.response.send_message("❌ An error occurred while viewing blacklist.", ephemeral=True)
+
+        @self.tree.command(
+            name="admin_user",
+            description="User management commands"
+        )
+        async def admin_user_command(interaction: discord.Interaction):
+            """사용자 관리 명령어 메뉴"""
+            if not self.is_admin_user(interaction.user.id):
+                await interaction.response.send_message("❌ This command is for the designated administrator only.", ephemeral=True)
+                return
+            
+            if not self.is_admin_channel_allowed(interaction.channel.id):
+                await interaction.response.send_message("❌ This admin command can only be used in designated admin channels.", ephemeral=True)
+                return
+            
+            view = UserManagementView(self.db, self)
+            embed = discord.Embed(
+                title="👥 User Management",
+                description="Select the user management function you want to use.",
+                color=discord.Color.blue()
+            )
+            embed.add_field(name="💝 Reset Affinity", value="Reset user's character affinity", inline=True)
+            embed.add_field(name="👑 Add Role", value="Add admin role to user", inline=True)
+            embed.add_field(name="❌ Remove Role", value="Remove admin role from user", inline=True)
+            embed.add_field(name="📊 Set Daily Limit", value="Set daily message limit", inline=True)
+            embed.add_field(name="📖 Reset Story", value="Reset user's story progress", inline=True)
+            embed.add_field(name="📝 Message Add", value="Manually add user's message count", inline=True)
+            embed.add_field(name="🎯 Reset Quest", value="Reset user's quest claim records", inline=True)
+            embed.add_field(name="🃏 Cleanup Cards", value="Clean up duplicate cards", inline=True)
+            
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     def get_memory_usage(self):
         """메모리 사용량을 반환합니다."""
@@ -2534,9 +3110,6 @@ class BotSelector(commands.Bot):
 
     def setup_commands(self):
         # 관리자 명령어들은 setup_admin_commands에서 처리하므로 여기서는 일반 명령어만 정의
-        # admin_group이 None인 경우를 처리하기 위해 임시로 생성
-        if self.admin_group is None:
-            self.admin_group = app_commands.Group(name="admin", description="Administrative commands")
         @self.tree.command(
             name="bot",
             description="Open character selection menu"
